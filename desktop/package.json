@@ -20,7 +20,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "publisherName": "JewelloSoft"
     },
     "nsis": {
@@ -31,9 +31,9 @@
       "createStartMenuShortcut": true,
       "shortcutName": "JewelloSoft",
       "runAfterFinish": true,
-      "installerIcon": "build/icon.png",
-      "uninstallerIcon": "build/icon.png",
-      "installerHeaderIcon": "build/icon.png",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
       "deleteAppDataOnUninstall": false
     },
     "extraResources": [
