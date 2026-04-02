@@ -1,7 +1,3 @@
-Here’s a **professional production-ready `README.md`** for your **JewelloSoft Desktop Application** 👇
-
----
-
 # JewelloSoft – Smart Jewellery Billing & Inventory Desktop App
 
 JewelloSoft is a **modern, offline-first desktop application** built for jewellery shop owners to manage **billing, inventory, customers, and orders** with a seamless and professional experience.
