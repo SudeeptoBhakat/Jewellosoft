@@ -52,8 +52,8 @@ backend/out.txt
 backend/test.txt
 
 # PyInstaller temporary
-build/
-dist/
+/build/
+/dist/
 *.egg-info/
 
 # Frontend (React/Vite)
@@ -67,7 +67,6 @@ frontend/yarn-error.log*
 # Desktop / Electron
 desktop/node_modules/
 desktop/dist/
-desktop/build/
 desktop/out/
 desktop/*.msi
 desktop/*.exe
