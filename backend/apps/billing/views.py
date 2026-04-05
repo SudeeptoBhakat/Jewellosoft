@@ -1,9 +1,13 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+import logging
+
 from .models import Invoice, Estimate
 from .serializers import InvoiceSerializer, EstimateSerializer
 from .services.invoice_service import create_invoice, convert_estimate_to_invoice, create_estimate
+
+logger = logging.getLogger(__name__)
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all()
@@ -19,7 +23,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(invoice_obj)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error creating invoice: %s", str(e), exc_info=True)
+            return Response({"detail": "An error occurred while creating the invoice."}, status=status.HTTP_400_BAD_REQUEST)
 
 class EstimateViewSet(viewsets.ModelViewSet):
     queryset = Estimate.objects.all()
@@ -35,7 +40,8 @@ class EstimateViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(estimate_obj)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error creating estimate: %s", str(e), exc_info=True)
+            return Response({"detail": "An error occurred while creating the estimate."}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
     def convert(self, request, pk=None):
@@ -44,7 +50,8 @@ class EstimateViewSet(viewsets.ModelViewSet):
             invoice_obj = convert_estimate_to_invoice(estimate.id, request.data.get('rate_override'))
             return Response({"status": "success", "invoice_id": invoice_obj.id})
         except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error converting estimate to invoice: %s", str(e), exc_info=True)
+            return Response({"detail": "An error occurred while converting the estimate."}, status=status.HTTP_400_BAD_REQUEST)
 
 class BillingPreviewViewSet(viewsets.ViewSet):
     """

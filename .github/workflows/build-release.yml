@@ -2,8 +2,14 @@ name: Build & Release JewelloSoft
 
 on:
   push:
+    branches:
+      - '**' # Triggers on each commit to any branch
     tags:
       - 'v*'  # Triggers on version tags like v1.0.0, v1.1.0
+  pull_request:
+    branches:
+      - '**' # Triggers on PRs to any branch
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -58,10 +64,16 @@ jobs:
         run: npm ci
 
       - name: Build & Publish Electron installer
+        if: github.event_name != 'pull_request'
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build:publish
+
+      - name: Build Electron installer
+        if: github.event_name == 'pull_request'
+        working-directory: desktop
+        run: npm run build
       
       # ── Upload artifacts (backup) ────────────────────────────────
       - name: Upload installer artifact
@@ -70,3 +82,20 @@ jobs:
           name: JewelloSoft-Windows-Installer
           path: desktop/dist/*.exe
           retention-days: 30
+
+      - name: Upload backend executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: JewelloSoft-Backend-Executable
+          path: backend/dist/backend.exe
+          retention-days: 30
+
+      # ── Cleanup ──────────────────────────────────────────────────
+      - name: Cleanup build files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf backend/build backend/dist backend/__pycache__
+          rm -rf frontend/node_modules frontend/dist
+          rm -rf desktop/node_modules desktop/dist desktop/build
+          rm -rf ~/.npm ~/.cache/pip
