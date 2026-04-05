@@ -2,13 +2,11 @@
   "name": "jewello-soft",
   "version": "1.0.0",
   "description": "JewelloSoft — Jewelry Billing & Inventory Management",
-  "description": "JewelloSoft — Jewelry Billing & Inventory Management",
   "main": "main.js",
   "author": "JewelloSoft",
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "prebuild": "node check_backend.js",
     "prebuild": "node check_backend.js",
     "build": "electron-builder --win",
     "build:publish": "electron-builder --win --publish always"
@@ -24,7 +22,6 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
-      "icon": "build/icon.ico",
       "publisherName": "JewelloSoft"
     },
     "nsis": {
@@ -38,15 +35,11 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
       "deleteAppDataOnUninstall": false
     },
     "extraResources": [
       {
-        "from": "../backend/dist/backend.exe",
-        "to": "backend.exe""from": "../backend/dist/backend",
+        "from": "../backend/dist/backend",
         "to": "backend"
       },
       {
