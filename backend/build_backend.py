@@ -1,59 +1,217 @@
 import os
 import sys
-import PyInstaller.__main__
 from pathlib import Path
+import shutil
+import site
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
-# Provide PyInstaller's Django hook with explicit settings resolution
+# ────────────────────────────────────────────────────────────────
+# Paths
+# ────────────────────────────────────────────────────────────────
+BACKEND_DIR = Path(__file__).resolve().parent
+RUN_SCRIPT  = BACKEND_DIR / "run_waitress.py"
+DIST_DIR    = BACKEND_DIR / "dist"
+BUILD_DIR   = BACKEND_DIR / "build"
+
+# 🔥 CRITICAL: Fix for "AppRegistryNotReady" inside PyInstaller hooks
+# PyInstaller hooks run in isolated subprocesses. They need PYTHONPATH 
+# explicitly set to find your local apps during hook execution.
+os.environ['PYTHONPATH'] = str(BACKEND_DIR) + os.pathsep + os.environ.get('PYTHONPATH', '')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.base')
 
-# Paths
-BACKEND_DIR = Path(__file__).resolve().parent
-RUN_SCRIPT = BACKEND_DIR / "run_waitress.py"
+# Call django setup in this process as well
+import django
+django.setup()
 
-# Hidden Imports required by Django's dynamic INSTALLED_APPS loading
+import PyInstaller.__main__
+
+# Clean previous builds
+if DIST_DIR.exists():
+    shutil.rmtree(DIST_DIR)
+if BUILD_DIR.exists():
+    shutil.rmtree(BUILD_DIR)
+
+# ────────────────────────────────────────────────────────────────
+# Minutely Specified Hidden Imports
+# ────────────────────────────────────────────────────────────────
+# We avoid --collect-all because it indiscriminately imports submodules
+# and triggers AppRegistryNotReady in things like 'rest_framework.schemas'.
 HIDDEN_IMPORTS = [
+    # Server and DB
     'waitress',
-    'django.core.management',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    'sqlite3',
+    'django.db.backends.sqlite3',
+    
+    # Core Application Config
+    'config',
+    'config.settings',
+    'config.settings.base',
+    'config.urls',
+    'config.wsgi',
+
+    # Django built-in apps and core modules required by base.py
+    # Statically declaring the roots fails to inherit their internal `apps.py` AppConfigs,
+    # causing 'AppConfig object has no attribute default_site' or missing middlewares.
+    *collect_submodules('django.contrib.admin'),
+    *collect_submodules('django.contrib.auth'),
+    *collect_submodules('django.contrib.contenttypes'),
+    *collect_submodules('django.contrib.sessions'),
+    *collect_submodules('django.contrib.messages'),
+    *collect_submodules('django.contrib.staticfiles'),
+    *collect_submodules('django.core.management'),
+
+    # Third Party Libraries (Only what's minutely required)
     'rest_framework',
+    'rest_framework.authentication',
+    'rest_framework.parsers',
+    'rest_framework.negotiation',
+    'rest_framework.metadata',
+    'rest_framework.permissions',
+    'rest_framework.pagination',
     'rest_framework_simplejwt',
+    "rest_framework_simplejwt.authentication",
+    "rest_framework_simplejwt.tokens",
+    "rest_framework_simplejwt.views",
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'corsheaders.middleware',
     'django_filters',
-    # Our internal apps
-    'apps.accounts',
-    'apps.billing',
-    'apps.inventory',
-    'apps.orders',
-    'apps.rates',
-    'apps.payments',
-    'apps.customers',
-    'apps.core',
-    # Modules hiding inside apps
-    'apps.accounts.apps',
-    'apps.billing.apps',
-    'apps.inventory.apps',
-    'apps.orders.apps',
-    'apps.rates.apps',
-    'apps.payments.apps',
-    'apps.customers.apps',
-    'apps.core.apps',
+    'django_filters.rest_framework',
+
+    # Dynamic project classes defined in settings
+    'core.pagination',
+    'core.exceptions',
 ]
 
-print(">>> Starting Professional PyInstaller Compilation for JewelloSoft Backend <<<")
+# 🚀 BULLETPROOF GUARANTEE: Use PyInstaller's safe internal analyzer to fetch 
+# all dynamically loaded core submodules so Waitress has everything at runtime!
+HIDDEN_IMPORTS.extend(collect_submodules('django.template')) # Fixes loader_tags/defaulttags/defaultfilters
+HIDDEN_IMPORTS.extend(collect_submodules('django.templatetags'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.contrib.admin.templatetags'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.contrib.staticfiles.templatetags'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.core.cache'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.core.management')) # Explicitly pack core CLI commands like migrate
+HIDDEN_IMPORTS.extend(collect_submodules('django.db.backends.sqlite3'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.views')) # Secures runtime defaults like csrf.csrf_failure and debug views
 
-# Execute PyInstaller with our meticulously defined parameters
-PyInstaller.__main__.run([
+# 🔥 Explicit Middlewares, Validators and Filters loaded via settings.py Strings
+HIDDEN_IMPORTS.extend(collect_submodules('django.middleware'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.contrib.sessions.middleware'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.contrib.auth.middleware'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.contrib.messages.middleware'))
+HIDDEN_IMPORTS.extend(collect_submodules('django.contrib.auth.password_validation'))
+HIDDEN_IMPORTS.extend(collect_submodules('rest_framework.filters'))
+HIDDEN_IMPORTS.extend(collect_submodules('rest_framework.permissions'))
+HIDDEN_IMPORTS.extend(collect_submodules('rest_framework.templatetags'))
+
+# Add our custom project apps
+PROJECT_APPS = [
+    'accounts',
+    'billing',
+    'inventory',
+    'orders',
+    'rates',
+    'payments',
+    'customers',
+    'core',
+]
+
+for app in PROJECT_APPS:
+    app_base = f'apps.{app}'
+    HIDDEN_IMPORTS.extend([
+        app_base,
+        f'{app_base}.apps',
+        f'{app_base}.urls',
+        f'{app_base}.views',
+        f'{app_base}.models',
+        f'{app_base}.serializers',
+    ])
+    
+    # Optional services module
+    if (BACKEND_DIR / "apps" / app / "services.py").exists():
+        HIDDEN_IMPORTS.append(f'{app_base}.services')
+    
+    # Optional signals module
+    if (BACKEND_DIR / "apps" / app / "signals.py").exists():
+        HIDDEN_IMPORTS.append(f'{app_base}.signals')
+
+    # 🔥 CRITICAL EXPLICIT MIGRATIONS: 
+    # Must be python hidden-imports, NOT regular --add-data!
+    migrations_dir = BACKEND_DIR / "apps" / app / "migrations"
+    if migrations_dir.exists():
+        for py_file in migrations_dir.glob("*.py"):
+            if py_file.name == "__init__.py":
+                HIDDEN_IMPORTS.append(f'{app_base}.migrations')
+            else:
+                HIDDEN_IMPORTS.append(f'{app_base}.migrations.{py_file.stem}')
+
+# ────────────────────────────────────────────────────────────────
+# Data Bundling (Templates + Static DATA ONLY)
+# ────────────────────────────────────────────────────────────────
+DATAS = []
+
+# Project Templates
+templates_dir = BACKEND_DIR / "templates"
+if templates_dir.exists():
+    DATAS.append((str(templates_dir), "templates"))
+
+# Add guaranteed internal bindings for Django and DRF Data (Templates, Localization, CSS/JS)
+# Using collect_data_files statically guarantees flawless collection of .mo translation files
+# which prevents 'No translation files found for default language en-us' crashes!
+DATAS.extend(collect_data_files('django', include_py_files=False))
+DATAS.extend(collect_data_files('rest_framework', include_py_files=False))
+DATAS.extend(collect_data_files('django_filters', include_py_files=False))
+DATAS.extend(collect_data_files('rest_framework_simplejwt', include_py_files=False))
+
+# ────────────────────────────────────────────────────────────────
+# PyInstaller Command
+# ────────────────────────────────────────────────────────────────
+print("=" * 60)
+print("  JewelloSoft Backend — Production Build")
+print("=" * 60)
+
+cmd = [
     str(RUN_SCRIPT),
     '--name=backend',
-    '--onefile',       # Bundle everything into a single .exe
-    '--noconfirm',     # Overwrite output directory without asking
-    '--clean',         # Clean cache
-    '--console',       # We need the console for Waitress to pipe stderr/stdout to Electron
-] + [f'--hidden-import={imp}' for imp in HIDDEN_IMPORTS])
+    '--onedir', # Industry standard for Electron wraps: avoids %TEMP% extraction delays and aligns path to backend/backend.exe
+    '--noconfirm',
+    '--clean',
+    '--console',
+]
 
-print(">>> PyInstaller Compilation Complete! Executable is located at backend/dist/backend.exe <<<")
+# 1. Add all explicit hidden modules
+for imp in HIDDEN_IMPORTS:
+    cmd.append(f'--hidden-import={imp}')
+
+# 2. Add explicit data folders
+for src, dst in DATAS:
+    cmd.append(f'--add-data={src}{os.pathsep}{dst}')
+
+
+print(f"Entry Script    : {RUN_SCRIPT}")
+print(f"Output Dir      : {DIST_DIR}")
+print(f"Hidden Imports  : {len(HIDDEN_IMPORTS)}")
+print(f"Data Files      : {len(DATAS)}")
+print("\n🚀 Building EXE...\n")
+
+PyInstaller.__main__.run(cmd)
+
+# ────────────────────────────────────────────────────────────────
+# Verify Build
+# ────────────────────────────────────────────────────────────────
+# Since we use --onedir, the exe is nested inside the app folder
+exe_path = DIST_DIR / "backend" / "backend.exe"
+
+if exe_path.exists():
+    size_mb = exe_path.stat().st_size / (1024 * 1024)
+
+    print("\n" + "=" * 60)
+    print("✅ BUILD SUCCESSFUL")
+    print(f"EXE Path : {exe_path}")
+    print(f"Size     : {size_mb:.1f} MB")
+    print("=" * 60)
+else:
+    print("\n" + "=" * 60)
+    print("❌ BUILD FAILED — backend.exe not found")
+    print("=" * 60)
+    sys.exit(1)

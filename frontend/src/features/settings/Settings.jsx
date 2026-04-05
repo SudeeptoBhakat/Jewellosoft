@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import api from '../../lib/axios';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Settings() {
+  const { syncShop } = useAuth();
   const [tab, setTab] = useState('General');
   const tabs = ['General', 'Business', 'Security'];
 
@@ -74,7 +76,9 @@ export default function Settings() {
     setSaving(true);
     setMessage({ text: '', type: '' });
     try {
-      await api.put('/accounts/shop/current/', formData);
+      await api.patch('/accounts/shop/current/', formData);
+      // Refresh global shop state so Navbar etc. pick up changes
+      if (syncShop) await syncShop();
       setMessage({ text: 'Settings saved successfully!', type: 'success' });
       setTimeout(() => setMessage({ text: '', type: '' }), 3000);
     } catch (err) {

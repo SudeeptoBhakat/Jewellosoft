@@ -16,6 +16,10 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'unsafe-fallback-key-replace-in-prod
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
+# ── Supabase Config ──────────────────────────────────────────────────
+# Found in Supabase Dashboard → Settings → API → JWT Secret
+SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET', '')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -48,6 +52,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.accounts.middleware.SupabaseAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -90,10 +95,14 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
 USE_TZ = True
+ROOT_URLCONF = 'config.urls'
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 # ── Media files (product images, etc.) ────────────────────────────────
 MEDIA_URL = '/media/'
 MEDIA_ROOT = USER_DATA_DIR / 'media'
@@ -126,6 +135,19 @@ SIMPLE_JWT = {
 
 # ── CORS Config ──────────────────────────────────────────────────────
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-user-email',
+    'x-user-id',
+]
 
 # ── Logging ──────────────────────────────────────────────────────────
 LOG_DIR = USER_DATA_DIR / 'logs'

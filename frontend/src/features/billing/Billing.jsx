@@ -49,7 +49,7 @@ function BillSetupModal({ onStart, onClose }) {
         Gold: d.gold22k?.rate_per_gram || d.gold24k?.rate_per_gram || 0,
         Silver: d.silver925?.rate_per_gram || d.silver999?.rate_per_gram || 0,
       });
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   return (
@@ -222,7 +222,7 @@ export default function Billing() {
   const [allRates, setAllRates] = useState({});
 
   useEffect(() => {
-    api.get('/rates/latest/').then(res => setAllRates(res.data)).catch(() => {});
+    api.get('/rates/latest/').then(res => setAllRates(res.data)).catch(() => { });
   }, []);
 
   const rateOptions = useMemo(() => {
@@ -324,8 +324,8 @@ export default function Billing() {
   }, [metalRate]);
 
   const addItemFromSearch = useCallback((product) => {
-    const newItem = recalcItem({ 
-      ...createEmptyItem(), 
+    const newItem = recalcItem({
+      ...createEmptyItem(),
       inventory_id: product.id,
       name: product.name,
       huid: product.huid || '',
@@ -346,13 +346,13 @@ export default function Billing() {
         setShowCustSuggestions(false);
       }
     };
-    
+
     const keyHandler = (e) => {
       if (e.ctrlKey && e.key === 's') { e.preventDefault(); handleSave(); }
       if (e.ctrlKey && e.key === 'p') { e.preventDefault(); handlePrint(); }
       if (e.key === 'Escape' && !showModal) { handleCancel(); }
     };
-    
+
     document.addEventListener('mousedown', mouseHandler);
     document.addEventListener('keydown', keyHandler);
     return () => {
@@ -384,29 +384,34 @@ export default function Billing() {
 
     const oldWt = parseFloat(oldWeight) || 0;
     const deductPct = parseFloat(oldDeductPct) || 0;
-    
+
     // Netting the physical weight first
     const netWeight = totalWeight - oldWt;
     let baseMetalValue = 0;
 
     if (netWeight >= 0) {
-       // Customer buys more weight than they deposited
-       baseMetalValue = netWeight * metalRate;
+      // Customer buys more weight than they deposited
+      baseMetalValue = netWeight * metalRate;
     } else {
-       // Customer deposited more weight than they bought
-       const adjustedRate = metalRate * (1 - deductPct / 100);
-       baseMetalValue = netWeight * adjustedRate; // This is a negative value
+      // Customer deposited more weight than they bought
+      const adjustedRate = metalRate * (1 - deductPct / 100);
+      baseMetalValue = netWeight * adjustedRate; // This is a negative value
     }
-
+    const totalMetalValue = items.reduce((s, i) => s + (i.metalValue || 0), 0);
     // Subtotal combines the Net Metal Value and Making Charges
     const subtotal = baseMetalValue + totalMaking;
+
+    // Old metal breakdown
+    const oldMV = oldWt * metalRate;
+    const oldDeductAmt = oldMV * (deductPct / 100);
+    const oldValue = oldMV - oldDeductAmt;
 
     // Hallmark
     const hc = parseInt(hallmarkCount) || 0;
     const hallmarkAmt = hc * hallmarkValue;
 
     const oc = parseFloat(otherCharges) || 0;
-    
+
     // All charges added together (always against customer)
     const payableBeforeTax = subtotal + hallmarkAmt + oc;
 
@@ -424,7 +429,7 @@ export default function Billing() {
     // Customer Owes = positive
     // Shop Owes Customer = negative
     const preRound = payableBeforeTax + cgst + sgst - adv - disc;
-    
+
     const roundOff = Math.round(preRound);
     const roundOffVal = roundOff - preRound;
     const finalAmt = roundOff;
@@ -435,8 +440,8 @@ export default function Billing() {
     const balance = Math.abs(finalAmt) - totalPaid; // Keep balance positive for UI
 
     return {
-      totalWeight, totalMaking, subtotal,
-      netWeight, baseMetalValue, oldWt, deductPct,
+      totalWeight, totalMaking, totalMetalValue, subtotal,
+      netWeight, baseMetalValue, oldWt, oldMV, oldDeductAmt, oldValue, deductPct,
       hallmarkAmt, cgst, sgst,
       otherChargesVal: oc, advanceVal: adv, discountVal: disc,
       preRound, roundOffVal, finalAmt,
@@ -463,29 +468,29 @@ export default function Billing() {
         alert('Billing is only allowed for Orders in "complete" status.');
         return;
       }
-      
+
       // Map complete order to UI
       setCustomerId(ord.customer);
       setCustName(ord.customer_detail?.name || '');
       setCustMobile(ord.customer_detail?.phone || '');
       setCustAddress(ord.customer_detail?.address || '');
       setOrderDate(ord.created_at?.split('T')[0] || '');
-      
+
       // Pull items
       if (ord.items && ord.items.length > 0) {
         const mappedItems = ord.items.map(i => ({
-             id: Date.now() + Math.random(),
-             name: i.product_name,
-             huid: i.huid || '',
-             weight: i.expected_weight || i.weight || '',
-             makingCharges: i.making_charge || '',
-             metalValue: 0, total: 0
+          id: Date.now() + Math.random(),
+          name: i.product_name,
+          huid: i.huid || '',
+          weight: i.expected_weight || i.weight || '',
+          makingCharges: i.making_charge || '',
+          metalValue: 0, total: 0
         }));
         setItems(mappedItems);
         // Force recalc based on current UI metal rate
-        setTimeout(() => setMetalRate(prev => prev), 50); 
+        setTimeout(() => setMetalRate(prev => prev), 50);
       }
-    } catch(err) {
+    } catch (err) {
       console.error(err);
       alert('Error fetching order.');
     } finally {
@@ -495,115 +500,117 @@ export default function Billing() {
 
   /* ─── Actions ─── */
   const handleSave = async (redirectList = true) => {
-      if (!custName.trim()) {
-          alert('Validation Error: Customer name is required.');
-          return false;
+    if (!custName.trim()) {
+      alert('Validation Error: Customer name is required.');
+      return false;
+    }
+    try {
+      let finalId = customerId;
+      if (!finalId) {
+        const cr = await api.post('/customers/', {
+          shop: 1, name: custName, phone: custMobile || `NA-${Date.now().toString().slice(-8)}`, address: custAddress
+        });
+        finalId = cr.data.id;
+        setCustomerId(finalId);
       }
-      try {
-          let finalId = customerId;
-          if (!finalId) {
-             const cr = await api.post('/customers/', {
-                 shop: 1, name: custName, phone: custMobile || `NA-${Date.now().toString().slice(-8)}`, address: custAddress
-             });
-             finalId = cr.data.id;
-             setCustomerId(finalId);
-          }
 
-          const payload = {
-              shop_id: 1, 
-              customer_id: finalId, // Explicit backend FK
-              customer_name: custName,
-              customer_mobile: custMobile,
-              customer_address: custAddress,
-              metal_type: metalType,
-              rate_10gm: metalRate * 10,
-              invoice_no: billType === 'Invoice' ? null : undefined, // Trigger auto-gen
-              items: items.map(it => ({
-                  inventory_id: it.inventory_id,
-                  weight: it.weight || 0,
-                  making: it.makingCharges || 0,
-                  metalValue: it.metalValue || 0,
-                  total: it.total || 0,
-                  product_name: it.name,
-                  purity: metalType.toLowerCase() === 'silver' ? '925' : '22K'
-              })),
-              totals: {
-                total_weight: calc.totalWeight,
-                making_total: calc.totalMaking,
-                subtotal: calc.subtotal,
-                old_weight: calc.oldWt,
-                old_amount: Math.abs(calc.baseMetalValue), // Use the net-metal base
-                advance: calc.advanceVal,
-                discount: calc.discountVal,
-                hallmark: calc.hallmarkAmt,
-                others: calc.otherChargesVal,
-                cgst: calc.cgst,
-                sgst: calc.sgst,
-                round_off: calc.roundOffVal,
-                grand_total: calc.finalAmt
-              },
-              payments: [
-                 { mode: 'cash', amount: cashAmt },
-                 { mode: 'upi', amount: onlineAmt }
-              ].filter(p => p.amount > 0)
-          };
-          
-          if (billType === 'Invoice') {
-              await api.post('/billing/invoices/', payload);
-          } else {
-              await api.post('/billing/estimates/', payload);
-          }
-          if (redirectList) {
-             alert('Bill saved successfully!');
-             navigate('/billing/list');
-          }
-          return true;
-      } catch (err) {
-         console.error(err);
-         alert('Failed to save bill on backend.');
-         return false;
+      const payload = {
+        shop_id: 1,
+        customer_id: finalId, // Explicit backend FK
+        customer_name: custName,
+        customer_mobile: custMobile,
+        customer_address: custAddress,
+        metal_type: metalType,
+        rate_10gm: metalRate * 10,
+        invoice_no: billType === 'Invoice' ? null : undefined, // Trigger auto-gen
+        items: items.map(it => ({
+          inventory_id: it.inventory_id,
+          weight: it.weight || 0,
+          making: it.makingCharges || 0,
+          metalValue: it.metalValue || 0,
+          total: it.total || 0,
+          product_name: it.name,
+          purity: metalType.toLowerCase() === 'silver' ? '925' : '22K'
+        })),
+        totals: {
+          total_weight: calc.totalWeight,
+          making_total: calc.totalMaking,
+          subtotal: calc.subtotal,
+          old_weight: calc.oldWt,
+          old_amount: calc.oldWt > 0 ? calc.oldValue : 0, // Use the net-metal base
+          advance: calc.advanceVal,
+          discount: calc.discountVal,
+          hallmark: calc.hallmarkAmt,
+          others: calc.otherChargesVal,
+          cgst: calc.cgst,
+          sgst: calc.sgst,
+          round_off: calc.roundOffVal,
+          grand_total: calc.finalAmt
+        },
+        payments: [
+          { mode: 'cash', amount: cashAmt },
+          { mode: 'upi', amount: onlineAmt }
+        ].filter(p => p.amount > 0)
+      };
+
+      if (billType === 'Invoice') {
+        await api.post('/billing/invoices/', payload);
+      } else {
+        await api.post('/billing/estimates/', payload);
       }
+      if (redirectList) {
+        alert('Bill saved successfully!');
+        navigate('/billing/list');
+      }
+      return true;
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save bill on backend.');
+      return false;
+    }
   };
-  
+
   const handlePrint = async () => {
-      const success = await handleSave(false);
-      if (success) {
-          const docData = {
-              docType: billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
-              theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
-              customer: { name: custName, phone: custMobile, address: custAddress },
-              meta: { number: billNumber || 'TBD', date: orderDate || new Date().toLocaleDateString('en-IN') },
-              rates: { rate10gm: metalRate * 10 },
-              items: items.map(it => ({
-                  name: it.name,
-                  huid: billType === 'Invoice' ? it.huid : undefined,
-                  weight: it.weight || 0,
-                  metalValue: it.metalValue || 0,
-                  making: it.makingCharges || 0,
-                  total: it.total || 0
-              })),
-              oldMetal: parseFloat(oldWeight) > 0 ? { weight: parseFloat(oldWeight), value: calc.oldValue } : null,
-              totals: {
-                  subtotal: calc.subtotal,
-                  cgst: calc.cgst,
-                  sgst: calc.sgst,
-                  otherCharges: calc.otherChargesVal,
-                  hallmark: calc.hallmarkAmt,
-                  advance: calc.advanceVal,
-                  discount: calc.discountVal,
-                  roundOff: calc.roundOffVal,
-                  finalAmount: calc.finalAmt,
-                  amountInWords: calc.amountInWords
-              },
-              payment: { amounts: [
-                  { mode: 'CASH', amount: parseFloat(cashAmt) || 0 },
-                  { mode: 'ONLINE', amount: parseFloat(onlineAmt) || 0 }
-              ].filter(x => x.amount > 0) }
-          };
-          setPrintData(docData);
-      }
+    const success = await handleSave(false);
+    if (success) {
+      const docData = {
+        docType: billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
+        theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
+        customer: { name: custName, phone: custMobile, address: custAddress },
+        meta: { number: billNumber || 'TBD', date: orderDate || new Date().toLocaleDateString('en-IN') },
+        rates: { rate10gm: metalRate * 10 },
+        items: items.map(it => ({
+          name: it.name,
+          huid: billType === 'Invoice' ? it.huid : undefined,
+          weight: it.weight || 0,
+          metalValue: it.metalValue || 0,
+          making: it.makingCharges || 0,
+          total: it.total || 0
+        })),
+        oldMetal: parseFloat(oldWeight) > 0 ? { weight: parseFloat(oldWeight), value: calc.oldValue } : null,
+        totals: {
+          subtotal: calc.subtotal,
+          cgst: calc.cgst,
+          sgst: calc.sgst,
+          otherCharges: calc.otherChargesVal,
+          hallmark: calc.hallmarkAmt,
+          advance: calc.advanceVal,
+          discount: calc.discountVal,
+          roundOff: calc.roundOffVal,
+          finalAmount: calc.finalAmt,
+          amountInWords: calc.amountInWords
+        },
+        payment: {
+          amounts: [
+            { mode: 'CASH', amount: parseFloat(cashAmt) || 0 },
+            { mode: 'ONLINE', amount: parseFloat(onlineAmt) || 0 }
+          ].filter(x => x.amount > 0)
+        }
+      };
+      setPrintData(docData);
+    }
   };
-  
+
   const handleCancel = () => { setShowModal(true); setItems([createEmptyItem()]); };
 
   /* ═══ RENDER ═══ */
@@ -659,13 +666,13 @@ export default function Billing() {
           <div className="form-row" style={{ gridTemplateColumns: '1.5fr 1fr 2fr' }}>
             <div className="form-group" style={{ marginBottom: 'var(--space-3)', position: 'relative' }} ref={custWrapRef}>
               <label className="form-label">Customer Name *</label>
-              <input 
-                 className="form-input" 
-                 type="text" 
-                 placeholder="Enter customer name" 
-                 value={custName} 
-                 onChange={e => { setCustName(e.target.value); setCustomerId(null); setShowCustSuggestions(true); }} 
-                 id="bill-cust-name" 
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Enter customer name"
+                value={custName}
+                onChange={e => { setCustName(e.target.value); setCustomerId(null); setShowCustSuggestions(true); }}
+                id="bill-cust-name"
               />
               {showCustSuggestions && custSuggestions.length > 0 && (
                 <div className="search-ac__dropdown">
@@ -696,14 +703,14 @@ export default function Billing() {
               <label className="form-label">Order Number</label>
               <div className="flex gap-2">
                 <input className="form-input" type="text" placeholder="Order #" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} id="bill-order-num" />
-                <button 
-                  className="btn btn--secondary btn--sm" 
-                  style={{ padding: '0 10px' }} 
-                  onClick={handleLoadOrder} 
+                <button
+                  className="btn btn--secondary btn--sm"
+                  style={{ padding: '0 10px' }}
+                  onClick={handleLoadOrder}
                   disabled={orderLoading || !orderNumber.trim()}
                   title="Load Complete Order"
                 >
-                   {orderLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-cloud-arrow-down"></i>}
+                  {orderLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-cloud-arrow-down"></i>}
                 </button>
               </div>
             </div>
@@ -845,10 +852,6 @@ export default function Billing() {
               <span className="bill-totals-label">Total Making</span>
               <span className="bill-totals-value">{fmt(calc.totalMaking)}</span>
             </div>
-            <div className="bill-totals-item">
-              <span className="bill-totals-label">Total Making</span>
-              <span className="bill-totals-value">{fmt(calc.totalMaking)}</span>
-            </div>
             <div className="bill-totals-item" style={{ borderLeft: '2px solid var(--color-primary)', paddingLeft: 'var(--space-4)' }}>
               <span className="bill-totals-label" style={{ color: 'var(--color-primary-hover)' }}>Net Weight</span>
               <span className="bill-totals-value" style={{ color: 'var(--color-primary-hover)', fontSize: 'var(--text-md)', fontWeight: 700 }}>{calc.netWeight.toFixed(3)}g</span>
@@ -976,20 +979,20 @@ export default function Billing() {
                   <div className="bill-sline"><span>New Gold Weight</span><span>{calc.totalWeight.toFixed(3)}g</span></div>
                   <div className="bill-sline"><span>(−) Old Gold Deposited</span><span>{calc.oldWt.toFixed(3)}g</span></div>
                   <div className="bill-sline" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                    <span>Net Weight {calc.netWeight < 0 && <span style={{fontSize: '0.7rem', color: 'var(--color-danger)'}}>({calc.deductPct}% less applied)</span>}</span>
+                    <span>Net Weight {calc.netWeight < 0 && <span style={{ fontSize: '0.7rem', color: 'var(--color-danger)' }}>({calc.deductPct}% less applied)</span>}</span>
                     <span>{calc.netWeight > 0 ? '+' : ''}{calc.netWeight.toFixed(3)}g</span>
                   </div>
                 </>
               )}
-              
+
               <div className="bill-sline">
                 <span>{calc.netWeight < 0 ? 'Return Metal Value' : 'Net Metal Value'}</span>
-                <span style={{color: calc.baseMetalValue < 0 ? 'var(--color-success)' : 'inherit'}}>
+                <span style={{ color: calc.baseMetalValue < 0 ? 'var(--color-success)' : 'inherit' }}>
                   {calc.baseMetalValue < 0 ? '−' : ''}{fmt(Math.abs(calc.baseMetalValue))}
                 </span>
               </div>
               <div className="bill-sline"><span>(+) Total Making Charges</span><span>{fmt(calc.totalMaking)}</span></div>
-              
+
               <div className="bill-sline" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '4px' }}>
                 <span style={{ fontWeight: 600 }}>Subtotal</span>
                 <span style={{ fontWeight: 600, color: calc.subtotal < 0 ? 'var(--color-success)' : 'inherit' }}>
@@ -1021,7 +1024,7 @@ export default function Billing() {
             {/* Final Amount */}
             <div className="bill-final-block">
               <div className="bill-final-label">FINAL AMOUNT</div>
-              <div className="bill-final-value" style={{ color: calc.finalAmt < 0 ? 'var(--color-success)' : 'var(--text-primary)'}}>
+              <div className="bill-final-value" style={{ color: calc.finalAmt < 0 ? 'var(--color-success)' : 'var(--text-primary)' }}>
                 {calc.finalAmt < 0 ? '−' : ''}{fmtInt(Math.abs(calc.finalAmt))}
               </div>
               <div className="bill-final-words">{calc.amountInWords}</div>

@@ -3,6 +3,7 @@
 .pdf-print-wrapper {
     position: relative;
     width: 210mm;
+    overflow: hidden;
     min-height: 297mm;
     background-color: #ffffff;
     margin: auto;
@@ -21,13 +22,13 @@
 /* Watermark */
 .pdf-watermark {
     position: absolute;
-    top: 50%;
+    top: 47%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 60%;
-    opacity: 0.04;
+    width: 86%;
+    opacity: 0.35;
     pointer-events: none;
-    z-index: 0;
+    z-index: 1;
 }
 
 .pdf-content-layer {
@@ -35,7 +36,8 @@
     z-index: 10;
     display: flex;
     flex-direction: column;
-    min-height: 267mm; /* Full page minus padding */
+    min-height: 271mm;
+    /* Full page minus padding */
 }
 
 /* Theme Configuration */
@@ -79,6 +81,7 @@
     font-size: 11px;
     color: #555;
     line-height: 1.4;
+    font-weight: bolder;
 }
 
 .pdf-header-right {
@@ -118,8 +121,19 @@
     gap: 15px;
 }
 
-.pdf-customer-box, .pdf-rate-box {
-    background: var(--bg-light);
+.pdf-customer-box {
+    background: linear-gradient(152deg,
+            rgba(255, 255, 255, 1) 45%,
+            rgba(212, 175, 55, 0.18));
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 15px;
+}
+
+.pdf-rate-box {
+    background: linear-gradient(220deg,
+            rgba(255, 255, 255, 1) 40%,
+            rgba(212, 175, 55, 0.18));
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 10px 15px;
@@ -165,6 +179,7 @@
     margin-bottom: 4px;
     font-weight: 600;
 }
+
 .pdf-rate-item:last-child {
     margin-bottom: 0;
 }
@@ -190,16 +205,20 @@
     padding: 8px 10px;
     border: 1px solid var(--border-color);
     border-bottom: 1px dashed var(--border-color);
+    font-weight: bold;
 }
 
 .pdf-table tbody tr:last-child td {
     border-bottom: 1px solid var(--border-color);
 }
 
-.pdf-table th.txt-right, .pdf-table td.txt-right {
+.pdf-table th.txt-right,
+.pdf-table td.txt-right {
     text-align: right;
 }
-.pdf-table th.txt-center, .pdf-table td.txt-center {
+
+.pdf-table th.txt-center,
+.pdf-table td.txt-center {
     text-align: center;
 }
 
@@ -254,7 +273,8 @@
 .pdf-summary-grid {
     display: flex;
     gap: 15px;
-    margin-top: auto; /* pushes to bottom of flex if space exists */
+    margin-top: auto;
+    /* pushes to bottom of flex if space exists */
 }
 
 .pdf-sg-left {
@@ -310,6 +330,7 @@
     font-size: 14px;
     font-weight: 700;
 }
+
 .pdf-grand-total td {
     border: none;
     padding: 10px;
@@ -342,11 +363,11 @@
         padding: 0;
         background: white;
     }
-    
+
     .no-print {
         display: none !important;
     }
-    
+
     .pdf-print-wrapper {
         margin: 0;
         box-shadow: none;
@@ -359,7 +380,7 @@
         border-radius: 0;
         padding: 10mm 10mm;
     }
-    
+
     @page {
         size: A4;
         margin: 0;

@@ -1,6 +1,5 @@
 import logging
 from rest_framework import viewsets
-from rest_framework.permissions import AllowAny
 from .models import ProductInventory
 from .serializers import ProductInventorySerializer
 
@@ -10,7 +9,6 @@ logger = logging.getLogger("jewellosoft.api")
 class ProductInventoryViewSet(viewsets.ModelViewSet):
     """Full CRUD for inventory products. Ordered to prevent pagination warnings."""
     serializer_class = ProductInventorySerializer
-    permission_classes = [AllowAny]  # Revert to IsAuthenticated for prod
 
     filterset_fields = ['shop', 'status', 'metal_type', 'purity']
     search_fields = ['name', 'huid', 'barcode']

@@ -5,16 +5,11 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
-  const [shopName, setShopName] = useState('JewelloSoft');
-  const [ownerName, setOwnerName] = useState('Admin');
+  const { logout, shop } = useAuth();
 
-  useEffect(() => {
-    api.get('/accounts/shop/current/').then((res) => {
-      setShopName(res.data.name || 'JewelloSoft');
-      setOwnerName(res.data.owner_name || 'Admin');
-    }).catch(() => console.warn('Could not fetch settings for Navbar'));
-  }, []);
+  // Derive shop name / owner from global auth state
+  const shopName = shop?.name || 'JewelloSoft';
+  const ownerName = shop?.owner_name || 'Admin';
 
   const handleLogout = async () => {
     try {

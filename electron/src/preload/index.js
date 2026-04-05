@@ -1,1 +1,0 @@
-// ContextBridge for window.api

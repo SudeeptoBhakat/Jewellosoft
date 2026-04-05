@@ -1,1 +1,0 @@
-// Bootstrap python/django binary

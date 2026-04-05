@@ -1,7 +1,7 @@
 import logging
 from django.db.models import Count, Sum, Max
-from rest_framework import viewsets
-from rest_framework.permissions import AllowAny
+from rest_framework import viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import Customer
 from .serializers import CustomerSerializer
 
@@ -14,8 +14,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
     Annotates total_bills, total_spent, last_visit from Invoice table.
     """
     serializer_class = CustomerSerializer
-    permission_classes = [AllowAny]  # Revert to IsAuthenticated for prod
-
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['shop']
     search_fields = ['name', 'phone', 'customer_code']
 

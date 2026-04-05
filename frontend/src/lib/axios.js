@@ -1,5 +1,4 @@
 import axios from 'axios';
-
 const api = axios.create({
   // Fallback for web mode, interceptor overwrites in Electron desktop mode
   baseURL: 'http://localhost:8000/api',
@@ -10,7 +9,7 @@ const api = axios.create({
 
 let _electronApiUrl = null;
 
-// ── Request interceptor: dynamic URL & auth ────────────────────────────
+// ── Request interceptor: dynamic URL & Supabase JWT ─────────────────
 api.interceptors.request.use(async config => {
   // Electron dynamic routing
   if (window.electronAPI) {
@@ -21,11 +20,16 @@ api.interceptors.request.use(async config => {
     config.baseURL = _electronApiUrl;
   }
 
-  // Token attach
-  const token = localStorage.getItem('jewellosoft_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // ── Attach Local JWT ──────────────────────────────────────────────────
+  try {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch (err) {
+    console.debug('[axios] Could not attach local token:', err?.message);
   }
+
   return config;
 });
 
@@ -40,14 +44,13 @@ api.interceptors.response.use(
     const data = error.response?.data;
 
     // Structured error from our custom exception handler
-    const message = data?.message || error.message || 'Something went wrong';
+    const message = data?.message || data?.detail || error.message || 'Something went wrong';
 
     if (status === 401) {
-      console.warn('[Auth] Session expired. Please log in again.');
+      console.warn('[Auth] Session expired or unauthenticated. Please log in again.');
       // Could redirect to login here
     } else if (status === 400) {
       console.warn('[Validation]', message, data?.errors || '');
-      // Added global visible alert for debugging as requested
       const details = data?.errors ? JSON.stringify(data.errors) : message;
       alert(`Validation Error: ${details}`);
     } else if (status >= 500) {

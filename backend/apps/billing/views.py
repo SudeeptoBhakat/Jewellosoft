@@ -1,18 +1,13 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action
 from .models import Invoice, Estimate
 from .serializers import InvoiceSerializer, EstimateSerializer
 from .services.invoice_service import create_invoice, convert_estimate_to_invoice, create_estimate
 
 class InvoiceViewSet(viewsets.ModelViewSet):
-    serializer_class = InvoiceSerializer
-    permission_classes = [AllowAny]  # TODO: switch to IsAuthenticated in production
-
     queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
-    permission_classes = [AllowAny]  # TODO: switch to IsAuthenticated in production
     
     filterset_fields = ['shop', 'customer']
     search_fields = ['invoice_no', 'customer__name', 'customer__phone']
@@ -27,12 +22,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class EstimateViewSet(viewsets.ModelViewSet):
-    serializer_class = EstimateSerializer
-    permission_classes = [AllowAny]  # TODO: switch to IsAuthenticated in production
-
     queryset = Estimate.objects.all()
     serializer_class = EstimateSerializer
-    permission_classes = [AllowAny]  # TODO: switch to IsAuthenticated in production
     
     filterset_fields = ['shop', 'customer']
     search_fields = ['estimate_no', 'customer__name', 'customer__phone']
@@ -59,7 +50,6 @@ class BillingPreviewViewSet(viewsets.ViewSet):
     """
     Stateless endpoint to preview calculations using BillingEngine before commit.
     """
-    permission_classes = [AllowAny]  # TODO: switch to IsAuthenticated in production
 
     def create(self, request):
         from .services.billing_engine import BillingEngine

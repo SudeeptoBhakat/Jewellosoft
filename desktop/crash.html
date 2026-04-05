@@ -2,23 +2,336 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>JewelloSoft Error Recovery</title>
+  <title>JewelloSoft — Error Report</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #eaedf2; color: #1e293b; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; max-width: 400px; }
-    .icon { font-size: 48px; color: #ef4444; margin-bottom: 20px; }
-    h2 { margin: 0 0 10px; font-size: 24px; color: #0f172a; }
-    p { margin: 0 0 25px; font-size: 15px; color: #64748b; line-height: 1.5; }
-    .btn { background: #3b82f6; color: white; border: none; padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 6px; cursor: pointer; transition: 0.2s; }
-    .btn:hover { background: #2563eb; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .container {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      width: 100%;
+      max-width: 720px;
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%);
+      padding: 28px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-icon {
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: #fecaca;
+      margin-top: 4px;
+    }
+
+    .body {
+      padding: 24px 32px;
+    }
+
+    .reason-box {
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+
+    .reason-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    #crash-reason {
+      font-size: 14px;
+      color: #f87171;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .log-path-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .log-path-box .label {
+      font-size: 12px;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+
+    #log-dir {
+      font-size: 12px;
+      color: #38bdf8;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      word-break: break-all;
+    }
+
+    #diagnostics {
+      display: none;
+    }
+
+    .section {
+      margin-bottom: 16px;
+    }
+
+    .section-header {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #334155;
+    }
+
+    .log-output {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-output::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .log-output::-webkit-scrollbar-track {
+      background: #020617;
+    }
+
+    .log-output::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 3px;
+    }
+
+    .footer {
+      padding: 20px 32px;
+      border-top: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .footer-hint {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      border: none;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #475569;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+
+    .toggle-btn {
+      background: none;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      padding: 6px 14px;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      font-family: inherit;
+    }
+
+    .toggle-btn:hover {
+      background: #334155;
+      color: #e2e8f0;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="icon">⚠️</div>
-    <h2>Backend Initialization Failed</h2>
-    <p>JewelloSoft's core database/server could not be started or crashed unexpectedly. Please check the logs in AppData.</p>
-    <button class="btn" onclick="window.close()">Exit Application</button>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">⚠️</div>
+      <div>
+        <h1>Backend Initialization Failed</h1>
+        <p>JewelloSoft's core service could not be started or crashed unexpectedly.</p>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+      <!-- Failure Reason -->
+      <div class="reason-box">
+        <div class="reason-label">Failure Reason</div>
+        <div id="crash-reason">Backend process terminated unexpectedly</div>
+      </div>
+
+      <!-- Log Path -->
+      <div class="log-path-box">
+        <span class="label">📂 Log Directory:</span>
+        <span id="log-dir">Check AppData/Roaming/jewello-soft/JewelloSoft_Data/logs/</span>
+      </div>
+
+      <!-- Toggle Details -->
+      <button class="toggle-btn" onclick="toggleDiagnostics()">▶ Show Diagnostic Details</button>
+
+      <!-- Diagnostics (hidden by default, populated by main.js) -->
+      <div id="diagnostics">
+        <div class="section">
+          <div class="section-header">Backend Stderr Output</div>
+          <div class="log-output" id="stderr-log">No stderr output captured.</div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">Electron Process Log</div>
+          <div class="log-output" id="electron-log">No electron log captured.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-hint">
+        Share the log directory with support<br>for faster troubleshooting.
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="copyDiagnostics()">📋 Copy Logs</button>
+        <button class="btn btn-danger" onclick="window.close()">Exit</button>
+      </div>
+    </div>
   </div>
+
+  <script>
+    function toggleDiagnostics() {
+      const el = document.getElementById('diagnostics');
+      const btn = document.querySelector('.toggle-btn');
+      if (el.style.display === 'block') {
+        el.style.display = 'none';
+        btn.textContent = '▶ Show Diagnostic Details';
+      } else {
+        el.style.display = 'block';
+        btn.textContent = '▼ Hide Diagnostic Details';
+      }
+    }
+
+    function copyDiagnostics() {
+      const reason = document.getElementById('crash-reason').textContent;
+      const stderr = document.getElementById('stderr-log').textContent;
+      const electronLog = document.getElementById('electron-log').textContent;
+      const logDir = document.getElementById('log-dir').textContent;
+
+      const text = [
+        '=== JEWELLOSOFT CRASH REPORT ===',
+        '',
+        'Reason: ' + reason,
+        'Log Directory: ' + logDir,
+        '',
+        '--- Backend Stderr ---',
+        stderr,
+        '',
+        '--- Electron Log ---',
+        electronLog,
+      ].join('\n');
+
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      const btn = document.querySelector('.btn-secondary');
+      const orig = btn.textContent;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+  </script>
 </body>
 </html>

@@ -1,14 +1,16 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().prefetch_related('items').order_by('-created_at')
+    """
+    Standard CRUD for Orders.
+    """
+    queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    permission_classes = [AllowAny] # Revert to IsAuthenticated for prod
     
     filterset_fields = ['shop', 'order_status', 'priority']
     search_fields = ['order_no', 'customer__name', 'customer__phone']

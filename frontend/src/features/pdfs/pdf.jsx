@@ -1,5 +1,6 @@
 import React from "react";
 import "../../assets/styles/pdf.css";
+import WatermarkSVG from "../../assets/media/svg.svg";
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -26,24 +27,24 @@ export default function InvoicePDF({ data }) {
 
     return (
         <div className={`pdf-print-wrapper theme-${theme.toLowerCase()}`}>
-            
+
             {/* SVG Watermark */}
-            <img 
-                src="/src/assets/media/svg.svg" 
-                alt="watermark" 
-                className="pdf-watermark" 
-                onError={(e) => { e.target.style.display = 'none'; }} 
+            <img
+                src={WatermarkSVG}
+                alt="watermark"
+                className="pdf-watermark"
+                onError={(e) => { e.target.style.display = 'none'; }}
             />
 
             <div className="pdf-content-layer">
-                
+
                 {/* Header */}
                 <div className="pdf-header">
                     <div className="pdf-header-left">
                         <h1 className="pdf-shop-name">MAA SARBAMANGALA JEWELLERS</h1>
                         <div className="pdf-shop-details">
-                            Main Road, Raniganj, West Bengal - 713347<br/>
-                            Phone: +91 9876543210 | Email: contact@maasarbamangala.com<br/>
+                            Main Road, Raniganj, West Bengal - 713347<br />
+                            Phone: +91 9876543210 | Email: contact@maasarbamangala.com<br />
                             GSTIN: 19ABAFM4530A1ZS
                         </div>
                     </div>
@@ -141,7 +142,7 @@ export default function InvoicePDF({ data }) {
 
                 {/* Bottom Summary Grid */}
                 <div className="pdf-summary-grid">
-                    
+
                     {/* Left: T&C + Words */}
                     <div className="pdf-sg-left">
                         {totals.amountInWords && (
@@ -151,7 +152,7 @@ export default function InvoicePDF({ data }) {
                         )}
                         {payment && payment.amounts && payment.amounts.length > 0 && (
                             <div className="pdf-payment-info">
-                                <strong>Payment Received:</strong><br/>
+                                <strong>Payment Received:</strong><br />
                                 {payment.amounts.map(p => (
                                     <span key={p.mode} style={{ marginRight: 15 }}>
                                         {p.mode.toUpperCase()}: {fmt(p.amount)}
@@ -196,19 +197,19 @@ export default function InvoicePDF({ data }) {
                                 {oldMetal && oldMetal.value > 0 && (
                                     <tr>
                                         <td>Old Metal Value (−)</td>
-                                        <td style={{color: '#e53935'}}>{fmt(oldMetal.value)}</td>
+                                        <td style={{ color: '#e53935' }}>{fmt(oldMetal.value)}</td>
                                     </tr>
                                 )}
                                 {Number(totals.advance) > 0 && (
                                     <tr>
                                         <td>Advance Deducted (−)</td>
-                                        <td style={{color: '#e53935'}}>{fmt(totals.advance)}</td>
+                                        <td style={{ color: '#e53935' }}>{fmt(totals.advance)}</td>
                                     </tr>
                                 )}
                                 {Number(totals.discount) > 0 && (
                                     <tr>
                                         <td>Discount (−)</td>
-                                        <td style={{color: '#e53935'}}>{fmt(totals.discount)}</td>
+                                        <td style={{ color: '#e53935' }}>{fmt(totals.discount)}</td>
                                     </tr>
                                 )}
                                 {Number(totals.roundOff) !== 0 && (
@@ -225,7 +226,7 @@ export default function InvoicePDF({ data }) {
                         </table>
                     </div>
                 </div>
-                
+
                 {/* Signatures */}
                 <div className="pdf-footer">
                     <div style={{ paddingLeft: '20px' }}>

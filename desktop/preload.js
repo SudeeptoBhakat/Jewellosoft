@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     printToPDF: (filename) => ipcRenderer.invoke('print-to-pdf', filename),
     backupDB: () => ipcRenderer.invoke('backup-db'),
+    getLogPath: () => ipcRenderer.invoke('get-log-path'),
+    openLogFolder: () => ipcRenderer.invoke('open-log-folder'),
     
     // Auto-Updater hooks
     onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, info) => callback(info)),
@@ -12,3 +14,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, info) => callback(info)),
     installUpdate: () => ipcRenderer.send('install-update')
 });
+

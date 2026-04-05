@@ -1,4 +1,4 @@
-﻿altgraph==0.17.5
+altgraph==0.17.5
 asgiref==3.11.1
 colorama==0.4.6
 Django==6.0.3
@@ -6,7 +6,7 @@ django-cors-headers==4.9.0
 django-filter==25.2
 django-rest-framework==0.1.0
 djangorestframework==3.17.1
-djangorestframework_simplejwt==5.5.1
+python-dotenv==1.0.1
 iniconfig==2.3.0
 packaging==26.0
 pefile==2024.8.26

@@ -1,6 +1,5 @@
 import logging
 from rest_framework import viewsets
-from rest_framework.permissions import AllowAny
 from .models import RateHistory
 from .serializers import RateHistorySerializer
 
@@ -10,7 +9,6 @@ logger = logging.getLogger("jewellosoft.api")
 class RateHistoryViewSet(viewsets.ModelViewSet):
     """CRUD for rate history entries. Ordered by newest-first."""
     serializer_class = RateHistorySerializer
-    permission_classes = [AllowAny]  # Revert to IsAuthenticated for prod
 
     def get_queryset(self):
         queryset = RateHistory.objects.all().order_by('-created_at')

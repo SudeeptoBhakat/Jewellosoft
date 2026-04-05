@@ -8,7 +8,6 @@ from django.utils import timezone
 from django.db.models import Sum, Count, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
 
 logger = logging.getLogger("jewellosoft.api")
 
@@ -18,7 +17,6 @@ class DashboardStatsView(APIView):
     GET /api/dashboard/stats/
     Returns aggregated statistics for the Dashboard page.
     """
-    permission_classes = [AllowAny]  # TODO: IsAuthenticated in prod
 
     def get(self, request):
         from apps.billing.models import Invoice, Estimate
@@ -109,7 +107,6 @@ class GlobalSearchView(APIView):
     Searches across Customers, Invoices, Estimates, Orders, and Inventory.
     Returns categorized results.
     """
-    permission_classes = [AllowAny]  # TODO: IsAuthenticated in prod
 
     def get(self, request):
         q = request.query_params.get('q', '').strip()
@@ -196,7 +193,6 @@ class LatestRatesView(APIView):
     GET /api/rates/latest/
     Returns the single latest rate per metal_type for fast navbar consumption.
     """
-    permission_classes = [AllowAny]
 
     def get(self, request):
         from apps.rates.models import RateHistory
@@ -217,7 +213,8 @@ class ApplicationHealthView(APIView):
     GET /api/health/
     Lightweight health check for Electron to verify Django is fully booted.
     """
-    permission_classes = [AllowAny]
+    # This is the one endpoint that actually needs AllowAny so Electron can check health
+    permission_classes = []
 
     def get(self, request):
         return Response({"status": "ok", "message": "JewelloSoft Backend Ready"})
