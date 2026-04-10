@@ -73,10 +73,14 @@ HIDDEN_IMPORTS = [
     "rest_framework_simplejwt.tokens",
     "rest_framework_simplejwt.views",
     'rest_framework_simplejwt.token_blacklist',
+    'rest_framework_simplejwt.state',
     'corsheaders',
     'corsheaders.middleware',
     'django_filters',
     'django_filters.rest_framework',
+    'cryptography',
+    'cryptography.fernet',
+    'supabase',
 
     # Dynamic project classes defined in settings
     'core.pagination',
@@ -127,13 +131,19 @@ for app in PROJECT_APPS:
         f'{app_base}.serializers',
     ])
     
-    # Optional services module
-    if (BACKEND_DIR / "apps" / app / "services.py").exists():
-        HIDDEN_IMPORTS.append(f'{app_base}.services')
+    # Optional per-app modules loaded dynamically by Django
+    for optional_module in ['middleware', 'crypto', 'signals', 'services', 'admin', 'forms', 'filters']:
+        mod_file = BACKEND_DIR / "apps" / app / f"{optional_module}.py"
+        mod_dir  = BACKEND_DIR / "apps" / app / optional_module
+        if mod_file.exists() or mod_dir.exists():
+            HIDDEN_IMPORTS.append(f'{app_base}.{optional_module}')
     
-    # Optional signals module
-    if (BACKEND_DIR / "apps" / app / "signals.py").exists():
-        HIDDEN_IMPORTS.append(f'{app_base}.signals')
+    # Services subdirectory (e.g. apps.core.services.supabase)
+    services_dir = BACKEND_DIR / "apps" / app / "services"
+    if services_dir.is_dir():
+        for py_file in services_dir.glob("*.py"):
+            if py_file.name != "__init__.py":
+                HIDDEN_IMPORTS.append(f'{app_base}.services.{py_file.stem}')
 
     # 🔥 CRITICAL EXPLICIT MIGRATIONS: 
     # Must be python hidden-imports, NOT regular --add-data!
@@ -154,6 +164,11 @@ DATAS = []
 templates_dir = BACKEND_DIR / "templates"
 if templates_dir.exists():
     DATAS.append((str(templates_dir), "templates"))
+
+# Explicitly pack config.json
+config_path = BACKEND_DIR / "config.json"
+if config_path.exists():
+    DATAS.append((str(config_path), "."))
 
 # Add guaranteed internal bindings for Django and DRF Data (Templates, Localization, CSS/JS)
 # Using collect_data_files statically guarantees flawless collection of .mo translation files
@@ -192,7 +207,7 @@ print(f"Entry Script    : {RUN_SCRIPT}")
 print(f"Output Dir      : {DIST_DIR}")
 print(f"Hidden Imports  : {len(HIDDEN_IMPORTS)}")
 print(f"Data Files      : {len(DATAS)}")
-print("\n🚀 Building EXE...\n")
+print("\nBuilding EXE...\n")
 
 PyInstaller.__main__.run(cmd)
 
@@ -206,12 +221,12 @@ if exe_path.exists():
     size_mb = exe_path.stat().st_size / (1024 * 1024)
 
     print("\n" + "=" * 60)
-    print("✅ BUILD SUCCESSFUL")
+    print("BUILD SUCCESSFUL")
     print(f"EXE Path : {exe_path}")
     print(f"Size     : {size_mb:.1f} MB")
     print("=" * 60)
 else:
     print("\n" + "=" * 60)
-    print("❌ BUILD FAILED — backend.exe not found")
+    print("BUILD FAILED — backend.exe not found")
     print("=" * 60)
     sys.exit(1)

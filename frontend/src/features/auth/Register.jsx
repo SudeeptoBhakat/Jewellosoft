@@ -82,6 +82,10 @@ export default function Register() {
     try {
       setLoading(true);
       const result = await register(formData.email, formData.password, {
+        shop_name: formData.shopName,
+        owner_name: formData.ownerName,
+        mobile_number: formData.mobileNumber,
+        // Fallback keys ensuring compatibility based on any trigger parsing:
         shopName: formData.shopName,
         ownerName: formData.ownerName,
         mobileNumber: formData.mobileNumber,

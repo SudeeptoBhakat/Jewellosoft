@@ -1,6 +1,15 @@
+import os
 from pathlib import Path
 from datetime import timedelta
-import os
+import sys
+
+# Load local config system
+# We import loader like this because settings package is sometimes loaded differently
+base_dir_parent = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(base_dir_parent))
+from config.loader import load_config
+
+APP_CONFIG = load_config()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -17,8 +26,10 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # ── Supabase Config ──────────────────────────────────────────────────
-# Found in Supabase Dashboard → Settings → API → JWT Secret
-SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET', '')
+SUPABASE_URL = APP_CONFIG.get("SUPABASE_URL")
+SUPABASE_ANON_KEY = APP_CONFIG.get("SUPABASE_ANON_KEY")
+SUPABASE_SERVICE_ROLE_KEY = APP_CONFIG.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_JWT_SECRET = APP_CONFIG.get("SUPABASE_JWT_SECRET")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -100,9 +111,10 @@ ROOT_URLCONF = 'config.urls'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+STATICFILES_DIRS = []
+static_dir = BASE_DIR / 'static'
+if static_dir.exists():
+    STATICFILES_DIRS.append(static_dir)
 # ── Media files (product images, etc.) ────────────────────────────────
 MEDIA_URL = '/media/'
 MEDIA_ROOT = USER_DATA_DIR / 'media'
@@ -110,11 +122,9 @@ MEDIA_ROOT.mkdir(exist_ok=True)
 
 # ── REST Framework Global Config ─────────────────────────────────────
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',

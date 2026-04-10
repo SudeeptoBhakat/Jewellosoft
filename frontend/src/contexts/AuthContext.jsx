@@ -84,15 +84,70 @@ export function AuthProvider({ children }) {
 
   // ── Wrapped methods (delegate to authService) ──────────────────
   const login = useCallback(async (email, password) => {
+    // ── Offline Password Fallback ──
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      try {
+        const res = await api.post('/accounts/auth/offline-login/', { email, password });
+        setUser(res.data.user);
+        setShop(res.data.shop);
+        if (res.data.shop?.hallmark_value) {
+          localStorage.setItem('jewellosoft_hallmark_value', res.data.shop.hallmark_value);
+        }
+        if (res.data.access_token) {
+          localStorage.setItem('access_token', res.data.access_token);
+        }
+      } catch (err) {
+        throw new Error(err.response?.data?.detail || "Invalid password or profile not found for offline mode.");
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 1. Supabase Native Login
     await authService.signIn(email, password);
-    await checkSession();
-  }, [checkSession]);
+    
+    // 2. Activate Local Offline License & sync Shop Profile
+    try {
+      const res = await api.post('/accounts/auth/activate/', { password });
+      setUser(res.data.license); // Set User from license structure
+      setShop(res.data.shop);
+      if (res.data.shop?.hallmark_value) {
+        localStorage.setItem('jewellosoft_hallmark_value', res.data.shop.hallmark_value);
+      }
+    } catch (err) {
+       if (err.response?.status === 403) {
+         alert("Subscription inactive or expired. Please manage your subscription online.");
+       }
+       throw err;
+    } finally {
+       setLoading(false);
+    }
+  }, []);
 
   const register = useCallback(async (email, password, metadata) => {
-    const result = await authService.signUp(email, password, metadata);
-    await checkSession();
-    return result;
-  }, [checkSession]);
+    // 1. Supabase Native Register (Postgres Trigger instantly creates profile)
+    const { session, user } = await authService.signUp(email, password, metadata);
+    const needsEmailConfirmation = !session;
+    
+    // 2. Login implicitly happens, so let's activate the DB
+    try {
+      // NOTE: We pass email explicitly so backend can resolve user if JWT is missing due to confirmation pending
+      const res = await api.post('/accounts/auth/activate/', { 
+        email, 
+        password, 
+        ...metadata 
+      });
+      setUser(res.data.license || res.data.user); 
+      setShop(res.data.shop);
+    } catch (err) {
+       console.warn("[AuthContext:Register] Activation failed: ", err);
+       throw err;
+    } finally {
+       setLoading(false);
+    }
+    
+    return { needsEmailConfirmation };
+  }, []);
 
   const logout = useCallback(async () => {
     await authService.signOut();

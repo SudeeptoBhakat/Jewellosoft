@@ -40,7 +40,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     // Fetch shop name from backend
-    api.get('/accounts/shops/current/')
+    api.get('/accounts/shop/current/')
       .then((res) => setShopName(res.data.name || 'JewelloSoft'))
       .catch(() => {}); // Silent fail — default name is fine
 

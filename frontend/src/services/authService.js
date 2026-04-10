@@ -4,9 +4,8 @@
  * ────────────────────────────────────────────────────────────────
  */
 
-import api from '../lib/axios';
+import { supabase } from '../lib/supabaseClient';
 
-// ── Request lock (prevents duplicate parallel calls) ────────────
 const _locks = {};
 
 function acquireLock(key) {
@@ -25,28 +24,30 @@ function assertOnline() {
   }
 }
 
-// ─── PUBLIC API ──────────────────────────────────────────────────
-
-function parseError(err) {
-  return err.response?.data?.detail || err.response?.data?.message || err.message || "Authentication failed.";
-}
-
 export async function signUp(email, password, metadata = {}) {
   assertOnline();
   if (!acquireLock('signup')) throw new Error('Registration already in progress.');
 
   try {
-    const res = await api.post('/accounts/auth/register/', { email, password, ...metadata });
-    const { user, session } = res.data;
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: metadata,
+      }
+    });
     
-    if (session?.access_token) {
-      localStorage.setItem('access_token', session.access_token);
-      localStorage.setItem('refresh_token', session.refresh_token);
+    if (error) throw error;
+    
+    // We intentionally DO NOT insert into public.profiles.
+    // The Postgres trigger 'handle_new_user()' handles that securely.
+    
+    if (data.session?.access_token) {
+      localStorage.setItem('access_token', data.session.access_token);
+      localStorage.setItem('refresh_token', data.session.refresh_token);
     }
     
-    return { user, session, needsEmailConfirmation: false };
-  } catch (err) {
-    throw new Error(parseError(err));
+    return { user: data.user, session: data.session };
   } finally {
     releaseLock('signup');
   }
@@ -57,32 +58,36 @@ export async function signIn(email, password) {
   if (!acquireLock('signin')) throw new Error('Login already in progress.');
 
   try {
-    // Call the standard SimpleJWT endpoint
-    const res = await api.post('/auth/token/', { username: email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     
-    const access_token = res.data.access;
-    const refresh_token = res.data.refresh;
+    if (error) throw error;
     
-    localStorage.setItem('access_token', access_token);
-    localStorage.setItem('refresh_token', refresh_token);
+    if (data.session?.access_token) {
+      localStorage.setItem('access_token', data.session.access_token);
+      localStorage.setItem('refresh_token', data.session.refresh_token);
+    }
     
-    // We don't get user details back from TokenObtainPairView default,
-    // so we return the session and the AuthContext will fetch /me
-    return { session: { access_token, refresh_token }, user: null };
-  } catch (err) {
-    throw new Error(parseError(err));
+    return { user: data.user, session: data.session };
   } finally {
     releaseLock('signin');
   }
 }
 
 export async function signOut() {
+  await supabase.auth.signOut();
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
 }
 
 export async function resendConfirmation(email) {
-  // Not applicable for local auth, mock success
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+  });
+  if (error) throw error;
   return true;
 }
 
@@ -93,7 +98,6 @@ export async function getSession() {
 }
 
 export function getSupabaseClient() {
-  // Mock function to prevent breaking older code that tries to use it initially
-  return null;
+  return supabase;
 }
 
