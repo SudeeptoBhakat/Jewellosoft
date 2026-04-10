@@ -1,150 +1,105 @@
-# JewelloSoft – Smart Jewellery Billing & Inventory Desktop App
+# JewelloSoft – Production-Grade Jewellery Retail & Billing System
 
-JewelloSoft is a **modern, offline-first desktop application** built for jewellery shop owners to manage **billing, inventory, customers, and orders** with a seamless and professional experience.
+JewelloSoft is a **modern, offline-first desktop application** meticulously engineered for jewellery shop owners. It provides a robust, seamless, and professional environment to manage **billing, inventory, customers, and orders**. 
 
-Designed with a powerful stack (**Electron + React + Django**), it delivers **high performance, local data storage, and beautiful invoice generation** — all without requiring a browser.
-
----
-
-## Features
-
-### Billing & Invoicing
-
-* Generate professional invoices instantly
-* Auto calculation using advanced pricing engine
-* GST (CGST/SGST), making charges, discounts handled
-* Export invoices as **PDF (print-ready)**
-
-### Inventory Management
-
-* Track jewellery stock with SKU/HUID
-* Auto-update inventory on sales
-* Product image upload & local storage
-
-### Customer Management
-
-* Manage customer details
-* Fast search and filtering
-* Linked order history
-
-### Orders & Estimates
-
-* Create and convert estimates → invoices
-* Track order lifecycle
-* Advance payment support
-
-### Desktop Experience
-
-* Runs fully **offline (no internet required)**
-* Local database storage (safe & fast)
-* Native desktop UI (no browser)
-
-### Auto Update System
-
-* Detects new versions automatically
-* One-click update inside app
-* Secure update delivery via GitHub
+Designed with an enterprise-grade stack (**Electron + React + Django**), it delivers **high performance, offline local data availability**, and resilient **background cloud synchronization**.
 
 ---
 
-## Tech Stack
+## 🚀 Core Features
 
-| Layer       | Technology             |
-| ----------- | ---------------------- |
-| Frontend    | React + Vite           |
-| Backend     | Django + DRF           |
-| Desktop App | Electron               |
-| Database    | SQLite (Local Storage) |
-| PDF Engine  | Electron Print API     |
+### 💎 Advanced Billing & Invoicing
+* Instantly generate professional, print-ready PDF invoices.
+* Automated calculating engine accommodating Making Charges, Discounts, and live Gold/Silver hallmark rates.
+* Complex GST (CGST/SGST/IGST) calculations mapped dynamically.
 
----
+### 📦 Precision Inventory Management
+* Track and manage jewellery stock using HUID and SKU logic.
+* High-resolution product image upload and local unified storage.
+* Automated dynamic stock deduction upon invoice generation.
 
-## Download & Install
+### 👥 Customer Relationship Management
+* Comprehensive database for customer tracking.
+* Fast indexing, advanced filtering, and rich search.
+* 360-degree linked order and billing history.
 
-👉 **Download Latest Version (One Click Install):**
-🔗 [https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest](https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest)
+### ☁️ Offline-First Security & Cloud Sync
+* **Works 100% Offline**: Continuous operation even during internet outages using local SQLite storage.
+* **Background Data Synchronization**: A silent daemon natively syncs customer and shop configuration back to a secure Supabase cloud layer upon internet reconnection.
+* **Secure Auth Bridging**: Highly secure local encryption and Supabase JWT integrated profile logic, employing a true Singleton tenant structure per device to prevent data leaks.
 
-### Installation Steps:
-
-1. Download the `.exe` installer
-2. Double-click to run installer
-3. Choose installation location
-4. Complete setup (Next → Install → Finish)
-5. Launch JewelloSoft from Desktop shortcut
-
----
-
-## Authentication
-
-* Register a new account or login
-* Secure local authentication
-* Optional cloud sync (future support)
+### 🔄 CI/CD & Auto Update Pipeline
+* Implemented with **electron-updater** tracking GitHub Releases.
+* Automatically detects, downloads, and prompts for new NSIS version installations directly inside the UI.
 
 ---
 
-## Data Storage
+## 🏗 Technology Stack
 
-All data is stored locally on your system:
-
-```
-C:\Users\<YourName>\AppData\Roaming\JewelloSoft\
-```
-
-Includes:
-
-* Database (SQLite)
-* Product images
-* Generated invoices
-* Logs
+| Layer                         | Technology                      |
+| ----------------------------- | ------------------------------- |
+| **Frontend Framework**        | React + Vite                    |
+| **Backend API Layer**         | Python Django + Django REST (DRF)|
+| **Production WSGI Server**    | Waitress (Bundled via PyInstaller)|
+| **Desktop Orchestration**     | Electron.js                     |
+| **Local Offline Database**    | SQLite                          |
+| **Cloud Authentication/Sync** | Supabase                        |
 
 ---
 
-## PDF Invoice
+## 📥 Download & Install
 
-* High-quality PDF generation
-* Uses same React UI design
-* Print or Save instantly
+👉 **Download the Latest Production Release (v1.0.1):**  
+🔗 [Download Latest JewelloSoft Setup.exe](https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest)
 
----
-
-## Auto Updates
-
-* App checks for updates automatically
-* Shows "Update Available" notification
-* One-click update installs latest version
+### Installation Guide:
+1. Download the `.exe` installer locally.
+2. Run the installer and provide administrator privileges if prompted.
+3. Advance through the configuration setup.
+4. Launch JewelloSoft natively from your Desktop shortcut!
 
 ---
 
-## Development Setup (For Developers)
+## 🛡️ Architecture & Security Details
 
-### Clone Repository
+* **Django Standalone Bundle**: The Python backend is entirely independent and dependency-free, shipped as a frozen executable using PyInstaller.
+* **Encrypted Licensing**: Offline license keys are validated using AES/Fernet cryptography.
+* **Separation of Concerns**: UI runs solely on React/Electron processes, routing requests to the hidden background WSGI local server.
 
+---
+
+## 💻 Development Setup
+
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/SudeeptoBhakat/Jewellosoft.git
 cd Jewellosoft
 ```
 
-### Backend Setup
-
+### 2. Backend Initialization (Django)
+Requires Python 3.10+
 ```bash
 cd backend
 python -m venv .venv
+# On Windows:
 .venv\Scripts\activate
+# Install requirements
 pip install -r requirements.txt
+# Migrate Schema
 python manage.py migrate
+# Seed Database & Run Server
 python manage.py runserver
 ```
 
-### Frontend Setup
-
+### 3. Frontend Initialization (React)
+Requires Node.js 18+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Electron App
-
+### 4. Desktop Shell (Electron)
 ```bash
 cd desktop
 npm install
@@ -153,60 +108,41 @@ npm start
 
 ---
 
-## Build Desktop App
+## 📦 Building for Production
 
+JewelloSoft uses GitHub Actions for continuous delivery. To build locally:
 ```bash
+# Compile Frontend Production Build
+cd frontend
+npm run build
+
+# Compile Python Backend Binary (Windows)
+cd backend
+python build_backend.py 
+
+# Build Electron NSIS Installer
 cd desktop
 npm run build
 ```
-
-Output:
-
-```
-dist/JewelloSoft Setup.exe
-```
+Output artifact available at: `desktop/dist/JewelloSoft Setup.exe`
 
 ---
 
-## Important Notes
+## 🗺 Roadmap
 
-* This is a **production-ready desktop application**
-* Works completely offline after installation
-* No browser required
-* Keep backups of your local data folder
-
----
-
-## Roadmap (Future Updates)
-
-* Cloud sync & backup
-* Multi-user support
-* Role-based access
-* Advanced analytics dashboard
-* Barcode scanning integration
+* Advanced multi-location branch syncing.
+* Enhanced Barcode/QR Code scanning integration.
+* Daily market price rate integration feeds.
+* Role-based access control (RBAC) for multiple staff logins.
 
 ---
 
-## Author
-
-**Sudeepto Bhakat**
-Backend Developer
+## 👤 Author
+**Sudeepto Bhakat**  
+Lead Backend Engineer & Systems Architect  
 📧 [sudeeptabhakat84645@gmail.com](mailto:sudeeptabhakat84645@gmail.com)
 
 ---
 
-## Support
-
-If you like this project:
-
-* ⭐ Star the repository
-* 🐛 Report issues
-* 💡 Suggest improvements
-
----
-
-## License
-
-This project is licensed under the MIT License.
-
----
+## 📜 License
+This project is securely licensed under the MIT License.
