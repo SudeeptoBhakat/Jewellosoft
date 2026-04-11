@@ -572,8 +572,15 @@ app.on('ready', async () => {
       });
     });
 
+    // ─── Auto-Updater: check once after a short delay ────────────
+    // Delay ensures the window is fully loaded before we send IPC events.
     if (!isDev) {
-      autoUpdater.checkForUpdatesAndNotify();
+      setTimeout(() => {
+        log('[AutoUpdater] Checking for updates...');
+        autoUpdater.checkForUpdates().catch((err) => {
+          log(`[AutoUpdater] Check failed: ${err.message}`);
+        });
+      }, 5000);
     }
 
     log('Application started successfully');
@@ -623,37 +630,122 @@ function killProcessTree(pid) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Auto Updater Configurations & Handlers
+// Auto Updater — Production-Grade Permission-Based Flow
+// ─────────────────────────────────────────────────────────────────
+//
+// Flow:
+//   1. App boots → checks for updates (once, after 5s delay)
+//   2. update-available → sends info to renderer (NO auto-download)
+//   3. Renderer shows "Update Available v{X}" card → user clicks "Download"
+//   4. User approves → renderer sends 'start-download' IPC
+//   5. Main process calls autoUpdater.downloadUpdate()
+//   6. download-progress events stream to renderer (live %)
+//   7. update-downloaded → renderer shows "Restart & Install" button
+//   8. User clicks → main calls autoUpdater.quitAndInstall()
+//
+// Error handling:
+//   - Network failures → renderer shows retry-able error state
+//   - update-not-available → renderer stays idle (nothing shown)
+//   - All events logged to electron-updater.log
 // ─────────────────────────────────────────────────────────────────
 
 electronLog.transports.file.resolvePathFn = () => path.join(getTodayLogDir(), 'electron-updater.log');
 autoUpdater.logger = electronLog;
 autoUpdater.logger.transports.file.level = 'info';
-autoUpdater.autoDownload = true;
+
+// ▶ CRITICAL: Do NOT auto-download. Wait for user permission.
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
+
+autoUpdater.on('checking-for-update', () => {
+  log('[AutoUpdater] Checking for update...');
+});
 
 autoUpdater.on('update-available', (info) => {
-  electronLog.info('Update available.');
-  log(`Update available: ${JSON.stringify(info)}`);
-  if (mainWindow) mainWindow.webContents.send('update-available', info);
+  log(`[AutoUpdater] Update available: v${info.version} (released: ${info.releaseDate})`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-available', {
+      version: info.version,
+      releaseDate: info.releaseDate,
+      releaseNotes: info.releaseNotes || '',
+      currentVersion: app.getVersion(),
+    });
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  log(`[AutoUpdater] No update available. Current: v${app.getVersion()}, Latest: v${info.version}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-not-available');
+  }
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
-  if (mainWindow) mainWindow.webContents.send('download-progress', progressObj);
+  const msg = `Download speed: ${(progressObj.bytesPerSecond / 1024).toFixed(1)} KB/s — ` +
+              `${progressObj.percent.toFixed(1)}% ` +
+              `(${(progressObj.transferred / 1024 / 1024).toFixed(2)} / ${(progressObj.total / 1024 / 1024).toFixed(2)} MB)`;
+  log(`[AutoUpdater] ${msg}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('download-progress', {
+      percent: progressObj.percent,
+      bytesPerSecond: progressObj.bytesPerSecond,
+      transferred: progressObj.transferred,
+      total: progressObj.total,
+    });
+  }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  electronLog.info('Update downloaded.');
-  log(`Update downloaded: ${JSON.stringify(info)}`);
-  if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
+  log(`[AutoUpdater] Update downloaded: v${info.version}. Ready to install.`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-downloaded', {
+      version: info.version,
+    });
+  }
 });
 
 autoUpdater.on('error', (err) => {
-  electronLog.error(`AutoUpdater Error: ${err.message}`);
-  log(`AutoUpdater Error: ${err.message}`);
+  const message = err ? (err.stack || err.message || err).toString() : 'Unknown updater error';
+  log(`[AutoUpdater] ERROR: ${message}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-error', {
+      message: err.message || 'Update check failed. Please try again later.',
+    });
+  }
+});
+
+// ─── IPC: User-triggered update actions ─────────────────────────
+
+ipcMain.on('start-download', () => {
+  log('[AutoUpdater] User approved download. Starting...');
+  autoUpdater.downloadUpdate().catch((err) => {
+    log(`[AutoUpdater] Download failed: ${err.message}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', {
+        message: err.message || 'Download failed. Check your internet connection.',
+      });
+    }
+  });
 });
 
 ipcMain.on('install-update', () => {
-  autoUpdater.quitAndInstall();
+  log('[AutoUpdater] User requested install. Quitting and installing...');
+  // Give a brief moment for the renderer to show its "Restarting..." state
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true);
+  }, 500);
+});
+
+ipcMain.on('check-for-updates', () => {
+  log('[AutoUpdater] Manual update check requested by user.');
+  autoUpdater.checkForUpdates().catch((err) => {
+    log(`[AutoUpdater] Manual check failed: ${err.message}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', {
+        message: err.message || 'Update check failed.',
+      });
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────

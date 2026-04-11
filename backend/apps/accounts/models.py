@@ -15,15 +15,15 @@ class Shop(BaseModel):
 
     # ── Business Info ─────────────────────────────────────────────
     name = models.CharField(max_length=255)
-    owner_name = models.CharField(max_length=255)
-    phone = models.CharField(max_length=15)
+    owner_name = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=15, blank=True)
     email = models.EmailField(blank=True, null=True)
     gst_number = models.CharField(max_length=50, blank=True, null=True)
-    address = models.TextField()
+    address = models.TextField(blank=True)
 
     # Settings
     language = models.CharField(max_length=20, default='English')
-    theme = models.CharField(max_length=20, default='System Default')
+    theme = models.CharField(max_length=30, default='default')
     date_format = models.CharField(max_length=20, default='DD/MM/YYYY')
     default_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=3.0)
     decimal_precision = models.IntegerField(default=2)

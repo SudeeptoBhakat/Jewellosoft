@@ -12,6 +12,17 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   </head>
   <body>
+    <script>
+      // ── Flash-of-Wrong-Theme Prevention ──
+      // Runs synchronously before React to apply saved theme instantly.
+      (function() {
+        try {
+          var t = localStorage.getItem('jewellosoft_theme');
+          var map = { dark: 'dark', light: 'light' };
+          if (t && map[t]) document.documentElement.setAttribute('data-theme', map[t]);
+        } catch(e) {}
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

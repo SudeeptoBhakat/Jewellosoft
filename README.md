@@ -142,7 +142,3 @@ Output artifact available at: `desktop/dist/JewelloSoft Setup.exe`
 Lead Backend Engineer & Systems Architect  
 📧 [sudeeptabhakat84645@gmail.com](mailto:sudeeptabhakat84645@gmail.com)
 
----
-
-## 📜 License
-This project is securely licensed under the MIT License.

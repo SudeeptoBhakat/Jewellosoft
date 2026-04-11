@@ -8,10 +8,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLogPath: () => ipcRenderer.invoke('get-log-path'),
     openLogFolder: () => ipcRenderer.invoke('open-log-folder'),
     
-    // Auto-Updater hooks
-    onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, info) => callback(info)),
-    onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (_event, progressObj) => callback(progressObj)),
-    onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, info) => callback(info)),
-    installUpdate: () => ipcRenderer.send('install-update')
-});
+    // ─── Auto-Updater IPC ────────────────────────────────────────
+    // Events FROM main → renderer  (listeners)
+    onUpdateAvailable:    (cb) => ipcRenderer.on('update-available',     (_e, info) => cb(info)),
+    onUpdateNotAvailable: (cb) => ipcRenderer.on('update-not-available', ()         => cb()),
+    onDownloadProgress:   (cb) => ipcRenderer.on('download-progress',    (_e, info) => cb(info)),
+    onUpdateDownloaded:   (cb) => ipcRenderer.on('update-downloaded',    (_e, info) => cb(info)),
+    onUpdateError:        (cb) => ipcRenderer.on('update-error',         (_e, info) => cb(info)),
 
+    // Actions FROM renderer → main  (user-initiated)
+    startDownload:    () => ipcRenderer.send('start-download'),
+    installUpdate:    () => ipcRenderer.send('install-update'),
+    checkForUpdates:  () => ipcRenderer.send('check-for-updates'),
+});

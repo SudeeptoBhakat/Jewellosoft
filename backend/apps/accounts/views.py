@@ -39,6 +39,9 @@ class ShopCurrentView(APIView):
                 payload=serializer.data
             )
             return Response(serializer.data)
+            
+        # Log validation errors for debugging
+        print("Serializer Validation Errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

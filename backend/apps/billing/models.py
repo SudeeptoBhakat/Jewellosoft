@@ -83,6 +83,9 @@ class Estimate(BaseBilling):
     )
     is_paid = models.BooleanField(default=False)
 
+    class Meta:
+        ordering = ['-created_at']
+
 
 class Invoice(BaseBilling):
     invoice_no = models.CharField(max_length=50, unique=True)
@@ -98,3 +101,6 @@ class Invoice(BaseBilling):
     )
 
     is_paid = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']

@@ -1,14 +1,175 @@
 import { useState, useEffect } from 'react';
 import api from '../../lib/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme, THEMES } from '../../contexts/ThemeContext';
 
+/* ─── Theme Card Mini-Preview ─────────────────────────────────── */
+const themeCardStyle = (preview, isActive) => ({
+  position: 'relative',
+  flex: '1 1 220px',
+  maxWidth: 300,
+  borderRadius: 'var(--radius-lg)',
+  border: isActive
+    ? '2px solid var(--color-primary)'
+    : '2px solid var(--border-primary)',
+  cursor: 'pointer',
+  overflow: 'hidden',
+  transition: 'all 0.25s ease',
+  boxShadow: isActive ? '0 0 0 3px var(--color-primary-muted)' : 'var(--shadow-sm)',
+  transform: isActive ? 'scale(1.02)' : 'scale(1)',
+});
+
+const previewWindowStyle = (preview) => ({
+  display: 'flex',
+  height: 100,
+  background: preview.bg,
+  borderBottom: `1px solid ${preview.accent}22`,
+});
+
+const previewSidebarStyle = (preview) => ({
+  width: 50,
+  background: preview.sidebar,
+  borderRight: `1px solid ${preview.accent}22`,
+  padding: 8,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 5,
+});
+
+const previewBarStyle = (preview, w) => ({
+  height: 5,
+  width: w,
+  borderRadius: 3,
+  background: preview.accent,
+  opacity: 0.5,
+});
+
+const previewContentStyle = (preview) => ({
+  flex: 1,
+  padding: 10,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+});
+
+const previewCardStyle = (preview) => ({
+  background: preview.card,
+  borderRadius: 4,
+  height: 26,
+  border: `1px solid ${preview.accent}18`,
+});
+
+const previewTextStyle = (preview, w) => ({
+  height: 4,
+  width: w,
+  borderRadius: 2,
+  background: preview.text,
+  opacity: 0.25,
+});
+
+function ThemeCard({ themeDef, isActive, onClick }) {
+  const { preview } = themeDef;
+  return (
+    <div
+      id={`theme-card-${themeDef.key}`}
+      style={themeCardStyle(preview, isActive)}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+    >
+      {/* Mini Window Preview */}
+      <div style={previewWindowStyle(preview)}>
+        <div style={previewSidebarStyle(preview)}>
+          <div style={previewBarStyle(preview, '100%')} />
+          <div style={previewBarStyle(preview, '70%')} />
+          <div style={previewBarStyle(preview, '85%')} />
+          <div style={previewBarStyle(preview, '60%')} />
+        </div>
+        <div style={previewContentStyle(preview)}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ ...previewCardStyle(preview), flex: 1 }} />
+            <div style={{ ...previewCardStyle(preview), flex: 1 }} />
+          </div>
+          <div style={{ ...previewCardStyle(preview), flex: 1 }} />
+          <div style={{ display: 'flex', gap: 4, marginTop: 'auto' }}>
+            <div style={previewTextStyle(preview, 30)} />
+            <div style={previewTextStyle(preview, 50)} />
+          </div>
+        </div>
+      </div>
+
+      {/* Label Area */}
+      <div style={{
+        padding: '12px 14px',
+        background: 'var(--bg-card)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}>
+        <div style={{
+          width: 32,
+          height: 32,
+          borderRadius: 'var(--radius-md)',
+          background: isActive ? 'var(--color-primary-muted)' : 'var(--bg-elevated)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: isActive ? 'var(--color-primary)' : 'var(--text-tertiary)',
+          fontSize: 'var(--text-md)',
+          flexShrink: 0,
+        }}>
+          <i className={themeDef.icon} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 'var(--text-base)',
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            lineHeight: 1.3,
+          }}>
+            {themeDef.label}
+          </div>
+          <div style={{
+            fontSize: 'var(--text-xs)',
+            color: 'var(--text-tertiary)',
+            lineHeight: 1.4,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {themeDef.description}
+          </div>
+        </div>
+
+        {isActive && (
+          <div style={{
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            background: 'var(--color-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <i className="fa-solid fa-check" style={{ fontSize: 10, color: 'white' }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Settings Component ──────────────────────────────────────── */
 export default function Settings() {
   const { syncShop } = useAuth();
+  const { theme: activeTheme, setTheme } = useTheme();
   const [tab, setTab] = useState('General');
   const tabs = ['General', 'Business', 'Security'];
 
   const [formData, setFormData] = useState({
-    theme: 'System Default',
+    theme: 'default',
     language: 'English',
     date_format: 'DD/MM/YYYY',
     default_gst_rate: 3,
@@ -33,8 +194,28 @@ export default function Settings() {
   const fetchSettings = async () => {
     try {
       const res = await api.get('/accounts/shop/current/');
-      setFormData(prev => ({ ...prev, ...res.data }));
-      
+      const data = { ...res.data };
+
+      // ── Migrate legacy theme values to new keys ──
+      const legacyMap = {
+        'System Default': 'default',
+        'Dark Mode': 'dark',
+        'Light Mode': 'light',
+        'halloween': 'default',
+      };
+      if (data.theme && legacyMap[data.theme]) {
+        data.theme = legacyMap[data.theme];
+      }
+      // Ensure we only use known keys
+      if (!THEMES.some((t) => t.key === data.theme)) {
+        data.theme = 'default';
+      }
+
+      setFormData(prev => ({ ...prev, ...data }));
+
+      // Sync theme from backend → context so it takes effect immediately
+      setTheme(data.theme);
+
       // Update local storage for hallmark if changed via API
       if (res.data.hallmark_value) {
         localStorage.setItem('jewellosoft_hallmark_value', res.data.hallmark_value);
@@ -50,7 +231,6 @@ export default function Settings() {
     const { id, value } = e.target;
     // Map IDs to JSON keys
     const fieldMap = {
-      'settings-theme': 'theme',
       'settings-language': 'language',
       'settings-dateformat': 'date_format',
       'settings-gst': 'default_gst_rate',
@@ -72,18 +252,51 @@ export default function Settings() {
     }
   };
 
+  /** Called when clicking a theme card — live-previews immediately */
+  const handleThemeSelect = (themeKey) => {
+    setFormData(prev => ({ ...prev, theme: themeKey }));
+    setTheme(themeKey); // live apply
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setMessage({ text: '', type: '' });
+    
     try {
-      await api.patch('/accounts/shop/current/', formData);
+      // ── Senior Engineer Hardening Strategy ──
+      // 1. Ensure numeric fields are actually numbers and not NaN
+      // 2. Trim string fields and provide fallbacks for mandatory ones
+      // 3. Remove fields that shouldn't be patched directly if they are read-only
+      
+      const sanitizedData = {
+        ...formData,
+        default_gst_rate: parseFloat(formData.default_gst_rate) || 0,
+        decimal_precision: parseInt(formData.decimal_precision) || 2,
+        hallmark_value: parseFloat(formData.hallmark_value) || 0,
+        name: (formData.name || '').trim() || 'My Jewellery Shop',
+        owner_name: (formData.owner_name || '').trim(),
+        phone: (formData.phone || '').trim(),
+        address: (formData.address || '').trim(),
+        gst_number: (formData.gst_number || '').trim(),
+        email: (formData.email || '').trim(),
+      };
+
+      // Remove read-only or sensitive keys that might be in formData from a previous GET
+      delete sanitizedData.id;
+      delete sanitizedData.supabase_email;
+      delete sanitizedData.supabase_user_id;
+
+      await api.patch('/accounts/shop/current/', sanitizedData);
+      
       // Refresh global shop state so Navbar etc. pick up changes
       if (syncShop) await syncShop();
+      
       setMessage({ text: 'Settings saved successfully!', type: 'success' });
       setTimeout(() => setMessage({ text: '', type: '' }), 3000);
     } catch (err) {
       console.error('Save failed', err);
-      setMessage({ text: 'Failed to save settings. Please try again.', type: 'error' });
+      const detail = err.response?.data?.detail || 'Failed to save settings. Please check all fields.';
+      setMessage({ text: detail, type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -109,10 +322,13 @@ export default function Settings() {
             marginTop: 12, 
             padding: '10px 14px', 
             borderRadius: 6, 
-            backgroundColor: message.type === 'success' ? '#f0fdf4' : '#fef2f2',
-            color: message.type === 'success' ? '#166534' : '#991b1b',
-            border: `1px solid ${message.type === 'success' ? '#bbf7d0' : '#fecaca'}`
+            backgroundColor: message.type === 'success' ? 'var(--color-accent-muted, #f0fdf4)' : 'var(--color-danger-muted, #fef2f2)',
+            color: message.type === 'success' ? 'var(--color-accent, #166534)' : 'var(--color-danger, #991b1b)',
+            border: `1px solid ${message.type === 'success' ? 'var(--color-accent, #bbf7d0)' : 'var(--color-danger, #fecaca)'}`,
+            fontSize: 'var(--text-sm)',
+            fontWeight: 500,
           }}>
+            <i className={`fa-solid ${message.type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}`} style={{ marginRight: 8 }} />
             {message.text}
           </div>
         )}
@@ -129,20 +345,41 @@ export default function Settings() {
       {/* General Settings */}
       {tab === 'General' && (
         <div className="animate-fade-in-up">
+          {/* ── Theme Picker ──────────────────────────────── */}
           <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
             <div className="billing-form__header">
-              <span className="billing-form__header-title"><i className="fa-solid fa-palette" style={{ marginRight: 8, opacity: 0.6 }}></i>Appearance</span>
+              <span className="billing-form__header-title">
+                <i className="fa-solid fa-palette" style={{ marginRight: 8, opacity: 0.6 }}></i>Theme
+              </span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
+                Changes apply instantly — click Save to persist
+              </span>
+            </div>
+            <div className="billing-form__body">
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 'var(--space-4)',
+              }}>
+                {THEMES.map((t) => (
+                  <ThemeCard
+                    key={t.key}
+                    themeDef={t}
+                    isActive={formData.theme === t.key}
+                    onClick={() => handleThemeSelect(t.key)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Appearance ────────────────────────────────── */}
+          <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="billing-form__header">
+              <span className="billing-form__header-title"><i className="fa-solid fa-globe" style={{ marginRight: 8, opacity: 0.6 }}></i>Regional</span>
             </div>
             <div className="billing-form__body">
               <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Theme</label>
-                  <select className="form-input form-select" id="settings-theme" value={formData.theme} onChange={handleChange}>
-                    <option value="Dark Mode">Dark Mode</option>
-                    <option value="Light Mode">Light Mode</option>
-                    <option value="System Default">System Default</option>
-                  </select>
-                </div>
                 <div className="form-group">
                   <label className="form-label">Language</label>
                   <select className="form-input form-select" id="settings-language" value={formData.language} onChange={handleChange}>
@@ -164,9 +401,10 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* ── Preferences ───────────────────────────────── */}
           <div className="billing-form">
             <div className="billing-form__header">
-              <span className="billing-form__header-title"><i className="fa-solid fa-bell" style={{ marginRight: 8, opacity: 0.6 }}></i>Preferences</span>
+              <span className="billing-form__header-title"><i className="fa-solid fa-sliders" style={{ marginRight: 8, opacity: 0.6 }}></i>Preferences</span>
             </div>
             <div className="billing-form__body">
               <div className="form-row">
