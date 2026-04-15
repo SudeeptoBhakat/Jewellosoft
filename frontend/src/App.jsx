@@ -18,6 +18,7 @@ import AuthGuard from './features/auth/AuthGuard';
 import AuthLayout from './features/auth/AuthLayout';
 import Login from './features/auth/Login';
 import Register from './features/auth/Register';
+import TemplateSelection from './features/auth/TemplateSelection';
 
 export default function App() {
   return (
@@ -30,6 +31,9 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
           </Route>
+
+          {/* Onboarding — authenticated but standalone (no sidebar) */}
+          <Route path="/select-template" element={<AuthGuard><TemplateSelection /></AuthGuard>} />
 
           {/* Protected App Routes */}
           <Route element={<AuthGuard><MainLayout /></AuthGuard>}>

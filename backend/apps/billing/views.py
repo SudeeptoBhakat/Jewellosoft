@@ -61,54 +61,29 @@ class BillingPreviewViewSet(viewsets.ViewSet):
     def create(self, request):
         from .services.billing_engine import BillingEngine
         from decimal import Decimal
-        
+
         items_data = request.data.get('items', [])
         rate_10gm = request.data.get('rate_10gm', 0)
         making_per_gm = request.data.get('making_per_gm', 0)
         extra = request.data.get('extra', {})
-        
+
         engine = BillingEngine(items_data, rate_10gm, making_per_gm, extra)
         result = engine.calculate()
 
-        # UI Detailed Breakdown (Does not affect Business Logic, just maps variables)
-        rate_per_g = Decimal(rate_10gm) / Decimal(10) if rate_10gm else Decimal(0)
-        old_weight = Decimal(extra.get("old_weight", 0))
-        old_less_percent = Decimal(extra.get("old_less_percent", 0))
-        
-        oldMV = old_weight * rate_per_g
-        oldDeductAmt = oldMV * (old_less_percent / Decimal(100))
-        oldValue = oldMV - oldDeductAmt
-        
-        hallmark_charges = Decimal(extra.get("hallmark_charges", 0))
-        other_charges = Decimal(extra.get("other_charges", 0))
-        advance = Decimal(extra.get("advance", 0))
-        discount = Decimal(extra.get("discount", 0))
-        
-        # Adjust final amount by subtracting discount and extracting round off
-        preRound = result['subtotal'] + other_charges + hallmark_charges + result['cgst'] + result['sgst'] - oldValue - advance - discount
-        finalAmt = round(preRound)
-        roundOffVal = finalAmt - preRound
+        # Convert all Decimal values to float for JSON serialization
+        serialized = {}
+        for k, v in result.items():
+            if isinstance(v, Decimal):
+                serialized[k] = float(round(v, 2))
+            else:
+                serialized[k] = v
 
-        def numToWords(n):
-            if n == 0: return 'Zero'
-            o = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
-                 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
-            t = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
-            def c(num):
-                if num == 0: return ''
-                if num < 20: return o[num] + ' '
-                if num < 100: return t[num // 10] + (' ' + o[num % 10] if num % 10 else '') + ' '
-                if num < 1000: return o[num // 100] + ' Hundred ' + c(num % 100)
-                if num < 100000: return c(num // 1000).strip() + ' Thousand ' + c(num % 1000)
-                if num < 10000000: return c(num // 100000).strip() + ' Lakh ' + c(num % 100000)
-                return c(num // 10000000).strip() + ' Crore ' + c(num % 10000000)
-            return (c(int(abs(n))).replace('  ', ' ').strip() + ' Rupees Only')
-
-        # Items mapping logic for UI (Calculating Metal Value & Total dynamically to reflect array items accurately)
+        # Process items for UI display
+        rate_per_g = Decimal(str(rate_10gm)) / Decimal(10) if rate_10gm else Decimal(0)
         processed_items = []
         for item in items_data:
-            wt = Decimal(item.get("weight", 0))
-            mk = Decimal(item.get("making", 0)) or (wt * Decimal(making_per_gm))
+            wt = Decimal(str(item.get("weight", 0)))
+            mk = Decimal(str(item.get("making", 0))) or (wt * Decimal(str(making_per_gm)))
             mv = wt * rate_per_g
             tot = mv + mk
             processed_item = item.copy()
@@ -118,19 +93,6 @@ class BillingPreviewViewSet(viewsets.ViewSet):
             })
             processed_items.append(processed_item)
 
-        result.update({
-            "items": processed_items,
-            "oldMV": float(round(oldMV, 2)),
-            "oldDeductAmt": float(round(oldDeductAmt, 2)),
-            "oldValue": float(round(oldValue, 2)),
-            "hallmarkAmt": float(round(hallmark_charges, 2)),
-            "otherChargesVal": float(round(other_charges, 2)),
-            "advanceVal": float(round(advance, 2)),
-            "discountVal": float(round(discount, 2)),
-            "preRound": float(round(preRound, 2)),
-            "roundOffVal": float(round(roundOffVal, 2)),
-            "finalAmt": float(finalAmt),
-            "amountInWords": numToWords(finalAmt)
-        })
+        serialized["items"] = processed_items
 
-        return Response(result)
+        return Response(serialized)

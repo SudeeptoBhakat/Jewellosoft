@@ -24,6 +24,15 @@ class Shop(BaseModel):
     # Settings
     language = models.CharField(max_length=20, default='English')
     theme = models.CharField(max_length=30, default='default')
+    pdf_template = models.CharField(
+        max_length=30, default='classic',
+        help_text='Selected PDF invoice template: classic | standard'
+    )
+    watermark_logo = models.ImageField(
+        upload_to='watermarks/', null=True, blank=True,
+        help_text='Custom logo image used as watermark on billing PDFs'
+    )
+    pan_number = models.CharField(max_length=20, blank=True, help_text='PAN card number for invoices')
     date_format = models.CharField(max_length=20, default='DD/MM/YYYY')
     default_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=3.0)
     decimal_precision = models.IntegerField(default=2)

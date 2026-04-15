@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
-
-const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtInt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
+import { useAuth } from '../../contexts/AuthContext';
+import { fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
 
 const statusMap = { Paid: 'success', Pending: 'warning', Partial: 'info', Cancelled: 'danger' };
 const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'primary'}`}>{s}</span>;
@@ -123,7 +122,26 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                 {bill.hallmark > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) Hallmark</span><span>{fmt(bill.hallmark)}</span></div>}
                 {bill.cgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) CGST 1.5%</span><span>{fmt(bill.cgst)}</span></div>}
                 {bill.sgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) SGST 1.5%</span><span>{fmt(bill.sgst)}</span></div>}
-                {bill.oldValue > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Old Value</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldValue)}</span></div>}
+                {/* Old Metal — show by settlement mode */}
+                {(bill.oldSettlementMode === 'weight' && bill.oldWt > 0) && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-tertiary)' }}>(−) Old Metal ({bill.oldWt.toFixed(3)}g)</span>
+                    <span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldValue)}</span>
+                  </div>
+                )}
+                {(bill.oldSettlementMode === 'value' && bill.oldValueDirect > 0) && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-tertiary)' }}>(−) Old Metal (Direct)</span>
+                    <span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldValueDirect)}</span>
+                  </div>
+                )}
+                {/* Fallback for legacy bills without mode */}
+                {(!bill.oldSettlementMode || bill.oldSettlementMode === 'none') && bill.oldValue > 0 && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-tertiary)' }}>(−) Old Value</span>
+                    <span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldValue)}</span>
+                  </div>
+                )}
                 {bill.advance > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Advance</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.advance)}</span></div>}
                 {bill.discount > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Discount</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.discount)}</span></div>}
               </div>
@@ -212,6 +230,7 @@ function DeleteModal({ bill, onClose, onConfirm }) {
    BILLS LIST PAGE
    ═══════════════════════════════════════════ */
 export default function BillsList() {
+  const { shop } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -248,6 +267,8 @@ export default function BillsList() {
     sgst: parseFloat(b.sgst || 0),
     oldValue: parseFloat(b.old_amount || 0),
     oldWt: parseFloat(b.old_weight || 0),
+    oldValueDirect: parseFloat(b.old_value_direct || 0),
+    oldSettlementMode: b.old_settlement_mode || 'none',
     advance: parseFloat(b.advance || 0),
     discount: parseFloat(b.discount || 0),
     roundOff: parseFloat(b.round_off || 0),
@@ -355,13 +376,27 @@ export default function BillsList() {
 
   const handlePrint = (bill) => {
     const docData = {
+        template: shop?.pdf_template || 'classic',
+        shop: {
+            name: shop?.name || 'My Jewellery Shop',
+            address: shop?.address || '',
+            phone: shop?.phone || '',
+            email: shop?.email || '',
+            gst_number: shop?.gst_number || '',
+            pan_number: shop?.pan_number || '',
+            watermark_logo_url: shop?.watermark_logo || null,
+        },
         docType: bill.billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
         theme: bill.metal.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: bill.customer, phone: bill.phone, address: bill.address },
         meta: { number: bill.id, date: new Date(bill.date).toLocaleDateString('en-IN') },
         rates: { rate10gm: bill.rate10gm },
         items: bill.items,
-        oldMetal: bill.oldValue > 0 ? { weight: bill.oldWt, value: bill.oldValue } : null,
+        oldMetal: (bill.oldSettlementMode === 'weight' && bill.oldWt > 0)
+          ? { weight: bill.oldWt, value: bill.oldValue, mode: 'weight' }
+          : (bill.oldSettlementMode === 'value' && bill.oldValueDirect > 0)
+            ? { weight: 0, value: bill.oldValueDirect, mode: 'value' }
+            : bill.oldValue > 0 ? { weight: bill.oldWt, value: bill.oldValue, mode: 'weight' } : null,
         totals: {
             subtotal: bill.subtotal,
             cgst: bill.cgst,

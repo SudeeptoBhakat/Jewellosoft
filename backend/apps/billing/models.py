@@ -20,6 +20,13 @@ class BaseBilling(BaseModel):
 
     old_weight = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     old_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    old_value_direct = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    OLD_SETTLEMENT_CHOICES = [
+        ('none', 'None'),
+        ('weight', 'By Weight'),
+        ('value', 'By Direct Value'),
+    ]
+    old_settlement_mode = models.CharField(max_length=10, choices=OLD_SETTLEMENT_CHOICES, default='none')
 
     advance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 

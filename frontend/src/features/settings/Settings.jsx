@@ -180,7 +180,10 @@ export default function Settings() {
     phone: '',
     email: '',
     gst_number: '',
-    address: ''
+    address: '',
+    pan_number: '',
+    pdf_template: 'classic',
+    watermark_logo: null
   });
 
   const [loading, setLoading] = useState(true);
@@ -241,7 +244,9 @@ export default function Settings() {
       'settings-phone': 'phone',
       'settings-email': 'email',
       'settings-gst-number': 'gst_number',
-      'settings-address': 'address'
+      'settings-address': 'address',
+      'settings-pan-number': 'pan_number',
+      'settings-pdf-template': 'pdf_template'
     };
     
     const key = fieldMap[id] || id;
@@ -256,6 +261,34 @@ export default function Settings() {
   const handleThemeSelect = (themeKey) => {
     setFormData(prev => ({ ...prev, theme: themeKey }));
     setTheme(themeKey); // live apply
+  };
+
+  const handleWatermarkUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const fd = new FormData();
+      fd.append('watermark_logo', file);
+      const res = await api.post('/accounts/shop/watermark/', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setFormData(prev => ({ ...prev, watermark_logo: res.data.watermark_logo }));
+      setMessage({ text: 'Watermark uploaded successfully!', type: 'success' });
+      if (syncShop) await syncShop();
+    } catch (err) {
+      setMessage({ text: 'Failed to upload watermark.', type: 'error' });
+    }
+  };
+
+  const handleWatermarkDelete = async () => {
+    try {
+        await api.delete('/accounts/shop/watermark/');
+        setFormData(prev => ({ ...prev, watermark_logo: null }));
+        setMessage({ text: 'Watermark deleted successfully!', type: 'success' });
+        if (syncShop) await syncShop();
+    } catch (err) {
+        setMessage({ text: 'Failed to delete watermark.', type: 'error' });
+    }
   };
 
   const handleSave = async () => {
@@ -279,6 +312,8 @@ export default function Settings() {
         address: (formData.address || '').trim(),
         gst_number: (formData.gst_number || '').trim(),
         email: (formData.email || '').trim(),
+        pan_number: (formData.pan_number || '').trim(),
+        pdf_template: formData.pdf_template || 'classic',
       };
 
       // Remove read-only or sensitive keys that might be in formData from a previous GET
@@ -459,6 +494,10 @@ export default function Settings() {
                   <label className="form-label">Phone</label>
                   <input className="form-input" type="tel" id="settings-phone" value={formData.phone} onChange={handleChange} />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">PAN Number</label>
+                  <input className="form-input" type="text" id="settings-pan-number" value={formData.pan_number} onChange={handleChange} style={{ textTransform: 'uppercase' }} />
+                </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -468,6 +507,44 @@ export default function Settings() {
                 <div className="form-group">
                   <label className="form-label">Address</label>
                   <input className="form-input" type="text" id="settings-address" value={formData.address} onChange={handleChange} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="billing-form__header">
+              <span className="billing-form__header-title"><i className="fa-solid fa-file-pdf" style={{ marginRight: 8, opacity: 0.6 }}></i>PDF & Branding</span>
+            </div>
+            <div className="billing-form__body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Billing PDF Template</label>
+                  <select className="form-input form-select" id="settings-pdf-template" value={formData.pdf_template} onChange={handleChange}>
+                    <option value="classic">Classic (Original)</option>
+                    <option value="standard">Standard (Minimal Professional)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Watermark Logo</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    {formData.watermark_logo ? (
+                      <>
+                        <img src={formData.watermark_logo} alt="Watermark" style={{ height: 40, width: 40, objectFit: 'contain', background: 'var(--bg-deep)', borderRadius: 'var(--radius-sm)' }} />
+                        <button className="btn btn--danger btn--sm" onClick={handleWatermarkDelete}>Delete Watermark</button>
+                      </>
+                    ) : (
+                      <>
+                        <input type="file" id="watermark-upload" accept="image/*" style={{ display: 'none' }} onChange={handleWatermarkUpload} />
+                        <label htmlFor="watermark-upload" className="btn btn--outline btn--sm" style={{ cursor: 'pointer' }}>
+                            <i className="fa-solid fa-upload" style={{ marginRight: 6 }}></i> Upload Logo
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                    Transparent PNG recommended. This will appear as a background watermark on printed bills.
+                  </span>
                 </div>
               </div>
             </div>

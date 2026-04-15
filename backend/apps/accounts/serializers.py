@@ -6,7 +6,9 @@ class ShopSerializer(serializers.ModelSerializer):
         model = Shop
         fields = [
             'id', 'name', 'owner_name', 'phone', 'email', 'gst_number', 'address',
-            'language', 'theme', 'date_format', 'default_gst_rate',
+            'language', 'theme', 'pdf_template', 'watermark_logo', 'pan_number',
+            'date_format', 'default_gst_rate',
             'decimal_precision', 'hallmark_value', 'supabase_email'
         ]
-        read_only_fields = ['id', 'supabase_email']
+        read_only_fields = ['id', 'supabase_email', 'watermark_logo']
+

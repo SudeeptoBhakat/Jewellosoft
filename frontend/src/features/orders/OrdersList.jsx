@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 /* ─── Item Status Pipeline ─── */
 const ITEM_STATUSES = [
@@ -327,6 +328,7 @@ function InventoryModal({ item, onClose, onSuccess }) {
    ORDERS LIST MAIN PAGE
    ═══════════════════════════════════════════ */
 export default function OrdersList() {
+  const { shop } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -358,6 +360,16 @@ export default function OrdersList() {
 
   const handlePrint = (order) => {
     const docData = {
+        template: shop?.pdf_template || 'classic',
+        shop: {
+            name: shop?.name || 'My Jewellery Shop',
+            address: shop?.address || '',
+            phone: shop?.phone || '',
+            email: shop?.email || '',
+            gst_number: shop?.gst_number || '',
+            pan_number: shop?.pan_number || '',
+            watermark_logo_url: shop?.watermark_logo || null,
+        },
         docType: 'ORDER RECEIPT',
         theme: (order.metal_type || 'gold').toLowerCase(),
         customer: { name: order.customer_detail?.name || 'Walk-in', phone: order.customer_detail?.phone, address: order.customer_detail?.address },

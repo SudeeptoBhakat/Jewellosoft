@@ -1,0 +1,263 @@
+/* ROOT */
+.pdf-root {
+    font-family: 'Segoe UI', sans-serif;
+    background: #fff;
+    padding: 25px;
+    position: relative;
+    color: #0a0a0a;
+}
+
+/* WATERMARK */
+.pdf-watermark {
+    position: absolute;
+    top: 65%;
+    left: 50%;
+    width: 93%;
+    opacity: 0.10;
+    z-index: 0;
+}
+
+/* CONTAINER */
+.pdf-container {
+    position: relative;
+    z-index: 2;
+}
+
+/* HEADER */
+.pdf-header {
+    position: relative;
+    padding-top: 42px;
+    margin-bottom: 15px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* center everything */
+    gap: 1px;
+    /* tight spacing like image */
+
+    width: 100%;
+}
+
+/* 🔥 TOP DIAGONAL STRIP */
+.pdf-top-strip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 65px;
+    z-index: 0;
+    /* VERY IMPORTANT */
+    background: linear-gradient(120deg, #1e1b8f 20%, #6d5dfc 80%);
+    clip-path: polygon(0 0, 100% 0, 85% 40%, 0% 100%);
+}
+
+.pdf-header>*:not(.pdf-top-strip) {
+    position: relative;
+    z-index: 2;
+}
+
+/* TITLE */
+.pdf-title {
+    color: #ff2d2d;
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 5px;
+    letter-spacing: 1px;
+    position: relative;
+}
+
+/* SHOP NAME */
+.pdf-shop-name {
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #0b0b3c;
+    /* deep navy */
+    margin-bottom: 5px;
+}
+
+/* ADDRESS ROW */
+.pdf-shop-address-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 5px 0;
+    padding: 0 10px;
+    text-transform: uppercase;
+}
+
+/* GST + PAN */
+.pdf-shop-meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.pdf-shop-address-row,
+.pdf-shop-meta-row {
+    width: 100%;
+}
+
+.pdf-shop-address-row {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.pdf-shop-meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+/* TOP ROW */
+.pdf-top-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    font-size: 13px;
+}
+
+.pdf-customer .bold {
+    font-weight: 700;
+}
+
+.pdf-meta {
+    text-align: right;
+    font-weight: 600;
+}
+
+/* 🔥 RATE PILL */
+.pdf-rate-pill {
+    margin-top: 15px;
+    display: flex;
+    justify-content: space-between;
+    border: 2px solid #1e40af;
+    border-radius: 40px;
+    padding: 10px 20px;
+    font-weight: 700;
+    background: #f8faff33;
+    font-size: 13px;
+}
+
+/* TABLE */
+.pdf-table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* 🔥 HEADER */
+.pdf-table thead tr {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    color: #fff;
+}
+
+.pdf-table th {
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* rounded corners */
+.pdf-table thead tr th:first-child {
+    border-top-left-radius: 10px;
+}
+
+.pdf-table thead tr th:last-child {
+    border-top-right-radius: 10px;
+}
+
+/* ROWS */
+.pdf-table td {
+    padding: 10px;
+    font-size: 13px;
+    border-bottom: 1px solid #eee;
+    text-align: center;
+}
+
+/* SUMMARY HEAD */
+.pdf-summary-head {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 10px 5px;
+    text-align: center;
+}
+
+/* SUMMARY VALUES */
+.pdf-summary-values {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    padding: 10px 5px;
+    font-size: 13px;
+    text-align: center;
+    border-bottom: 2px solid #eee;
+}
+
+.red {
+    color: #e53935;
+}
+
+.bold {
+    font-weight: 800;
+}
+
+/* 🔥 AMOUNT STRIP */
+.pdf-amount-strip {
+    margin-top: 15px;
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    color: #fff;
+    text-align: center;
+    padding: 12px;
+    border-radius: 25px;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+/* PAYMENT */
+.pdf-payment {
+    margin-top: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* FOOTER */
+.pdf-footer {
+    margin-top: 35px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.signature {
+    width: 160px;
+    border-top: 1px solid #000;
+    text-align: center;
+    padding-top: 5px;
+    font-size: 13px;
+}
+
+.thank-text {
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+@media print {
+    .pdf-root {
+        width: 794px;
+        /* exact A4 width in px */
+    }
+}

@@ -97,7 +97,7 @@ export default function Register() {
         return;
       }
 
-      navigate('/dashboard', { replace: true });
+      navigate('/select-template', { replace: true });
     } catch (err) {
       const msg = err.message || 'Registration failed. Please try again.';
       setError(msg);

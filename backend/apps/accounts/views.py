@@ -252,3 +252,75 @@ class OfflineLoginView(APIView):
             "shop": ShopSerializer(shop).data
         })
 
+
+class WatermarkUploadView(APIView):
+    """
+    Dedicated endpoint for watermark logo upload and deletion.
+    POST: Upload a new watermark image (multipart/form-data).
+    DELETE: Remove the current watermark logo.
+    
+    Separated from the main PATCH endpoint because file uploads
+    require multipart encoding, which should not be mixed with
+    standard JSON settings payloads in production.
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        shop = Shop.objects.first()
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
+
+        uploaded_file = request.FILES.get('watermark_logo')
+        if not uploaded_file:
+            return Response(
+                {"detail": "No file provided. Send 'watermark_logo' as multipart form data."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file type
+        allowed_types = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']
+        if uploaded_file.content_type not in allowed_types:
+            return Response(
+                {"detail": f"Invalid file type '{uploaded_file.content_type}'. Allowed: PNG, JPEG, SVG, WebP."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file size (max 5MB)
+        max_size = 5 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return Response(
+                {"detail": "File too large. Maximum size is 5 MB."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Delete old watermark file if it exists
+        if shop.watermark_logo:
+            try:
+                shop.watermark_logo.delete(save=False)
+            except Exception:
+                pass
+
+        shop.watermark_logo = uploaded_file
+        shop.save()
+
+        logger.info(f"[Watermark] Uploaded new watermark: {shop.watermark_logo.name}")
+        return Response(ShopSerializer(shop).data)
+
+    def delete(self, request):
+        shop = Shop.objects.first()
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
+
+        if shop.watermark_logo:
+            try:
+                shop.watermark_logo.delete(save=False)
+            except Exception:
+                pass
+            shop.watermark_logo = None
+            shop.save()
+            logger.info("[Watermark] Deleted watermark logo.")
+
+        return Response({"status": "deleted"})
+
+

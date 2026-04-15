@@ -2,35 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
-
-/* ─── Indian Number-to-Words ─── */
-function numToWords(n) {
-  if (n === 0) return 'Zero';
-  const o = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
-    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-  const t = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  function c(num) {
-    if (num === 0) return '';
-    if (num < 20) return o[num] + ' ';
-    if (num < 100) return t[Math.floor(num / 10)] + (num % 10 ? ' ' + o[num % 10] : '') + ' ';
-    if (num < 1000) return o[Math.floor(num / 100)] + ' Hundred ' + c(num % 100);
-    if (num < 100000) return c(Math.floor(num / 1000)).trim() + ' Thousand ' + c(num % 1000);
-    if (num < 10000000) return c(Math.floor(num / 100000)).trim() + ' Lakh ' + c(num % 100000);
-    return c(Math.floor(num / 10000000)).trim() + ' Crore ' + c(num % 10000000);
-  }
-  return c(Math.abs(Math.floor(n))).replace(/\s+/g, ' ').trim();
-}
-function amountWords(amt) {
-  const r = Math.floor(Math.abs(amt));
-  const p = Math.round((Math.abs(amt) - r) * 100);
-  let s = numToWords(r) + ' Rupees';
-  if (p > 0) s += ' and ' + numToWords(p) + ' Paise';
-  return s + ' Only';
-}
-
-/* ─── Format Currency ─── */
-const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtInt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
+import { useAuth } from '../../contexts/AuthContext';
+import { calculateBill, fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
 
 /* ─── Products are fetched from inventory API ─── */
 
@@ -168,6 +141,7 @@ function BillSetupModal({ onStart, onClose }) {
    ═══════════════════════════════════════════ */
 export default function Billing() {
   const navigate = useNavigate();
+  const { shop } = useAuth();
   const searchRef = useRef(null);
   const searchWrapRef = useRef(null);
 
@@ -219,6 +193,7 @@ export default function Billing() {
 
   /* ─── Metal Rate (editable) ─── */
   const [metalRate, setMetalRate] = useState(0);
+  const [makingRate, setMakingRate] = useState(0);
   const [allRates, setAllRates] = useState({});
 
   useEffect(() => {
@@ -233,7 +208,7 @@ export default function Billing() {
       : { silver999: 'Silver 999 (Pure)', silver925: 'Silver 925 (Sterling)' };
     return Object.entries(labels)
       .filter(([key]) => allRates[key]?.rate_per_gram > 0)
-      .map(([key, label]) => ({ key, label, rate: allRates[key].rate_per_gram }));
+      .map(([key, label]) => ({ key, label, rate: allRates[key].rate_per_gram, making: allRates[key].making_per_gram || 0 }));
   }, [metalType, allRates]);
 
   /* ─── Items ─── */
@@ -264,8 +239,10 @@ export default function Billing() {
   }, [searchQ, metalType]);
 
   /* ─── Old Exchange ─── */
+  const [oldSettlementMode, setOldSettlementMode] = useState('none');
   const [oldWeight, setOldWeight] = useState('');
   const [oldDeductPct, setOldDeductPct] = useState('10');
+  const [oldValueDirect, setOldValueDirect] = useState('');
 
   /* ─── Tax & Charges ─── */
   const [otherCharges, setOtherCharges] = useState('');
@@ -277,8 +254,7 @@ export default function Billing() {
   const [cashAmt, setCashAmt] = useState('');
   const [onlineAmt, setOnlineAmt] = useState('');
 
-  /* ─── Options ─── */
-  const [hideMetalMaking, setHideMetalMaking] = useState(false);
+
 
   /* ─── Print Preview ─── */
   const [printData, setPrintData] = useState(null);
@@ -294,6 +270,7 @@ export default function Billing() {
     setMetalType(metal);
     setBillType(type);
     setMetalRate(rate || 0);
+    setMakingRate(0);
     setItems([createEmptyItem()]);
     setShowModal(false);
     setTimeout(() => searchRef.current?.focus(), 100);
@@ -305,23 +282,33 @@ export default function Billing() {
     name: '', huid: '', weight: '', makingCharges: '', metalValue: 0, total: 0,
   });
 
-  const recalcItem = (item, rate) => {
+  const recalcItem = (item, rate, mRate) => {
     const w = parseFloat(item.weight) || 0;
-    const mk = parseFloat(item.makingCharges) || 0;
+    const _autoMaking = Math.round(w * mRate * 100) / 100;
+    
+    let mkStr = item.makingCharges;
+    if (!mkStr || mkStr === String(item._autoMaking || '')) {
+       mkStr = _autoMaking ? String(_autoMaking) : '';
+    }
+
+    const mk = parseFloat(mkStr) || 0;
     const mv = Math.round(w * rate * 100) / 100;
-    return { ...item, metalValue: mv, total: Math.round((mv + mk) * 100) / 100 };
+    return { ...item, makingCharges: mkStr, metalValue: mv, total: Math.round((mv + mk) * 100) / 100, _autoMaking: _autoMaking ? String(_autoMaking) : '' };
   };
 
   const updateItem = useCallback((id, field, value) => {
     setItems(prev => prev.map(it => {
       if (it.id !== id) return it;
       const updated = { ...it, [field]: value };
+      if (field === 'makingCharges') {
+        updated._autoMaking = undefined;
+      }
       if (field === 'weight' || field === 'makingCharges') {
-        return recalcItem(updated, metalRate);
+        return recalcItem(updated, metalRate, makingRate);
       }
       return updated;
     }));
-  }, [metalRate]);
+  }, [metalRate, makingRate]);
 
   const addItemFromSearch = useCallback((product) => {
     const newItem = recalcItem({
@@ -330,11 +317,11 @@ export default function Billing() {
       name: product.name,
       huid: product.huid || '',
       weight: product.net_weight || product.gross_weight || ''
-    }, metalRate);
+    }, metalRate, makingRate);
     setItems(prev => [...prev, newItem]);
     setSearchQ('');
     setShowSuggestions(false);
-  }, [metalRate]);
+  }, [metalRate, makingRate]);
 
   /* ─── Click-outside & Keyboard Shortcuts ─── */
   useEffect(() => {
@@ -372,83 +359,29 @@ export default function Billing() {
   /* ─── Recalc all items when rate changes ─── */
   useEffect(() => {
     if (metalRate > 0) {
-      setItems(prev => prev.map(it => recalcItem(it, metalRate)));
+      setItems(prev => prev.map(it => recalcItem(it, metalRate, makingRate)));
     }
-  }, [metalRate]);
+  }, [metalRate, makingRate]);
 
-  /* ═══ INSTANT LOCAL CALCULATIONS ═══ */
-  /* ═══ INSTANT LOCAL CALCULATIONS ═══ */
+  /* ═══ INSTANT LOCAL CALCULATIONS (Shared Engine) ═══ */
   const calc = useMemo(() => {
-    const totalWeight = items.reduce((s, i) => s + (parseFloat(i.weight) || 0), 0);
-    const totalMaking = items.reduce((s, i) => s + (parseFloat(i.makingCharges) || 0), 0);
-
-    const oldWt = parseFloat(oldWeight) || 0;
-    const deductPct = parseFloat(oldDeductPct) || 0;
-
-    // Netting the physical weight first
-    const netWeight = totalWeight - oldWt;
-    let baseMetalValue = 0;
-
-    if (netWeight >= 0) {
-      // Customer buys more weight than they deposited
-      baseMetalValue = netWeight * metalRate;
-    } else {
-      // Customer deposited more weight than they bought
-      const adjustedRate = metalRate * (1 - deductPct / 100);
-      baseMetalValue = netWeight * adjustedRate; // This is a negative value
-    }
-    const totalMetalValue = items.reduce((s, i) => s + (i.metalValue || 0), 0);
-    // Subtotal combines the Net Metal Value and Making Charges
-    const subtotal = baseMetalValue + totalMaking;
-
-    // Old metal breakdown
-    const oldMV = oldWt * metalRate;
-    const oldDeductAmt = oldMV * (deductPct / 100);
-    const oldValue = oldMV - oldDeductAmt;
-
-    // Hallmark
-    const hc = parseInt(hallmarkCount) || 0;
-    const hallmarkAmt = hc * hallmarkValue;
-
-    const oc = parseFloat(otherCharges) || 0;
-
-    // All charges added together (always against customer)
-    const payableBeforeTax = subtotal + hallmarkAmt + oc;
-
-    // GST (only for Invoice)
-    const isInvoice = billType === 'Invoice';
-    // GST triggers on the absolute value of the net transaction
-    const gstBase = Math.abs(payableBeforeTax);
-    const cgst = isInvoice ? (gstBase * 0.015) : 0;
-    const sgst = isInvoice ? (gstBase * 0.015) : 0;
-
-    const adv = parseFloat(advance) || 0;
-    const disc = parseFloat(discount) || 0;
-
-    // The final pre-round algebraic sum
-    // Customer Owes = positive
-    // Shop Owes Customer = negative
-    const preRound = payableBeforeTax + cgst + sgst - adv - disc;
-
-    const roundOff = Math.round(preRound);
-    const roundOffVal = roundOff - preRound;
-    const finalAmt = roundOff;
-
-    const cashP = parseFloat(cashAmt) || 0;
-    const onlineP = parseFloat(onlineAmt) || 0;
-    const totalPaid = cashP + onlineP;
-    const balance = Math.abs(finalAmt) - totalPaid; // Keep balance positive for UI
-
-    return {
-      totalWeight, totalMaking, totalMetalValue, subtotal,
-      netWeight, baseMetalValue, oldWt, oldMV, oldDeductAmt, oldValue, deductPct,
-      hallmarkAmt, cgst, sgst,
-      otherChargesVal: oc, advanceVal: adv, discountVal: disc,
-      preRound, roundOffVal, finalAmt,
-      totalPaid, balance,
-      amountInWords: amountWords(finalAmt),
-    };
-  }, [items, oldWeight, oldDeductPct, metalRate, hallmarkCount, hallmarkValue, billType, otherCharges, advance, discount, cashAmt, onlineAmt]);
+    return calculateBill({
+      items,
+      metalRate,
+      oldSettlementMode,
+      oldWeight,
+      oldDeductPct,
+      oldValueDirect,
+      hallmarkCount,
+      hallmarkValue,
+      isInvoice: billType === 'Invoice',
+      otherCharges,
+      advance,
+      discount,
+      cashAmt,
+      onlineAmt,
+    });
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, billType, otherCharges, advance, discount, cashAmt, onlineAmt]);
 
   /* ─── Order Integration ─── */
   const [orderLoading, setOrderLoading] = useState(false);
@@ -537,7 +470,9 @@ export default function Billing() {
           making_total: calc.totalMaking,
           subtotal: calc.subtotal,
           old_weight: calc.oldWt,
-          old_amount: calc.oldWt > 0 ? calc.oldValue : 0, // Use the net-metal base
+          old_amount: calc.effectiveOldValue || 0,
+          old_value_direct: calc.oldValueDirect || 0,
+          old_settlement_mode: calc.oldMode || 'none',
           advance: calc.advanceVal,
           discount: calc.discountVal,
           hallmark: calc.hallmarkAmt,
@@ -574,6 +509,16 @@ export default function Billing() {
     const success = await handleSave(false);
     if (success) {
       const docData = {
+        template: shop?.pdf_template || 'classic',
+        shop: {
+            name: shop?.name || 'My Jewellery Shop',
+            address: shop?.address || '',
+            phone: shop?.phone || '',
+            email: shop?.email || '',
+            gst_number: shop?.gst_number || '',
+            pan_number: shop?.pan_number || '',
+            watermark_logo_url: shop?.watermark_logo || null,
+        },
         docType: billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
         theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: custName, phone: custMobile, address: custAddress },
@@ -587,7 +532,7 @@ export default function Billing() {
           making: it.makingCharges || 0,
           total: it.total || 0
         })),
-        oldMetal: parseFloat(oldWeight) > 0 ? { weight: parseFloat(oldWeight), value: calc.oldValue } : null,
+        oldMetal: calc.hasOld ? { weight: calc.oldWt, value: calc.effectiveOldValue, mode: calc.oldMode } : null,
         totals: {
           subtotal: calc.subtotal,
           cgst: calc.cgst,
@@ -722,14 +667,18 @@ export default function Billing() {
               <label className="form-label">{metalType} Rate (₹/g)</label>
               <select
                 className="form-input form-select"
-                value={metalRate}
-                onChange={e => setMetalRate(parseFloat(e.target.value) || 0)}
+                value={`${metalRate}_${makingRate}`}
+                onChange={e => {
+                   const [rt, mk] = e.target.value.split('_');
+                   setMetalRate(parseFloat(rt) || 0);
+                   setMakingRate(parseFloat(mk) || 0);
+                }}
                 id="bill-metal-rate"
                 style={{ fontWeight: 700, color: 'var(--color-warning)' }}
               >
-                {rateOptions.length === 0 && <option value={metalRate}>{metalRate > 0 ? `₹${metalRate}` : 'No rates set'}</option>}
+                {rateOptions.length === 0 && <option value={`${metalRate}_${makingRate}`}>{metalRate > 0 ? `₹${metalRate}` : 'No rates set'}</option>}
                 {rateOptions.map(r => (
-                  <option key={r.key} value={r.rate}>{r.label} — ₹{r.rate.toLocaleString('en-IN')}/g</option>
+                  <option key={r.key} value={`${r.rate}_${r.making}`}>{r.label} — ₹{r.rate.toLocaleString('en-IN')}/g</option>
                 ))}
               </select>
             </div>
@@ -853,8 +802,8 @@ export default function Billing() {
               <span className="bill-totals-value">{fmt(calc.totalMaking)}</span>
             </div>
             <div className="bill-totals-item" style={{ borderLeft: '2px solid var(--color-primary)', paddingLeft: 'var(--space-4)' }}>
-              <span className="bill-totals-label" style={{ color: 'var(--color-primary-hover)' }}>Net Weight</span>
-              <span className="bill-totals-value" style={{ color: 'var(--color-primary-hover)', fontSize: 'var(--text-md)', fontWeight: 700 }}>{calc.netWeight.toFixed(3)}g</span>
+              <span className="bill-totals-label" style={{ color: 'var(--color-primary-hover)' }}>{calc.hasOld ? 'Net Weight' : 'Product Value'}</span>
+              <span className="bill-totals-value" style={{ color: 'var(--color-primary-hover)', fontSize: 'var(--text-md)', fontWeight: 700 }}>{calc.hasOld ? `${(calc.totalWeight - calc.oldWt).toFixed(3)}g` : fmt(calc.newProductValue)}</span>
             </div>
           </div>
         )}
@@ -873,31 +822,89 @@ export default function Billing() {
               </span>
             </div>
             <div className="billing-form__body" style={{ padding: 'var(--space-3) var(--space-5) var(--space-4)' }}>
-              <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>
-                  <label className="form-label">Old Metal Weight (g)</label>
-                  <input className="form-input" type="number" step="0.001" placeholder="0.000" value={oldWeight} onChange={e => setOldWeight(e.target.value)} id="bill-old-wt" />
-                </div>
-                <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>
-                  <label className="form-label">Deduction %</label>
-                  <div className="flex gap-2">
-                    <select className="form-input form-select" value={oldDeductPct} onChange={e => setOldDeductPct(e.target.value)} style={{ width: '50%' }} id="bill-old-deduct">
-                      <option value="8">8%</option>
-                      <option value="10">10%</option>
-                      <option value="12">12%</option>
-                    </select>
-                    <input className="form-input" type="number" step="0.1" placeholder="Custom %" value={oldDeductPct} onChange={e => setOldDeductPct(e.target.value)} style={{ width: '50%' }} />
-                  </div>
-                </div>
+              {/* Settlement Mode Toggle */}
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                {[['none', 'No Old Metal', 'fa-xmark'], ['weight', 'By Weight', 'fa-weight-scale'], ['value', 'By Direct Value', 'fa-indian-rupee-sign']].map(([mode, label, icon]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`btn btn--sm ${oldSettlementMode === mode ? 'btn--primary' : 'btn--ghost'}`}
+                    onClick={() => { setOldSettlementMode(mode); if (mode === 'none') { setOldWeight(''); setOldValueDirect(''); } }}
+                    style={{ flex: 1, fontSize: 'var(--text-xs)', gap: 4 }}
+                  >
+                    <i className={`fa-solid ${icon}`}></i> {label}
+                  </button>
+                ))}
               </div>
-              {parseFloat(oldWeight) > 0 && (
-                <div className="bill-old-summary animate-fade-in">
-                  <div className="flex justify-between"><span>Old Metal Value</span><span style={{ fontWeight: 600 }}>{fmt(calc.oldMV)}</span></div>
-                  <div className="flex justify-between"><span>Deduction ({oldDeductPct}%)</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.oldDeductAmt)}</span></div>
-                  <div className="flex justify-between" style={{ fontWeight: 700, color: 'var(--color-accent)', borderTop: '1px solid var(--border-primary)', paddingTop: 6, marginTop: 6 }}>
-                    <span>Old Value (Credit)</span><span>{fmt(calc.oldValue)}</span>
+
+              {oldSettlementMode !== 'none' && (
+                <>
+                  <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                    <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>
+                      <label className="form-label" style={{ opacity: oldSettlementMode === 'value' ? 0.4 : 1 }}>Old Metal Weight (g)</label>
+                      <input
+                        className="form-input" type="number" step="0.001" placeholder="0.000"
+                        value={oldWeight}
+                        onChange={e => setOldWeight(e.target.value)}
+                        disabled={oldSettlementMode === 'value'}
+                        style={{ opacity: oldSettlementMode === 'value' ? 0.4 : 1 }}
+                        id="bill-old-wt"
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>
+                      <label className="form-label" style={{ opacity: oldSettlementMode === 'value' ? 0.4 : 1 }}>Deduction %</label>
+                      <div className="flex gap-2">
+                        <select
+                          className="form-input form-select" value={oldDeductPct}
+                          onChange={e => setOldDeductPct(e.target.value)}
+                          disabled={oldSettlementMode === 'value'}
+                          style={{ width: '50%', opacity: oldSettlementMode === 'value' ? 0.4 : 1 }}
+                          id="bill-old-deduct"
+                        >
+                          <option value="8">8%</option>
+                          <option value="10">10%</option>
+                          <option value="12">12%</option>
+                        </select>
+                        <input
+                          className="form-input" type="number" step="0.1" placeholder="Custom %"
+                          value={oldDeductPct}
+                          onChange={e => setOldDeductPct(e.target.value)}
+                          disabled={oldSettlementMode === 'value'}
+                          style={{ width: '50%', opacity: oldSettlementMode === 'value' ? 0.4 : 1 }}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>
+                      <label className="form-label" style={{ opacity: oldSettlementMode === 'weight' ? 0.4 : 1 }}>Old Value (₹)</label>
+                      <input
+                        className="form-input" type="number" step="1" placeholder="Enter amount"
+                        value={oldValueDirect}
+                        onChange={e => setOldValueDirect(e.target.value)}
+                        disabled={oldSettlementMode === 'weight'}
+                        style={{ opacity: oldSettlementMode === 'weight' ? 0.4 : 1, fontWeight: 600, color: 'var(--color-accent)' }}
+                        id="bill-old-value-direct"
+                      />
+                    </div>
                   </div>
-                </div>
+
+                  {/* Old Metal Summary */}
+                  {calc.hasOld && (
+                    <div className="bill-old-summary animate-fade-in">
+                      {oldSettlementMode === 'weight' && (
+                        <>
+                          <div className="flex justify-between"><span>Old Metal Value</span><span style={{ fontWeight: 600 }}>{fmt(calc.oldMV)}</span></div>
+                          {calc.oldDeductAmt > 0 && (
+                            <div className="flex justify-between"><span>Deduction ({oldDeductPct}%)</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.oldDeductAmt)}</span></div>
+                          )}
+                        </>
+                      )}
+                      <div className="flex justify-between" style={{ fontWeight: 700, color: 'var(--color-accent)', borderTop: oldSettlementMode === 'weight' ? '1px solid var(--border-primary)' : 'none', paddingTop: oldSettlementMode === 'weight' ? 6 : 0, marginTop: oldSettlementMode === 'weight' ? 6 : 0 }}>
+                        <span>{oldSettlementMode === 'value' ? 'Old Value (Direct Entry)' : 'Old Value (Credit)'}</span>
+                        <span>{fmt(calc.effectiveOldValue)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -953,12 +960,6 @@ export default function Billing() {
                   <input className="form-input" type="number" step="1" placeholder="0" value={onlineAmt} onChange={e => setOnlineAmt(e.target.value)} id="bill-online" style={{ fontSize: 'var(--text-md)', fontWeight: 600 }} />
                 </div>
               </div>
-              {/* Hide checkbox */}
-              <label className="bill-checkbox" style={{ marginTop: 'var(--space-2)' }}>
-                <input type="checkbox" checked={hideMetalMaking} onChange={e => setHideMetalMaking(e.target.checked)} />
-                <span className="bill-checkbox__mark"><i className="fa-solid fa-check"></i></span>
-                <span>Hide Metal Value & Making Charge from PDF</span>
-              </label>
             </div>
           </div>
         </div>
@@ -974,47 +975,44 @@ export default function Billing() {
           <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
             {/* Summary Lines */}
             <div className="bill-summary-lines">
-              {calc.oldWt > 0 && (
-                <>
-                  <div className="bill-sline"><span>New Gold Weight</span><span>{calc.totalWeight.toFixed(3)}g</span></div>
-                  <div className="bill-sline"><span>(−) Old Gold Deposited</span><span>{calc.oldWt.toFixed(3)}g</span></div>
-                  <div className="bill-sline" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                    <span>Net Weight {calc.netWeight < 0 && <span style={{ fontSize: '0.7rem', color: 'var(--color-danger)' }}>({calc.deductPct}% less applied)</span>}</span>
-                    <span>{calc.netWeight > 0 ? '+' : ''}{calc.netWeight.toFixed(3)}g</span>
-                  </div>
-                </>
-              )}
+              {/* Product Value */}
+              <div className="bill-sline"><span>New Product Value <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.totalWeight.toFixed(3)}g × ₹{metalRate}+ Making)</span></span><span>{fmt(calc.newProductValue)}</span></div>
 
-              <div className="bill-sline">
-                <span>{calc.netWeight < 0 ? 'Return Metal Value' : 'Net Metal Value'}</span>
-                <span style={{ color: calc.baseMetalValue < 0 ? 'var(--color-success)' : 'inherit' }}>
-                  {calc.baseMetalValue < 0 ? '−' : ''}{fmt(Math.abs(calc.baseMetalValue))}
-                </span>
-              </div>
-              <div className="bill-sline"><span>(+) Total Making Charges</span><span>{fmt(calc.totalMaking)}</span></div>
+              {/* Old Metal */}
+              {calc.hasOld && (
+                <div className="bill-sline" style={{ color: calc.transactionType === 'return' ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                  <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
+                  <span>{fmt(calc.effectiveOldValue)}</span>
+                </div>
+              )}
 
               <div className="bill-sline" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '4px' }}>
                 <span style={{ fontWeight: 600 }}>Subtotal</span>
-                <span style={{ fontWeight: 600, color: calc.subtotal < 0 ? 'var(--color-success)' : 'inherit' }}>
-                  {calc.subtotal < 0 ? '−' : ''}{fmt(Math.abs(calc.subtotal))}
+                <span style={{ fontWeight: 600 }}>
+                  {calc.transactionType === 'return' ? '' : ''}{fmt(calc.subtotal)}
                 </span>
               </div>
 
-              {calc.otherChargesVal > 0 && <div className="bill-sline"><span>(+) Other Charges</span><span>{fmt(calc.otherChargesVal)}</span></div>}
+              {/* Charges */}
               {calc.hallmarkAmt > 0 && (
                 <div className="bill-sline">
-                  <span>(+) Hallmark <span style={{ color: 'var(--text-muted)' }}>({hallmarkCount} × ₹{hallmarkValue})</span></span>
+                  <span>{calc.transactionType === 'return' ? '(−)' : '(+)'} Hallmark <span style={{ color: 'var(--text-muted)' }}>({hallmarkCount} × ₹{hallmarkValue})</span></span>
                   <span>{fmt(calc.hallmarkAmt)}</span>
                 </div>
               )}
               {billType === 'Invoice' && (
                 <>
-                  <div className="bill-sline"><span>(+) CGST @ 1.5%</span><span>{fmt(calc.cgst)}</span></div>
-                  <div className="bill-sline"><span>(+) SGST @ 1.5%</span><span>{fmt(calc.sgst)}</span></div>
+                  <div className="bill-sline"><span>{calc.transactionType === 'return' ? '(−)' : '(+)'} CGST @ 1.5%</span><span>{fmt(calc.cgst)}</span></div>
+                  <div className="bill-sline"><span>{calc.transactionType === 'return' ? '(−)' : '(+)'} SGST @ 1.5%</span><span>{fmt(calc.sgst)}</span></div>
+                  <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                    <span>GST Base: {fmt(calc.gstBase)}</span>
+                    <span></span>
+                  </div>
                 </>
               )}
-              {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
-              {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Discount</span><span>{fmt(calc.discountVal)}</span></div>}
+              {calc.otherChargesVal > 0 && <div className="bill-sline"><span>{calc.transactionType === 'return' ? '(−)' : '(+)'} Other Charges</span><span>{fmt(calc.otherChargesVal)}</span></div>}
+              {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>{calc.transactionType === 'return' ? '(+)' : '(−)'} Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
+              {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>{calc.transactionType === 'return' ? '(+)' : '(−)'} Discount</span><span>{fmt(calc.discountVal)}</span></div>}
               <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                 <span>Round Off</span>
                 <span>{calc.roundOffVal >= 0 ? '+' : ''}{calc.roundOffVal.toFixed(2)}</span>
@@ -1023,9 +1021,9 @@ export default function Billing() {
 
             {/* Final Amount */}
             <div className="bill-final-block">
-              <div className="bill-final-label">FINAL AMOUNT</div>
-              <div className="bill-final-value" style={{ color: calc.finalAmt < 0 ? 'var(--color-success)' : 'var(--text-primary)' }}>
-                {calc.finalAmt < 0 ? '−' : ''}{fmtInt(Math.abs(calc.finalAmt))}
+              <div className="bill-final-label">{calc.transactionType === 'return' ? 'RETURN AMOUNT' : 'FINAL AMOUNT'}</div>
+              <div className="bill-final-value" style={{ color: calc.transactionType === 'return' ? 'var(--color-success)' : 'var(--text-primary)' }}>
+                {fmtInt(Math.abs(calc.finalAmt))}
               </div>
               <div className="bill-final-words">{calc.amountInWords}</div>
             </div>
@@ -1033,7 +1031,7 @@ export default function Billing() {
             {/* Indicator */}
             {calc.finalAmt !== 0 && (
               <div style={{ textAlign: 'center', marginTop: 'var(--space-3)' }}>
-                {calc.finalAmt > 0 ? (
+                {calc.transactionType === 'payable' ? (
                   <span className="bill-indicator bill-indicator--pay">
                     <i className="fa-solid fa-arrow-up"></i> Customer Pays
                   </span>

@@ -9,6 +9,10 @@ export default function RateChart() {
     gold24k: '', gold22k: '', gold18k: '',
     silver999: '', silver925: '',
   });
+  const [makingRates, setMakingRates] = useState({
+    gold24k: '', gold22k: '', gold18k: '',
+    silver999: '', silver925: '',
+  });
 
   useEffect(() => {
     fetchRates();
@@ -25,15 +29,18 @@ export default function RateChart() {
 
       // Only want the latest rates to populate the form
       const latestRates = { gold24k: '', gold22k: '', gold18k: '', silver999: '', silver925: '' };
+      const latestMaking = { gold24k: '', gold22k: '', gold18k: '', silver999: '', silver925: '' };
       
       const processedTypes = new Set();
       data.forEach(entry => {
         if (!processedTypes.has(entry.metal_type)) {
           latestRates[entry.metal_type] = (Number(entry.rate_per_10gm) / 10).toFixed(2);
+          latestMaking[entry.metal_type] = (Number(entry.making_per_10gm || 0) / 10).toFixed(2);
           processedTypes.add(entry.metal_type);
         }
       });
       setRates(latestRates);
+      setMakingRates(latestMaking);
     } catch (err) {
       console.error("Failed to load rates:", err);
       setRateHistory([]);
@@ -47,7 +54,7 @@ export default function RateChart() {
       const payload = Object.entries(rates).map(([metal_type, rate]) => ({
         metal_type,
         rate_per_10gm: (Number(rate) * 10).toFixed(2),
-        making_per_10gm: "0.00"
+        making_per_10gm: (Number(makingRates[metal_type] || 0) * 10).toFixed(2)
       }));
       
       for (const entry of payload) {
@@ -65,6 +72,7 @@ export default function RateChart() {
   };
 
   const updateRate = (key, val) => setRates({ ...rates, [key]: val });
+  const updateMakingRate = (key, val) => setMakingRates({ ...makingRates, [key]: val });
 
   return (
     <div className="animate-fade-in">
@@ -107,16 +115,35 @@ export default function RateChart() {
             <div className="card animate-fade-in-up" key={item.key}>
               <div className="card__label" style={{ marginBottom: 'var(--space-2)' }}>{item.label}</div>
               {editMode ? (
-                <input
-                  className="form-input"
-                  type="number"
-                  step="1"
-                  value={rates[item.key]}
-                  onChange={(e) => updateRate(item.key, e.target.value)}
-                  style={{ fontSize: 'var(--text-xl)', fontWeight: 700, fontFamily: 'var(--font-display)', height: 48 }}
-                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Rate / 1g</div>
+                    <input
+                      className="form-input"
+                      type="number"
+                      step="1"
+                      value={rates[item.key]}
+                      onChange={(e) => updateRate(item.key, e.target.value)}
+                      style={{ fontSize: 'var(--text-lg)', fontWeight: 700, fontFamily: 'var(--font-display)', height: 48, padding: '8px' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Making / 1g</div>
+                    <input
+                      className="form-input"
+                      type="number"
+                      step="0.01"
+                      value={makingRates[item.key]}
+                      onChange={(e) => updateMakingRate(item.key, e.target.value)}
+                      style={{ fontSize: 'var(--text-lg)', fontWeight: 700, fontFamily: 'var(--font-display)', height: 48, padding: '8px' }}
+                    />
+                  </div>
+                </div>
               ) : (
-                <div className="card__value">₹{Number(rates[item.key]).toLocaleString('en-IN')}</div>
+                <>
+                  <div className="card__value">₹{Number(rates[item.key]).toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 4 }}>Making: ₹{makingRates[item.key] || '0.00'}/g</div>
+                </>
               )}
               <div className={`card__trend card__trend--${item.up ? 'up' : 'down'}`}>
                 <i className={`fa-solid fa-arrow-${item.up ? 'up' : 'down'}`}></i> {item.change}
@@ -142,16 +169,35 @@ export default function RateChart() {
             <div className="card animate-fade-in-up" key={item.key}>
               <div className="card__label" style={{ marginBottom: 'var(--space-2)' }}>{item.label}</div>
               {editMode ? (
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={rates[item.key]}
-                  onChange={(e) => updateRate(item.key, e.target.value)}
-                  style={{ fontSize: 'var(--text-xl)', fontWeight: 700, fontFamily: 'var(--font-display)', height: 48 }}
-                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Rate / 1g</div>
+                    <input
+                      className="form-input"
+                      type="number"
+                      step="0.01"
+                      value={rates[item.key]}
+                      onChange={(e) => updateRate(item.key, e.target.value)}
+                      style={{ fontSize: 'var(--text-lg)', fontWeight: 700, fontFamily: 'var(--font-display)', height: 48, padding: '8px' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Making / 1g</div>
+                    <input
+                      className="form-input"
+                      type="number"
+                      step="0.01"
+                      value={makingRates[item.key]}
+                      onChange={(e) => updateMakingRate(item.key, e.target.value)}
+                      style={{ fontSize: 'var(--text-lg)', fontWeight: 700, fontFamily: 'var(--font-display)', height: 48, padding: '8px' }}
+                    />
+                  </div>
+                </div>
               ) : (
-                <div className="card__value">₹{rates[item.key]}</div>
+                <>
+                  <div className="card__value">₹{Number(rates[item.key]).toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 4 }}>Making: ₹{makingRates[item.key] || '0.00'}/g</div>
+                </>
               )}
               <div className={`card__trend card__trend--${item.up ? 'up' : 'down'}`}>
                 <i className={`fa-solid fa-arrow-${item.up ? 'up' : 'down'}`}></i> {item.change}
@@ -190,11 +236,11 @@ export default function RateChart() {
             ) : rateHistory.map((row, i) => (
               <tr key={row.id || i}>
                 <td style={{ fontWeight: 500 }}>{new Date(row.created_at).toLocaleDateString()}</td>
-                <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{row.metal_type === 'gold24k' ? `₹${(row.rate_per_10gm/10).toFixed(2)}` : '—'}</td>
-                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'gold22k' ? `₹${(row.rate_per_10gm/10).toFixed(2)}` : '—'}</td>
-                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'gold18k' ? `₹${(row.rate_per_10gm/10).toFixed(2)}` : '—'}</td>
-                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'silver999' ? `₹${(row.rate_per_10gm/10).toFixed(2)}` : '—'}</td>
-                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'silver925' ? `₹${(row.rate_per_10gm/10).toFixed(2)}` : '—'}</td>
+                <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{row.metal_type === 'gold24k' ? <><div style={{fontWeight: 700}}>₹{(row.rate_per_10gm/10).toFixed(2)}</div><div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400}}>Mk: ₹{(row.making_per_10gm/10 || 0).toFixed(2)}</div></> : '—'}</td>
+                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'gold22k' ? <><div style={{fontWeight: 700}}>₹{(row.rate_per_10gm/10).toFixed(2)}</div><div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400}}>Mk: ₹{(row.making_per_10gm/10 || 0).toFixed(2)}</div></> : '—'}</td>
+                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'gold18k' ? <><div style={{fontWeight: 700}}>₹{(row.rate_per_10gm/10).toFixed(2)}</div><div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400}}>Mk: ₹{(row.making_per_10gm/10 || 0).toFixed(2)}</div></> : '—'}</td>
+                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'silver999' ? <><div style={{fontWeight: 700}}>₹{(row.rate_per_10gm/10).toFixed(2)}</div><div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400}}>Mk: ₹{(row.making_per_10gm/10 || 0).toFixed(2)}</div></> : '—'}</td>
+                <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.metal_type === 'silver925' ? <><div style={{fontWeight: 700}}>₹{(row.rate_per_10gm/10).toFixed(2)}</div><div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400}}>Mk: ₹{(row.making_per_10gm/10 || 0).toFixed(2)}</div></> : '—'}</td>
               </tr>
             ))}
           </tbody>

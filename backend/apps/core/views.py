@@ -88,6 +88,7 @@ class DashboardStatsView(APIView):
             if entry.metal_type not in latest_rates:
                 latest_rates[entry.metal_type] = {
                     'rate_per_gram': float(entry.rate_per_10gm / 10),
+                    'making_per_gram': float(entry.making_per_10gm / 10) if entry.making_per_10gm else 0.0,
                     'updated_at': entry.created_at.isoformat() if entry.created_at else '',
                 }
 
@@ -202,7 +203,9 @@ class LatestRatesView(APIView):
             if entry.metal_type not in latest:
                 latest[entry.metal_type] = {
                     'rate_per_gram': float(entry.rate_per_10gm / 10),
+                    'making_per_gram': float(entry.making_per_10gm / 10) if entry.making_per_10gm else 0.0,
                     'rate_per_10gm': float(entry.rate_per_10gm),
+                    'making_per_10gm': float(entry.making_per_10gm) if entry.making_per_10gm else 0.0,
                     'updated_at': entry.created_at.isoformat() if entry.created_at else '',
                 }
         return Response(latest)
