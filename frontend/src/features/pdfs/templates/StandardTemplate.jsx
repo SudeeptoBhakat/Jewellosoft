@@ -32,9 +32,9 @@ export default function StandardTemplate({ data }) {
     const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
 
     // ── Derive which item columns have data (respecting hide flags) ──
-    const hasHuid     = items.some((i) => i.huid && i.huid.trim() && i.huid !== "—");
+    const hasHuid = items.some((i) => i.huid && i.huid.trim() && i.huid !== "—");
     const hasMetalVal = !hideMetalValue && items.some((i) => has(i.metalValue));
-    const hasMaking   = !hideMaking && items.some((i) => has(i.making));
+    const hasMaking = !hideMaking && items.some((i) => has(i.making));
 
     // ── Derive rate display values ──
     const ratePerGm = has(rates.rate10gm) ? Number(rates.rate10gm) / 10 : 0;
@@ -42,22 +42,28 @@ export default function StandardTemplate({ data }) {
 
     // ── Build summary rows: only include non-zero values ──
     const summaryRows = [];
-    if (has(totals.subtotal))     summaryRows.push({ label: "SUBTOTAL",       value: fmt(totals.subtotal) });
-    if (has(totals.hallmark))     summaryRows.push({ label: "HALLMARK",       value: fmt(totals.hallmark) });
-    if (has(totals.cgst))         summaryRows.push({ label: "CGST 1.5%",     value: fmt(totals.cgst) });
-    if (has(totals.sgst))         summaryRows.push({ label: "SGST 1.5%",     value: fmt(totals.sgst) });
-    if (has(totals.otherCharges)) summaryRows.push({ label: "OTHER CHARGES", value: fmt(totals.otherCharges) });
+    // Final amount is always shown
+    summaryRows.push({ label: "NET TOTAL", value: fmt(totals.finalAmount), isFinal: true });
+    if (has(totals.roundOff)) summaryRows.push({ label: "ROUND OFF", value: Number(totals.roundOff).toFixed(2) });
+    if (has(totals.discount)) summaryRows.push({ label: "DISCOUNT", value: `- ${fmt(totals.discount)}`, isDeduct: true });
+    if (has(totals.advance)) summaryRows.push({ label: "LESS ADVANCE", value: `- ${fmt(totals.advance)}`, isDeduct: true });
     if (oldMetal && has(oldMetal.value))
         summaryRows.push({
             label: oldMetal.mode === "value" ? "OLD METAL (DIRECT)" : `OLD METAL (${Number(oldMetal.weight || 0).toFixed(2)}g)`,
             value: `- ${fmt(oldMetal.value)}`,
             isDeduct: true,
         });
-    if (has(totals.advance))      summaryRows.push({ label: "LESS ADVANCE",  value: `- ${fmt(totals.advance)}`,  isDeduct: true });
-    if (has(totals.discount))     summaryRows.push({ label: "DISCOUNT",      value: `- ${fmt(totals.discount)}`, isDeduct: true });
-    if (has(totals.roundOff))     summaryRows.push({ label: "ROUND OFF",     value: Number(totals.roundOff).toFixed(2) });
-    // Final amount is always shown
-    summaryRows.push({ label: "NET TOTAL", value: fmt(totals.finalAmount), isFinal: true });
+    if (has(totals.otherCharges)) summaryRows.push({ label: "OTHER CHARGES", value: fmt(totals.otherCharges) });
+    if (has(totals.sgst)) summaryRows.push({ label: "SGST 1.5%", value: fmt(totals.sgst) });
+    if (has(totals.cgst)) summaryRows.push({ label: "CGST 1.5%", value: fmt(totals.cgst) });
+    if (has(totals.hallmark)) summaryRows.push({ label: "HALLMARK", value: fmt(totals.hallmark) });
+    if (has(totals.subtotal)) summaryRows.push({ label: "SUBTOTAL", value: fmt(totals.subtotal) });
+
+    // ── Pad items array to always have at least 5 rows ──
+    const displayItems = [...items];
+    while (displayItems.length < 5) {
+        displayItems.push({ _isEmpty: true });
+    }
 
     // Dynamic grid columns based on summary items count
     const gridCols = summaryRows.length;
@@ -77,7 +83,8 @@ export default function StandardTemplate({ data }) {
 
                 <div className="pdf-header">
                     {/* TOP DESIGN STRIP */}
-                    <div className="pdf-top-strip"></div>
+                    <div className="pdf-top-strip-right"></div>
+                    <div className="pdf-top-strip-left"></div>
 
                     <div className="pdf-title">
                         {docType.includes("INVOICE") ? "INVOICE" : "ESTIMATE"}
@@ -142,22 +149,36 @@ export default function StandardTemplate({ data }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {items.length === 0 ? (
+                        {displayItems.length === 0 ? (
                             <tr>
                                 <td colSpan={3 + (hasHuid ? 1 : 0) + (hasMetalVal ? 1 : 0) + (hasMaking ? 1 : 0)} style={{ textAlign: "center", padding: 20, color: "#999" }}>
                                     No items
                                 </td>
                             </tr>
                         ) : (
-                            items.map((item, i) => (
+                            displayItems.map((item, i) => (
                                 <tr key={i}>
-                                    <td>{i + 1}</td>
-                                    <td style={{ textAlign: "left" }}>{item.name}</td>
-                                    {hasHuid && <td>{item.huid || "-"}</td>}
-                                    <td>{Number(item.weight || 0).toFixed(3)} g</td>
-                                    {hasMetalVal && <td>{fmt(item.metalValue)}</td>}
-                                    {hasMaking && <td>{fmt(item.making)}</td>}
-                                    <td>{fmt(item.total)}</td>
+                                    {item._isEmpty ? (
+                                        <>
+                                            <td>&nbsp;</td>
+                                            <td></td>
+                                            {hasHuid && <td></td>}
+                                            <td></td>
+                                            {hasMetalVal && <td></td>}
+                                            {hasMaking && <td></td>}
+                                            <td></td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td>{i + 1}</td>
+                                            <td style={{ textAlign: "left" }}>{item.name}</td>
+                                            {hasHuid && <td>{item.huid || "-"}</td>}
+                                            <td>{Number(item.weight || 0).toFixed(3)} g</td>
+                                            {hasMetalVal && <td>{fmt(item.metalValue)}</td>}
+                                            {hasMaking && <td>{fmt(item.making)}</td>}
+                                            <td>{fmt(item.total)}</td>
+                                        </>
+                                    )}
                                 </tr>
                             ))
                         )}
@@ -182,12 +203,12 @@ export default function StandardTemplate({ data }) {
                     </>
                 )}
 
-                {/* AMOUNT IN WORDS — only if valid string */}
-                {totals.amountInWords && totals.amountInWords.trim() && (
-                    <div className="pdf-amount-strip">
-                        {totals.amountInWords.toUpperCase()}
-                    </div>
-                )}
+                {/* AMOUNT IN WORDS — always show */}
+                <div className="pdf-amount-strip">
+                    AMOUNT IN WORDS: {totals.amountInWords && totals.amountInWords.trim() 
+                        ? totals.amountInWords.toUpperCase() 
+                        : "—"}
+                </div>
 
                 {/* PAYMENT — only if amounts exist */}
                 {payment?.amounts?.filter(p => has(p.amount)).length > 0 && (

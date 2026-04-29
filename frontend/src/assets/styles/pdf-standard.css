@@ -5,12 +5,20 @@
     padding: 25px;
     position: relative;
     color: #0a0a0a;
+    width: 794px;
+    /* A4 width */
+    min-height: 1123px;
+    /* A4 height */
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    margin: 0 auto;
 }
 
 /* WATERMARK */
 .pdf-watermark {
     position: absolute;
-    top: 65%;
+    top: 52%;
     left: 50%;
     width: 93%;
     opacity: 0.10;
@@ -21,6 +29,9 @@
 .pdf-container {
     position: relative;
     z-index: 2;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 /* HEADER */
@@ -39,23 +50,34 @@
     width: 100%;
 }
 
-/* 🔥 TOP DIAGONAL STRIP */
-.pdf-top-strip {
+
+.pdf-top-strip-left {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40%;
+    height: 75px;
+    background: #110e5e;
+    clip-path: polygon(0% 13%, 95% 35%, 0% 55%);
+    z-index: 1;
+}
+
+.pdf-top-strip-right {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 65px;
+    height: 80px;
     z-index: 0;
-    /* VERY IMPORTANT */
     background: linear-gradient(120deg, #1e1b8f 20%, #6d5dfc 80%);
-    clip-path: polygon(0 0, 100% 0, 85% 40%, 0% 100%);
+    clip-path: polygon(0% 0%, 100% 0%, 95% 70%, 1% 1%);
 }
 
-.pdf-header>*:not(.pdf-top-strip) {
+.pdf-header>*:not(.pdf-top-strip-right):not(.pdf-top-strip-left) {
     position: relative;
     z-index: 2;
 }
+
 
 /* TITLE */
 .pdf-title {
@@ -65,14 +87,17 @@
     margin-bottom: 5px;
     letter-spacing: 1px;
     position: relative;
+    margin-bottom: 5px;
 }
 
 /* SHOP NAME */
 .pdf-shop-name {
     font-size: 36px;
-    font-weight: 900;
-    letter-spacing: 3px;
+    font-weight: 500;
+    /* letter-spacing: 3px; */
     color: #0b0b3c;
+    padding: 0 10px;
+
     /* deep navy */
     margin-bottom: 5px;
 }
@@ -94,6 +119,7 @@
     justify-content: space-between;
     font-size: 14px;
     font-weight: 800;
+    padding: 0 10px;
     text-transform: uppercase;
 }
 
@@ -121,6 +147,7 @@
     justify-content: space-between;
     margin-top: 15px;
     font-size: 13px;
+    padding: 0 10px;
 }
 
 .pdf-customer .bold {
@@ -235,10 +262,11 @@
 
 /* FOOTER */
 .pdf-footer {
-    margin-top: 35px;
+    margin-top: auto;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
+    padding-top: 35px;
 }
 
 .signature {
