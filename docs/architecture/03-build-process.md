@@ -60,4 +60,4 @@ Now we bring the compiled backend and compiled frontend into the Electron wrappe
    ```
    *(or `npm run build` depending on the exact script defined in package.json)*
 
-4. **Final Output**: Electron Builder will generate a Setup executable (e.g., `JewelloSoft-Setup-1.0.0.exe`) in the `desktop/dist/` folder. This is the file you distribute to clients.
+4. **Final Output**: Electron Builder will generate a Setup executable (e.g., `JewelloSoft.Setup.1.0.0.exe`) in the `desktop/dist/` folder. This is the file you distribute to clients.
