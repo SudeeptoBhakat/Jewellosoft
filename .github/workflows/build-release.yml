@@ -110,7 +110,7 @@ jobs:
       # ── Attach backend.exe to GitHub Release ──────────────────────
       - name: Upload backend.exe to Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: backend/dist/backend/backend.exe
         env:
