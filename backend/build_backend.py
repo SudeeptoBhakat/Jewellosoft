@@ -165,10 +165,15 @@ templates_dir = BACKEND_DIR / "templates"
 if templates_dir.exists():
     DATAS.append((str(templates_dir), "templates"))
 
-# Explicitly pack config.json
-config_path = BACKEND_DIR / "config.json"
-if config_path.exists():
-    DATAS.append((str(config_path), "."))
+# Explicitly pack config (prefer encrypted, fall back to plain)
+config_enc_path = BACKEND_DIR / "config.json.enc"
+config_plain_path = BACKEND_DIR / "config.json"
+if config_enc_path.exists():
+    DATAS.append((str(config_enc_path), "."))
+    print(f"  → Bundling ENCRYPTED config: {config_enc_path}")
+elif config_plain_path.exists():
+    DATAS.append((str(config_plain_path), "."))
+    print(f"  ⚠ Bundling PLAIN config (dev mode): {config_plain_path}")
 
 # Add guaranteed internal bindings for Django and DRF Data (Templates, Localization, CSS/JS)
 # Using collect_data_files statically guarantees flawless collection of .mo translation files

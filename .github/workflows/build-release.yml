@@ -33,12 +33,33 @@ jobs:
         working-directory: backend
         run: |
           pip install -r requirements/base.txt
-          pip install pyinstaller waitress
+          pip install pyinstaller waitress cryptography
 
+      # ── Generate & Encrypt config.json ────────────────────────────
+      - name: Generate config.json from secrets
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $config = @{
+            SUPABASE_URL             = "${{ secrets.SUPABASE_URL }}"
+            SUPABASE_ANON_KEY        = "${{ secrets.SUPABASE_ANON_KEY }}"
+            SUPABASE_SERVICE_ROLE_KEY = "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+            SUPABASE_JWT_SECRET      = "${{ secrets.SUPABASE_JWT_SECRET }}"
+          } | ConvertTo-Json -Depth 1
+          $config | Out-File -FilePath "config.json" -Encoding utf8
+
+      - name: Encrypt config.json
+        working-directory: backend
+        env:
+          CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY }}
+        run: python encrypt_config.py
+
+      # ── Build Backend Executable ──────────────────────────────────
       - name: Build backend executable
         working-directory: backend
-        run: |
-          python build_backend.py
+        env:
+          CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY }}
+        run: python build_backend.py
 
       # ── Setup Node.js (for React + Electron) ─────────────────────
       - name: Setup Node.js
@@ -96,6 +117,7 @@ jobs:
         shell: bash
         run: |
           rm -rf backend/build backend/dist backend/__pycache__
+          rm -f backend/config.json backend/config.json.enc
           rm -rf frontend/node_modules frontend/dist
           rm -rf desktop/node_modules desktop/dist desktop/build
           rm -rf ~/.npm ~/.cache/pip

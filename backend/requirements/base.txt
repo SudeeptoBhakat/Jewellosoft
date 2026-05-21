@@ -10,3 +10,6 @@ sqlparse>=0.5
 
 # Production WSGI server
 waitress>=3.0
+
+# Encryption (config & license management)
+cryptography>=43.0

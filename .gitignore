@@ -51,6 +51,7 @@ backend/py_err.txt
 backend/out.txt
 backend/test.txt
 backend/config.json
+backend/config.json.enc
 
 # PyInstaller temporary
 /build/
