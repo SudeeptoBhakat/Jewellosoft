@@ -9,7 +9,7 @@ django-filter>=25.0
 sqlparse>=0.5
 
 # Production WSGI server
-waitress>=3.0
+waitress>=3.0.2
 
 # Encryption (config & license management)
 cryptography>=48.0.0
