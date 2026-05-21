@@ -104,12 +104,21 @@ jobs:
           path: desktop/dist/*.exe
           retention-days: 30
 
-      - name: Upload backend executable
+      - name: Upload backend executable artifact
         uses: actions/upload-artifact@v4
         with:
           name: JewelloSoft-Backend-Executable
-          path: backend/dist/backend.exe
+          path: backend/dist/backend/
           retention-days: 30
+
+      # ── Attach backend.exe to GitHub Release ──────────────────────
+      - name: Upload backend.exe to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: backend/dist/backend/backend.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ── Cleanup ──────────────────────────────────────────────────
       - name: Cleanup build files
