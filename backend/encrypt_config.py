@@ -25,11 +25,11 @@ ENCRYPTED_PATH = BACKEND_DIR / "config.json.enc"
 
 
 def main():
-    # ── 1. Read the encryption key ──────────────────────────────────
+    # ── 1. Read or generate the encryption key ──────────────────────
     key = os.environ.get("CONFIG_ENCRYPTION_KEY")
     if not key:
-        print("ERROR: CONFIG_ENCRYPTION_KEY environment variable is not set.")
-        sys.exit(1)
+        key = Fernet.generate_key().decode("utf-8")
+        print("[OK] Generated ephemeral encryption key for this build.")
 
     # Validate the key is a proper Fernet key
     try:
@@ -59,10 +59,16 @@ def main():
     with open(ENCRYPTED_PATH, "wb") as f:
         f.write(encrypted)
 
+    # Save the key alongside the encrypted config so PyInstaller can bundle it
+    key_path = BACKEND_DIR / ".config_key"
+    with open(key_path, "w", encoding="utf-8") as f:
+        f.write(key)
+
     # ── 4. Remove the plain config ──────────────────────────────────
     CONFIG_PATH.unlink()
 
     print(f"[OK] Encrypted config written to {ENCRYPTED_PATH}")
+    print(f"[OK] Encryption key written to {key_path}")
     print(f"[OK] Plain config.json deleted")
 
 

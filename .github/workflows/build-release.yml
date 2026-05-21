@@ -50,15 +50,11 @@ jobs:
 
       - name: Encrypt config.json
         working-directory: backend
-        env:
-          CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY }}
         run: python encrypt_config.py
 
       # ── Build Backend Executable ──────────────────────────────────
       - name: Build backend executable
         working-directory: backend
-        env:
-          CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY }}
         run: python build_backend.py
 
       # ── Setup Node.js (for React + Electron) ─────────────────────

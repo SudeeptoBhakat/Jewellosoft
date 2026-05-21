@@ -167,10 +167,14 @@ if templates_dir.exists():
 
 # Explicitly pack config (prefer encrypted, fall back to plain)
 config_enc_path = BACKEND_DIR / "config.json.enc"
+config_key_path = BACKEND_DIR / ".config_key"
 config_plain_path = BACKEND_DIR / "config.json"
 if config_enc_path.exists():
     DATAS.append((str(config_enc_path), "."))
     print(f"  [OK] Bundling ENCRYPTED config: {config_enc_path}")
+    if config_key_path.exists():
+        DATAS.append((str(config_key_path), "."))
+        print(f"  [OK] Bundling ENCRYPTION KEY: {config_key_path}")
 elif config_plain_path.exists():
     DATAS.append((str(config_plain_path), "."))
     print(f"  [WARN] Bundling PLAIN config (dev mode): {config_plain_path}")
