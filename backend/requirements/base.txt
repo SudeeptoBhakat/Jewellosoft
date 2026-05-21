@@ -1,6 +1,6 @@
 # Core Django packages
 Django>=5.0,<6.0
-djangorestframework>=3.15
+djangorestframework>=3.17.1
 djangorestframework-simplejwt>=5.4
 django-cors-headers>=4.6
 django-filter>=25.0
