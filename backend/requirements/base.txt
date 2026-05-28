@@ -6,7 +6,7 @@ django-cors-headers>=4.9.0
 django-filter>=25.0
 
 # Database
-sqlparse>=0.5
+sqlparse>=0.5.5
 
 # Production WSGI server
 waitress>=3.0.2
