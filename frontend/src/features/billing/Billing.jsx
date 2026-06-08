@@ -473,6 +473,9 @@ export default function Billing() {
           old_amount: calc.effectiveOldValue || 0,
           old_value_direct: calc.oldValueDirect || 0,
           old_settlement_mode: calc.oldMode || 'none',
+          old_metal_raw_value: calc.oldMV || 0,
+          old_deduct_percent: calc.oldDeductPct || 0,
+          old_deduct_amount: calc.oldDeductAmt || 0,
           advance: calc.advanceVal,
           discount: calc.discountVal,
           hallmark: calc.hallmarkAmt,
@@ -480,7 +483,8 @@ export default function Billing() {
           cgst: calc.cgst,
           sgst: calc.sgst,
           round_off: calc.roundOffVal,
-          grand_total: calc.finalAmt
+          grand_total: calc.finalAmt,
+          transaction_type: calc.transactionType
         },
         payments: [
           { mode: 'cash', amount: cashAmt },
@@ -508,6 +512,7 @@ export default function Billing() {
   const handlePrint = async () => {
     const success = await handleSave(false);
     if (success) {
+      // console.log("CALC =", calc);
       const docData = {
         template: shop?.pdf_template || 'classic',
         shop: {
@@ -523,7 +528,7 @@ export default function Billing() {
         theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: custName, phone: custMobile, address: custAddress },
         meta: { number: billNumber || 'TBD', date: orderDate || new Date().toLocaleDateString('en-IN') },
-        rates: { rate10gm: metalRate * 10 },
+        rates: { rate10gm: metalRate * 10, makingPerGm: makingRate || 0 },
         items: items.map(it => ({
           name: it.name,
           huid: billType === 'Invoice' ? it.huid : undefined,
@@ -532,7 +537,8 @@ export default function Billing() {
           making: it.makingCharges || 0,
           total: it.total || 0
         })),
-        oldMetal: calc.hasOld ? { weight: calc.oldWt, value: calc.effectiveOldValue, mode: calc.oldMode } : null,
+        oldMetal: calc.hasOld ? { weight: calc.oldWt, value: calc.effectiveOldValue, mode: calc.oldMode, rawValue: calc.oldMV, deductPct: calc.oldDeductPct, deductAmt: calc.oldDeductAmt } : null,
+        returnBreakdown: calc.returnBreakdown || null,
         totals: {
           subtotal: calc.subtotal,
           cgst: calc.cgst,
@@ -543,7 +549,8 @@ export default function Billing() {
           discount: calc.discountVal,
           roundOff: calc.roundOffVal,
           finalAmount: calc.finalAmt,
-          amountInWords: calc.amountInWords
+          amountInWords: calc.amountInWords,
+          transactionType: calc.transactionType
         },
         payment: {
           amounts: [
@@ -552,6 +559,7 @@ export default function Billing() {
           ].filter(x => x.amount > 0)
         }
       };
+
       setPrintData(docData);
     }
   };
@@ -975,48 +983,105 @@ export default function Billing() {
           <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
             {/* Summary Lines */}
             <div className="bill-summary-lines">
-              {/* Product Value */}
-              <div className="bill-sline"><span>New Product Value <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.totalWeight.toFixed(3)}g × ₹{metalRate}+ Making)</span></span><span>{fmt(calc.newProductValue)}</span></div>
-
-              {/* Old Metal */}
-              {calc.hasOld && (
-                <div className="bill-sline" style={{ color: calc.transactionType === 'return' ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                  <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
-                  <span>{fmt(calc.effectiveOldValue)}</span>
-                </div>
-              )}
-
-              <div className="bill-sline" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '4px' }}>
-                <span style={{ fontWeight: 600 }}>Subtotal</span>
-                <span style={{ fontWeight: 600 }}>
-                  {calc.transactionType === 'return' ? '' : ''}{fmt(calc.subtotal)}
-                </span>
-              </div>
-
-              {/* Charges */}
-              {calc.hallmarkAmt > 0 && (
-                <div className="bill-sline">
-                  <span>{calc.transactionType === 'return' ? '(−)' : '(+)'} Hallmark <span style={{ color: 'var(--text-muted)' }}>({hallmarkCount} × ₹{hallmarkValue})</span></span>
-                  <span>{fmt(calc.hallmarkAmt)}</span>
-                </div>
-              )}
-              {billType === 'Invoice' && (
+              {calc.returnBreakdown ? (
                 <>
-                  <div className="bill-sline"><span>{calc.transactionType === 'return' ? '(−)' : '(+)'} CGST @ 1.5%</span><span>{fmt(calc.cgst)}</span></div>
-                  <div className="bill-sline"><span>{calc.transactionType === 'return' ? '(−)' : '(+)'} SGST @ 1.5%</span><span>{fmt(calc.sgst)}</span></div>
+                  {/* ── SCENARIO 3: Step-by-step Return Breakdown ── */}
+                  <div style={{ padding: '8px 12px', background: 'linear-gradient(135deg, rgba(34,197,94,0.08), rgba(16,185,129,0.04))', borderRadius: 'var(--radius-md)', border: '1px solid rgba(34,197,94,0.2)', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <i className="fa-solid fa-scale-balanced" style={{ color: 'var(--color-success)', fontSize: '0.75rem' }}></i>
+                      <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-success)' }}>Old Metal Return Breakdown</span>
+                    </div>
+                    <div className="bill-sline" style={{ marginBottom: 2 }}>
+                      <span style={{ fontSize: 'var(--text-sm)' }}>Old: <strong>{calc.oldWt.toFixed(3)}g</strong> → New: <strong>{calc.totalWeight.toFixed(3)}g</strong></span>
+                      <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>+{calc.returnBreakdown.excessWeight.toFixed(3)}g extra</span>
+                    </div>
+                  </div>
+
+                  <div className="bill-sline">
+                    <span>Excess Value <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.returnBreakdown.excessWeight.toFixed(3)}g × ₹{metalRate.toLocaleString('en-IN')})</span></span>
+                    <span>{fmt(calc.returnBreakdown.excessMetalValue)}</span>
+                  </div>
+                  {calc.returnBreakdown.deductionAmt > 0 && (
+                    <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
+                      <span>(−) Deduction ({calc.returnBreakdown.deductionPct}%)</span>
+                      <span>−{fmt(calc.returnBreakdown.deductionAmt)}</span>
+                    </div>
+                  )}
+                  <div className="bill-sline" style={{ fontWeight: 700, borderTop: '1px solid var(--border-primary)', paddingTop: 6, marginTop: 4, marginBottom: 10 }}>
+                    <span>Return Base Amount</span>
+                    <span style={{ color: 'var(--color-success)' }}>{fmt(calc.returnBreakdown.afterDeduction)}</span>
+                  </div>
+
+                  <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Charges Deducted from Return</div>
+                  {calc.returnBreakdown.steps.map((step, i) => (
+                    <div key={i}>
+                      {step.isFlip && (
+                        <div style={{ textAlign: 'center', margin: '6px 0', padding: '4px 0' }}>
+                          <span style={{ fontSize: '0.65rem', padding: '3px 12px', background: 'rgba(251,191,36,0.15)', color: '#b45309', borderRadius: 12, fontWeight: 700, letterSpacing: '0.03em' }}>
+                            ⚡ Return Fulfilled — Customer Now Pays
+                          </span>
+                        </div>
+                      )}
+                      <div className="bill-sline" style={{ fontSize: 'var(--text-sm)' }}>
+                        <span>
+                          {step.isSubtract ? '(−)' : '(+)'} {step.label}
+                          {step.detail && <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}> ({step.detail})</span>}
+                          {step.isFlip && <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}> — {fmt(step.absorbed)} absorbed</span>}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: step.isSubtract ? 'var(--color-danger)' : 'var(--color-success)', fontWeight: 600 }}>
+                            {step.isSubtract ? '−' : '+'}{fmt(step.amount)}
+                          </span>
+                          <span style={{ fontSize: '0.6rem', color: step.balance >= 0 ? '#16a34a' : '#dc2626', background: step.balance >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', padding: '1px 6px', borderRadius: 4, fontWeight: 600, minWidth: 55, textAlign: 'right' }}>
+                            {step.balance >= 0 ? '↩' : '↑'} {fmt(Math.abs(step.balance))}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', marginTop: 4 }}>
+                    <span>Round Off</span>
+                    <span>{calc.roundOffVal >= 0 ? '+' : ''}{calc.roundOffVal.toFixed(2)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* ── Normal / Old≤New Scenario ── */}
+                  <div className="bill-sline"><span>New Product Value <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.totalWeight.toFixed(3)}g × ₹{metalRate.toLocaleString('en-IN')} + Making)</span></span><span>{fmt(calc.newProductValue)}</span></div>
+                  {calc.hasOld && (
+                    <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
+                      <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
+                      <span>{fmt(calc.effectiveOldValue)}</span>
+                    </div>
+                  )}
+                  <div className="bill-sline" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '4px' }}>
+                    <span style={{ fontWeight: 600 }}>Subtotal</span>
+                    <span style={{ fontWeight: 600 }}>{fmt(calc.subtotal)}</span>
+                  </div>
+                  {calc.hallmarkAmt > 0 && (
+                    <div className="bill-sline">
+                      <span>(+) Hallmark <span style={{ color: 'var(--text-muted)' }}>({hallmarkCount} × ₹{hallmarkValue})</span></span>
+                      <span>{fmt(calc.hallmarkAmt)}</span>
+                    </div>
+                  )}
+                  {billType === 'Invoice' && (
+                    <>
+                      <div className="bill-sline"><span>(+) CGST @ 1.5%</span><span>{fmt(calc.cgst)}</span></div>
+                      <div className="bill-sline"><span>(+) SGST @ 1.5%</span><span>{fmt(calc.sgst)}</span></div>
+                      <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                        <span>GST Base: {fmt(calc.gstBase)}</span><span></span>
+                      </div>
+                    </>
+                  )}
+                  {calc.otherChargesVal > 0 && <div className="bill-sline"><span>(+) Other Charges</span><span>{fmt(calc.otherChargesVal)}</span></div>}
+                  {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
+                  {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Discount</span><span>{fmt(calc.discountVal)}</span></div>}
                   <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
-                    <span>GST Base: {fmt(calc.gstBase)}</span>
-                    <span></span>
+                    <span>Round Off</span>
+                    <span>{calc.roundOffVal >= 0 ? '+' : ''}{calc.roundOffVal.toFixed(2)}</span>
                   </div>
                 </>
               )}
-              {calc.otherChargesVal > 0 && <div className="bill-sline"><span>{calc.transactionType === 'return' ? '(−)' : '(+)'} Other Charges</span><span>{fmt(calc.otherChargesVal)}</span></div>}
-              {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>{calc.transactionType === 'return' ? '(+)' : '(−)'} Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
-              {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>{calc.transactionType === 'return' ? '(+)' : '(−)'} Discount</span><span>{fmt(calc.discountVal)}</span></div>}
-              <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
-                <span>Round Off</span>
-                <span>{calc.roundOffVal >= 0 ? '+' : ''}{calc.roundOffVal.toFixed(2)}</span>
-              </div>
             </div>
 
             {/* Final Amount */}

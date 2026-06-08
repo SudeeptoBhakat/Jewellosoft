@@ -48,6 +48,9 @@ class Order(BaseModel):
         ('value', 'By Direct Value'),
     ]
     old_settlement_mode = models.CharField(max_length=10, choices=OLD_SETTLEMENT_CHOICES, default='none')
+    old_metal_raw_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    old_deduct_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    old_deduct_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     advance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     cgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -58,6 +61,12 @@ class Order(BaseModel):
     round_off = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    TRANSACTION_TYPE_CHOICES = [
+        ('payable', 'Customer Payable'),
+        ('return', 'Return to Customer'),
+    ]
+    transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPE_CHOICES, default='payable')
 
     PAYMENT_CHOICES = [
         ("cash", "Cash"),

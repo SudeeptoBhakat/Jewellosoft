@@ -558,8 +558,8 @@ app.on('ready', async () => {
       const csp = [
         "default-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com",
         "script-src 'self' 'unsafe-inline'",
-        "connect-src 'self' http://127.0.0.1:* ws://localhost:* https://*.supabase.co",
-        "img-src 'self' data: https: http://127.0.0.1:*",
+        "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https://*.supabase.co",
+        "img-src 'self' data: https: http://127.0.0.1:* http://localhost:*",
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com"
       ].join('; ');

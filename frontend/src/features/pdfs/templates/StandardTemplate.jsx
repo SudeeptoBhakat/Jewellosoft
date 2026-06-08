@@ -13,6 +13,7 @@ const has = (v) => Number(v) !== 0 && Number.isFinite(Number(v));
 
 export default function StandardTemplate({ data }) {
     if (!data) return null;
+    console.log(data);
 
     const {
         docType = "INVOICE",
@@ -27,6 +28,9 @@ export default function StandardTemplate({ data }) {
         theme = "gold",
         hideMetalValue = false,
         hideMaking = false,
+        designNotes = '',
+        designImages = [],
+        returnBreakdown = null,
     } = data;
 
     const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
@@ -40,33 +44,21 @@ export default function StandardTemplate({ data }) {
     const ratePerGm = has(rates.rate10gm) ? Number(rates.rate10gm) / 10 : 0;
     const rateLabel = theme?.toLowerCase() === "silver" ? "SILVER" : "GOLD";
 
-    // ── Build summary rows: only include non-zero values ──
-    const summaryRows = [];
-    // Final amount is always shown
-    summaryRows.push({ label: "NET TOTAL", value: fmt(totals.finalAmount), isFinal: true });
-    if (has(totals.roundOff)) summaryRows.push({ label: "ROUND OFF", value: Number(totals.roundOff).toFixed(2) });
-    if (has(totals.discount)) summaryRows.push({ label: "DISCOUNT", value: `- ${fmt(totals.discount)}`, isDeduct: true });
-    if (has(totals.advance)) summaryRows.push({ label: "LESS ADVANCE", value: `- ${fmt(totals.advance)}`, isDeduct: true });
-    if (oldMetal && has(oldMetal.value))
-        summaryRows.push({
-            label: oldMetal.mode === "value" ? "OLD METAL (DIRECT)" : `OLD METAL (${Number(oldMetal.weight || 0).toFixed(2)}g)`,
-            value: `- ${fmt(oldMetal.value)}`,
-            isDeduct: true,
-        });
-    if (has(totals.otherCharges)) summaryRows.push({ label: "OTHER CHARGES", value: fmt(totals.otherCharges) });
-    if (has(totals.sgst)) summaryRows.push({ label: "SGST 1.5%", value: fmt(totals.sgst) });
-    if (has(totals.cgst)) summaryRows.push({ label: "CGST 1.5%", value: fmt(totals.cgst) });
-    if (has(totals.hallmark)) summaryRows.push({ label: "HALLMARK", value: fmt(totals.hallmark) });
-    if (has(totals.subtotal)) summaryRows.push({ label: "SUBTOTAL", value: fmt(totals.subtotal) });
+    // ── Transaction direction ──
+    const transactionType = totals.transactionType || 'payable';
+    const isReturn = transactionType === 'return';
+    const finalLabel = isReturn ? 'RETURN TO CUSTOMER' : 'CUSTOMER PAYABLE';
+    const isOrderReceipt = docType === 'ORDER RECEIPT';
+
+    // ── Old metal ──
+    const hasOldMetal = oldMetal && (has(oldMetal.value) || has(oldMetal.weight));
+    // console.log(oldMetal.weight);
 
     // ── Pad items array to always have at least 5 rows ──
     const displayItems = [...items];
     while (displayItems.length < 5) {
         displayItems.push({ _isEmpty: true });
     }
-
-    // Dynamic grid columns based on summary items count
-    const gridCols = summaryRows.length;
 
     return (
         <div className="pdf-root">
@@ -87,7 +79,7 @@ export default function StandardTemplate({ data }) {
                     <div className="pdf-top-strip-left"></div>
 
                     <div className="pdf-title">
-                        {docType.includes("INVOICE") ? "INVOICE" : "ESTIMATE"}
+                        {isOrderReceipt ? 'ORDER RECEIPT' : docType.includes("INVOICE") ? "INVOICE" : "ESTIMATE"}
                     </div>
 
                     <div className="pdf-shop-name">
@@ -185,28 +177,124 @@ export default function StandardTemplate({ data }) {
                     </tbody>
                 </table>
 
-                {/* SUMMARY — dynamic grid, only columns with data */}
-                {summaryRows.length > 0 && (
-                    <>
-                        <div className="pdf-summary-head" style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
-                            {summaryRows.map((r, i) => (
-                                <div key={i} style={r.isFinal ? { fontWeight: 900 } : undefined}>{r.label}</div>
-                            ))}
+                {/* ── OLD GOLD CALCULATION BREAKDOWN ROW ── */}
+
+                {hasOldMetal && Number(oldMetal.weight || 0) > 0 && (() => {
+                    const oldW = Number(oldMetal.weight || 0);
+                    const newW = Number(totals.weightTotal || 0);
+                    const ratePerGram = Number(rates.rate10gm || 0) / 10;
+                    const isOldHeavier = oldW > newW;
+                    const diffWeight = Math.abs(oldW - newW);
+                    const diffMetalValue = isOldHeavier
+                        ? Number(oldMetal.value) 
+                        : diffWeight * ratePerGram;
+
+                    return (
+                        <div className="old-calc-breakdown-row">
+                            {/* <span>Old Gold: {oldW.toFixed(2)}g</span>
+                            <span style={{ color: '#64748b', margin: '0 4px' }}>|</span>
+
+                            <span>New Gold: {newW.toFixed(2)}g</span> */}
+
+                            <span style={{ color: isOldHeavier ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
+
+                                {isOldHeavier
+                                    ? `Old Metal: ${oldW.toFixed(3)} - New Metal: ${newW.toFixed(3)} `
+                                    : `New Metal: ${newW.toFixed(3)} - Old Metal: ${oldW.toFixed(3)} `
+                                }
+                                = {diffWeight.toFixed(2)}g
+                            </span>
+
+                            <span style={{ color: '#64748b', margin: '0 8px' }}>|</span>
+
+                            <span>
+                                {fmt(diffMetalValue)}
+                            </span>
+                            <span style={{ color: '#64748b', margin: '0 4px' }}>
+                                {isOldHeavier ? '−' : '+'}
+                            </span>
+                            <span>
+                                Making: {fmt(totals.makingTotal)}
+                            </span>
+
+                            <span style={{ fontWeight: 700 }}>
+                                = {fmt(totals.subtotal)}
+                            </span>
+
                         </div>
-                        <div className="pdf-summary-values" style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
-                            {summaryRows.map((r, i) => (
-                                <div key={i} className={r.isDeduct ? "red" : r.isFinal ? "bold" : ""}>
-                                    {r.value}
-                                </div>
-                            ))}
+                    );
+                })()}
+
+                {/* Old Breakdown End */}
+
+                {/* ── CALCULATION BREAKDOWN ── */}
+                {returnBreakdown ? (
+                    <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: '0 25px' }}>
+                        {/* Return Waterfall */}
+                        <div className="pdf-summary-head" style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 14px' }}>
+                            <span>OLD METAL RETURN BREAKDOWN</span>
+                            <span>Old: {Number(oldMetal?.weight || 0).toFixed(3)}g → New: {items.reduce((s, it) => s + Number(it.weight || 0), 0).toFixed(3)}g | Extra: {returnBreakdown.excessWeight.toFixed(3)}g</span>
                         </div>
-                    </>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', border: '1px solid #ddd' }}>
+                            <tbody>
+                                <tr style={{ background: '#f9f9f9' }}>
+                                    <td style={{ padding: '4px 10px' }}>Excess Value ({returnBreakdown.excessWeight.toFixed(3)}g)</td>
+                                    <td style={{ padding: '4px 10px', textAlign: 'right' }}>{fmt(returnBreakdown.excessMetalValue)}</td>
+                                </tr>
+                                {returnBreakdown.deductionAmt > 0 && (
+                                    <tr><td style={{ padding: '4px 10px', color: '#e53935' }}>Less Deduction ({returnBreakdown.deductionPct}%)</td><td style={{ padding: '4px 10px', textAlign: 'right', color: '#e53935' }}>−{fmt(returnBreakdown.deductionAmt)}</td></tr>
+                                )}
+                                <tr style={{ borderTop: '2px solid #333', fontWeight: 700 }}>
+                                    <td style={{ padding: '5px 10px' }}>Return Base</td>
+                                    <td style={{ padding: '5px 10px', textAlign: 'right', color: '#2e7d32' }}>{fmt(returnBreakdown.afterDeduction)}</td>
+                                </tr>
+                                {returnBreakdown.steps.map((step, i) => (
+                                    <React.Fragment key={i}>
+                                        {step.isFlip && (
+                                            <tr><td colSpan={2} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#e65100', background: '#fff3e0', padding: '4px 0' }}>RETURN FULFILLED — REMAINING CHARGED TO CUSTOMER</td></tr>
+                                        )}
+                                        <tr style={{ background: i % 2 === 0 ? '#fafafa' : '#fff' }}>
+                                            <td style={{ padding: '3px 10px' }}>{step.isSubtract ? '(−)' : '(+)'} {step.label}{step.isFlip ? ` (${fmt(step.absorbed)} absorbed)` : ''}</td>
+                                            <td style={{ padding: '3px 10px', textAlign: 'right', color: step.isSubtract ? '#e53935' : '#2e7d32' }}>{step.isSubtract ? '−' : '+'}{fmt(step.amount)}</td>
+                                        </tr>
+                                    </React.Fragment>
+                                ))}
+                                {has(totals.roundOff) && (
+                                    <tr><td style={{ padding: '3px 10px', color: '#888', fontSize: '10px' }}>Round Off</td><td style={{ padding: '3px 10px', textAlign: 'right', fontSize: '10px' }}>{Number(totals.roundOff).toFixed(2)}</td></tr>
+                                )}
+                                <tr style={{ background: isReturn ? '#e8f5e9' : '#e3f2fd', fontWeight: 700, fontSize: '13px' }}>
+                                    <td style={{ padding: '6px 10px', color: isReturn ? '#1b5e20' : '#1565c0' }}>{finalLabel}</td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'right', color: isReturn ? '#1b5e20' : '#1565c0' }}>{fmt(totals.finalAmount)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: "0 25px" }}>
+                        {/* Normal Summary Banner */}
+                        <div className="pdf-summary-head">
+                            <div>GRAND TOTAL</div>
+                            <div>ROUND OFF</div>
+                            <div>LESS ADVANCE</div>
+                            <div>HALLMARK CHARGES</div>
+                            <div>OTHER CHARGES</div>
+                            <div>TOTAL</div>
+                        </div>
+                        <div className="pdf-summary-values" style={{ borderBottomLeftRadius: '15px', borderBottomRightRadius: '15px' }}>
+                            <div className="bold">{fmt(totals.finalAmount)}</div>
+                            <div className="red">{has(totals.roundOff) ? `${Number(totals.roundOff).toFixed(2)}` : '₹ 0.00'}</div>
+                            <div>{has(totals.advance) ? `${fmt(totals.advance)}` : '₹ 0.00'}</div>
+                            <div>{has(totals.hallmark) ? `${fmt(totals.hallmark)}` : '₹ 0.00'}</div>
+                            <div>{has(totals.otherCharges) ? `${fmt(totals.otherCharges)}` : '₹ 0.00'}</div>
+                            <div className="bold">{fmt(totals.subtotal)}</div>
+                        </div>
+                    </div>
                 )}
 
-                {/* AMOUNT IN WORDS — always show */}
+                {/* AMOUNT IN WORDS */}
                 <div className="pdf-amount-strip">
-                    AMOUNT IN WORDS: {totals.amountInWords && totals.amountInWords.trim() 
-                        ? totals.amountInWords.toUpperCase() 
+                    {totals.amountInWords && totals.amountInWords.trim()
+                        ? totals.amountInWords.toUpperCase()
                         : "—"}
                 </div>
 
@@ -222,13 +310,29 @@ export default function StandardTemplate({ data }) {
                     </div>
                 )}
 
+                {/* DESIGN NOTES & IMAGES (Order Receipts Only) */}
+                {isOrderReceipt && designNotes && designNotes.trim() && (
+                    <div style={{ padding: '8px 14px', background: '#fafafa', borderRadius: 4, fontSize: '10px', lineHeight: 1.6, margin: '6px 0', border: '1px solid #eee' }}>
+                        <strong style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888' }}>Design Notes:</strong><br />
+                        {designNotes}
+                    </div>
+                )}
+                {isOrderReceipt && designImages && designImages.length > 0 && (
+                    <div style={{ padding: '8px 14px', margin: '4px 0' }}>
+                        <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888', marginBottom: 6 }}>Design References</div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {designImages.slice(0, 4).map((src, i) => (
+                                <img key={i} src={src} alt={`Design ${i + 1}`} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4, border: '1px solid #ddd' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* FOOTER */}
                 <div className="pdf-footer">
                     <div className="signature">Customer Signature</div>
                     <div className="thank-text">THANK YOU | VISIT US AGAIN</div>
-                    <div className="signature">
-                        {shop.name ? `For ${shop.name}` : "Authorized Signature"}
-                    </div>
+                    <div className="signature">Authorized Signature</div>
                 </div>
 
             </div>

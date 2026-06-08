@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
-import { fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
+import { fmtCurrency as fmt, fmtInt, amountWords } from '../../utils/billingCalcEngine';
 
 const statusMap = { Paid: 'success', Pending: 'warning', Partial: 'info', Cancelled: 'danger' };
 const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'primary'}`}>{s}</span>;
@@ -260,6 +260,9 @@ export default function BillsList() {
       making: parseFloat(i.making_charge) || 0,
       total: parseFloat(i.total) || (parseFloat(i.net_weight) * (parseFloat(b.metal_rate) / 10) + parseFloat(i.making_charge))
     })),
+    weightTotal: parseFloat(b.weight_total || 0),
+    makingTotal: parseFloat(b.making_total || 0),
+    // making_rate: parseFloat(b.making_charge || 0),
     subtotal: parseFloat(b.subtotal) || 0,
     otherCharges: parseFloat(b.others || 0),
     hallmark: parseFloat(b.hallmark || 0),
@@ -269,10 +272,14 @@ export default function BillsList() {
     oldWt: parseFloat(b.old_weight || 0),
     oldValueDirect: parseFloat(b.old_value_direct || 0),
     oldSettlementMode: b.old_settlement_mode || 'none',
+    oldMetalRawValue: parseFloat(b.old_metal_raw_value || 0),
+    oldDeductPercent: parseFloat(b.old_deduct_percent || 0),
+    oldDeductAmount: parseFloat(b.old_deduct_amount || 0),
     advance: parseFloat(b.advance || 0),
     discount: parseFloat(b.discount || 0),
     roundOff: parseFloat(b.round_off || 0),
     finalAmount: parseFloat(b.grand_total) || 0,
+    transactionType: b.transaction_type || 'payable',
     rate10gm: parseFloat(b.metal_rate || 0),
     payment: b.payment_method?.toUpperCase() || 'CASH',
     paidCash: b.payment_method === 'cash' ? parseFloat(b.grand_total) || 0 : 0,
@@ -304,6 +311,7 @@ export default function BillsList() {
         try {
           const estRes = await api.get(`/billing/estimates/${queryParams}`);
           const estData = extractList(estRes.data);
+          // console.log(estData);
           allResults = [...allResults, ...estData.map(b => mapBill(b, 'Estimate'))];
           total += estRes.data?.count || estData.length;
         } catch (e) {
@@ -375,6 +383,32 @@ export default function BillsList() {
   };
 
   const handlePrint = (bill) => {
+    // console.log(bill);
+    // Build oldMetal with full breakdown from stored data
+    let oldMetal = null;
+    if (bill.oldSettlementMode === 'weight' && bill.oldWt > 0) {
+      oldMetal = {
+        weight: bill.oldWt,
+        value: bill.oldValue,
+        mode: 'weight',
+        rawValue: bill.oldMetalRawValue || bill.oldValue,
+        deductPct: bill.oldDeductPercent || 0,
+        deductAmt: bill.oldDeductAmount || 0,
+      };
+    } else if (bill.oldSettlementMode === 'value' && bill.oldValueDirect > 0) {
+      oldMetal = {
+        weight: 0,
+        value: bill.oldValueDirect,
+        mode: 'value',
+        rawValue: bill.oldValueDirect,
+        deductPct: 0,
+        deductAmt: 0,
+      };
+    } else if (bill.oldValue > 0) {
+      // Legacy fallback
+      oldMetal = { weight: bill.oldWt, value: bill.oldValue, mode: 'weight', rawValue: bill.oldValue, deductPct: 0, deductAmt: 0 };
+    }
+
     const docData = {
         template: shop?.pdf_template || 'classic',
         shop: {
@@ -390,14 +424,12 @@ export default function BillsList() {
         theme: bill.metal.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: bill.customer, phone: bill.phone, address: bill.address },
         meta: { number: bill.id, date: new Date(bill.date).toLocaleDateString('en-IN') },
-        rates: { rate10gm: bill.rate10gm },
+        rates: { rate10gm: bill.rate10gm, makingCharge: bill.makingCharge },
         items: bill.items,
-        oldMetal: (bill.oldSettlementMode === 'weight' && bill.oldWt > 0)
-          ? { weight: bill.oldWt, value: bill.oldValue, mode: 'weight' }
-          : (bill.oldSettlementMode === 'value' && bill.oldValueDirect > 0)
-            ? { weight: 0, value: bill.oldValueDirect, mode: 'value' }
-            : bill.oldValue > 0 ? { weight: bill.oldWt, value: bill.oldValue, mode: 'weight' } : null,
+        oldMetal,
         totals: {
+            weightTotal: bill.weightTotal,
+            makingTotal: bill.makingTotal,
             subtotal: bill.subtotal,
             cgst: bill.cgst,
             sgst: bill.sgst,
@@ -406,13 +438,16 @@ export default function BillsList() {
             advance: bill.advance,
             discount: bill.discount,
             roundOff: bill.roundOff,
-            finalAmount: bill.finalAmount
+            finalAmount: bill.finalAmount,
+            amountInWords: amountWords(bill.finalAmount),
+            transactionType: bill.transactionType || 'payable'
         },
         payment: { amounts: [
             { mode: 'CASH', amount: bill.paidCash },
             { mode: 'ONLINE', amount: bill.paidOnline }
         ].filter(x => x.amount > 0) }
     };
+
     setPrintData(docData);
   };
 

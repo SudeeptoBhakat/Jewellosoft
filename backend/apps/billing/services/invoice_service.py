@@ -58,6 +58,9 @@ def create_invoice(payload):
         old_amount=totals.get("old_amount", 0),
         old_value_direct=totals.get("old_value_direct", 0),
         old_settlement_mode=totals.get("old_settlement_mode", "none"),
+        old_metal_raw_value=totals.get("old_metal_raw_value", 0),
+        old_deduct_percent=totals.get("old_deduct_percent", 0),
+        old_deduct_amount=totals.get("old_deduct_amount", 0),
         advance=totals.get("advance", 0),
         discount=totals.get("discount", 0),
         hallmark=totals.get("hallmark", 0),
@@ -66,6 +69,7 @@ def create_invoice(payload):
         sgst=totals.get("sgst", 0),
         round_off=totals.get("round_off", 0),
         grand_total=totals.get("grand_total", 0),
+        transaction_type=totals.get("transaction_type", "payable"),
         payment_method=payment_splits[0].get("mode") if payment_splits else "cash"
     )
 
@@ -141,6 +145,9 @@ def create_estimate(payload):
         old_amount=totals.get("old_amount", 0),
         old_value_direct=totals.get("old_value_direct", 0),
         old_settlement_mode=totals.get("old_settlement_mode", "none"),
+        old_metal_raw_value=totals.get("old_metal_raw_value", 0),
+        old_deduct_percent=totals.get("old_deduct_percent", 0),
+        old_deduct_amount=totals.get("old_deduct_amount", 0),
         advance=totals.get("advance", 0),
         discount=totals.get("discount", 0),
         hallmark=totals.get("hallmark", 0),
@@ -149,6 +156,7 @@ def create_estimate(payload):
         sgst=0,
         round_off=totals.get("round_off", 0),
         grand_total=totals.get("grand_total", 0),
+        transaction_type=totals.get("transaction_type", "payable"),
         payment_method="cash"
     )
 

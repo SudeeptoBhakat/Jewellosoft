@@ -31,6 +31,8 @@ const getProgress = (key) => {
 const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
 
+import { amountWords } from '../../utils/billingCalcEngine';
+
 /* ─── Order Status Colors ─── */
 const orderStatusMap = { pending: 'warning', in_progress: 'info', completed: 'success', delivered: 'primary', cancelled: 'danger' };
 
@@ -359,6 +361,37 @@ export default function OrdersList() {
   };
 
   const handlePrint = (order) => {
+    // Build oldMetal with full breakdown
+    let oldMetal = null;
+    const oldMode = order.old_settlement_mode || 'none';
+    const oldWt = parseFloat(order.old_weight || 0);
+    const oldAmt = parseFloat(order.old_amount || 0);
+    const oldValueDirect = parseFloat(order.old_value_direct || 0);
+    if (oldMode === 'weight' && oldWt > 0) {
+      oldMetal = {
+        weight: oldWt,
+        value: oldAmt,
+        mode: 'weight',
+        rawValue: parseFloat(order.old_metal_raw_value || 0) || oldAmt,
+        deductPct: parseFloat(order.old_deduct_percent || 0),
+        deductAmt: parseFloat(order.old_deduct_amount || 0),
+      };
+    } else if (oldMode === 'value' && oldValueDirect > 0) {
+      oldMetal = {
+        weight: 0,
+        value: oldValueDirect,
+        mode: 'value',
+        rawValue: oldValueDirect,
+        deductPct: 0,
+        deductAmt: 0,
+      };
+    } else if (oldAmt > 0) {
+      oldMetal = { weight: oldWt, value: oldAmt, mode: 'weight', rawValue: oldAmt, deductPct: 0, deductAmt: 0 };
+    }
+
+    // Build design images from backend OrderImage relations
+    const designImages = (order.images || []).map(img => img.image);
+
     const docData = {
         template: shop?.pdf_template || 'classic',
         shop: {
@@ -382,13 +415,23 @@ export default function OrdersList() {
             making: parseFloat(i.making_charge) || 0, 
             total: parseFloat(i.total) || 0
         })),
-        oldMetal: null,
+        oldMetal,
         totals: {
-            subtotal: order.subtotal,
-            advance: order.advance,
-            finalAmount: order.grand_total
+            subtotal: parseFloat(order.subtotal || 0),
+            cgst: parseFloat(order.cgst || 0),
+            sgst: parseFloat(order.sgst || 0),
+            otherCharges: parseFloat(order.others || 0),
+            hallmark: parseFloat(order.hallmark || 0),
+            advance: parseFloat(order.advance || 0),
+            discount: parseFloat(order.discount || 0),
+            roundOff: parseFloat(order.round_off || 0),
+            finalAmount: parseFloat(order.grand_total || 0),
+            amountInWords: amountWords(parseFloat(order.grand_total || 0)),
+            transactionType: order.transaction_type || 'payable'
         },
-        payment: { amounts: [{mode: 'ADVANCE', amount: order.advance}].filter(x => x.amount > 0) }
+        payment: { amounts: [{mode: 'ADVANCE', amount: parseFloat(order.advance || 0)}].filter(x => x.amount > 0) },
+        designNotes: order.design_notes || '',
+        designImages: designImages,
     };
     setPrintData(docData);
   };

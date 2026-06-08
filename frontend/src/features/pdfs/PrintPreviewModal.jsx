@@ -13,6 +13,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
     /* ─── Inject hide flags into data for templates ─── */
     const pdfData = useMemo(() => {
         if (!data) return null;
+        // console.log(data);
         return {
             ...data,
             hideMetalValue,

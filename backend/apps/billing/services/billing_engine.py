@@ -179,6 +179,7 @@ class BillingEngine:
             'advance': self.advance,
             'discount': self.discount,
             'old_mv': old_mv,
+            'old_less_percent': self.old_less_percent,
             'old_deduct_amt': old_deduct_amt,
             'effective_old_value': effective_old_value,
             'net_total': net_total,

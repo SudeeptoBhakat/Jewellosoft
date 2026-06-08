@@ -148,15 +148,64 @@ export function calculateBill(p) {
 
   } else {
     // ═══ SCENARIO 3: Old > New (shop returns to customer) ═══
-    // Return amount = afterDeduction (effectiveOldValue already has deduction applied)
-    // Making charge is subtracted from the return
+    // Smart Return Logic:
+    //   1. effectiveOldValue = excess weight value after deduction (shop owes this)
+    //   2. Subtract ALL charges: making, hallmark, GST, other charges, discount
+    //   3. Add advance (customer already paid → shop owes this back too)
+    //   4. If balance > 0 → return to customer; ≤ 0 → customer pays difference
     subtotal = r2(effectiveOldValue - totalMaking);
-
-    // Hallmark, GST, Other charges are subtracted from what shop returns
-    // Advance and Discount are ADDED back (shop owes less → customer gave advance earlier)
     netTotal = r2(subtotal - hallmarkAmt - totalGst);
-    preRound = r2(netTotal - otherCharges + advance + discount);
+    preRound = r2(netTotal - otherCharges + advance - discount);
     transactionType = preRound > 0 ? 'return' : 'payable';
+  }
+
+  // ── 6b. Build return waterfall breakdown (Scenario 3 display) ──
+  let returnBreakdown = null;
+  if (hasOld && oldMode === 'weight' && oldWt > totalWeight) {
+    const excessWt = r2(oldWt - totalWeight);
+    const excessValue = r2(excessWt * metalRate);
+
+    // Ordered list of charges to subtract from return balance
+    const chargeList = [];
+    if (totalMaking > 0) chargeList.push({ label: 'Making Charges', amount: totalMaking, detail: totalWeight + 'g new product' });
+    if (otherCharges > 0) chargeList.push({ label: 'Other Charges', amount: otherCharges });
+    if (hallmarkAmt > 0) chargeList.push({ label: 'Hallmark Charges', amount: hallmarkAmt, detail: hallmarkCount + ' × ₹' + hallmarkValue });
+    if (cgst > 0) chargeList.push({ label: 'CGST (1.5%)', amount: cgst });
+    if (sgst > 0) chargeList.push({ label: 'SGST (1.5%)', amount: sgst });
+    if (discount > 0) chargeList.push({ label: 'Discount', amount: discount });
+
+    let bal = effectiveOldValue;
+    const steps = [];
+    let flipIdx = -1;
+
+    for (let i = 0; i < chargeList.length; i++) {
+      const ch = chargeList[i];
+      const prev = bal;
+      bal = r2(bal - ch.amount);
+      const didFlip = prev > 0 && bal <= 0 && flipIdx === -1;
+      if (didFlip) flipIdx = steps.length;
+      steps.push({
+        label: ch.label, amount: ch.amount, detail: ch.detail || null,
+        absorbed: didFlip ? r2(prev) : (prev > 0 ? ch.amount : 0),
+        balance: bal, isFlip: didFlip, isSubtract: true,
+      });
+    }
+
+    // Advance — always added (customer already paid, increases return / reduces payable)
+    if (advance > 0) {
+      bal = r2(bal + advance);
+      steps.push({
+        label: 'Advance (Customer Credit)', amount: advance,
+        absorbed: advance, balance: bal, detail: null,
+        isFlip: false, isSubtract: false,
+      });
+    }
+
+    returnBreakdown = {
+      excessWeight: excessWt, excessMetalValue: excessValue,
+      deductionPct: oldDeductPct, deductionAmt: oldDeductAmt,
+      afterDeduction: effectiveOldValue, steps, flipIndex: flipIdx,
+    };
   }
 
   // ── 7. Rounding ──
@@ -205,6 +254,9 @@ export function calculateBill(p) {
     // Transaction type
     transactionType,
 
+    // Return waterfall (Scenario 3 only — null otherwise)
+    returnBreakdown,
+
     // Payment
     totalPaid,
     balance,
@@ -233,7 +285,7 @@ function numToWords(n) {
   return c(Math.abs(Math.floor(n))).replace(/\s+/g, ' ').trim();
 }
 
-function amountWords(amt) {
+export function amountWords(amt) {
   const absAmt = Math.abs(amt);
   const r = Math.floor(absAmt);
   const p = Math.round((absAmt - r) * 100);

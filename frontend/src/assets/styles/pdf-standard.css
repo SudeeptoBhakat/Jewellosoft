@@ -20,7 +20,7 @@
     position: absolute;
     top: 52%;
     left: 50%;
-    width: 93%;
+    width: 90%;
     opacity: 0.10;
     z-index: 0;
 }
@@ -38,13 +38,13 @@
 .pdf-header {
     position: relative;
     padding-top: 42px;
-    margin-bottom: 15px;
+    /* margin-bottom: 15px; */
 
     display: flex;
     flex-direction: column;
     align-items: center;
     /* center everything */
-    gap: 1px;
+    /* gap: 1px; */
     /* tight spacing like image */
 
     width: 100%;
@@ -82,44 +82,55 @@
 /* TITLE */
 .pdf-title {
     color: #ff2d2d;
-    font-size: 18px;
-    font-weight: 800;
-    margin-bottom: 5px;
+    font-size: 23px;
+    font-family: Arial, Helvetica, sans-serif;
+    /* font-weight: bolder; */
+    font-weight: 700;
     letter-spacing: 1px;
+    text-decoration: underline;
+    text-transform: uppercase;
     position: relative;
-    margin-bottom: 5px;
+    /* margin-bottom: 5px; */
 }
 
 /* SHOP NAME */
 .pdf-shop-name {
-    font-size: 36px;
-    font-weight: 500;
-    /* letter-spacing: 3px; */
+    font-family: 'Montserrat', 'Futura', sans-serif;
+    font-size: 35px;
+    font-weight: 700;
+    letter-spacing: 2px;
     color: #0b0b3c;
-    padding: 0 10px;
-
-    /* deep navy */
-    margin-bottom: 5px;
+    /* padding: 0 10px; */
+    text-transform: uppercase;
+    /* margin-bottom: 5px; */
 }
 
 /* ADDRESS ROW */
 .pdf-shop-address-row {
     display: flex;
     justify-content: space-between;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    font-weight: bolder;
+    color: #000000;
+    /* margin: 4px 0; */
+    padding: 0 39px;
+    text-transform: uppercase;
+    width: 100%;
+    text-align: center;
     font-size: 14px;
     font-weight: 600;
-    margin: 5px 0;
-    padding: 0 10px;
-    text-transform: uppercase;
 }
 
 /* GST + PAN */
 .pdf-shop-meta-row {
     display: flex;
     justify-content: space-between;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000000;
     font-size: 14px;
     font-weight: 800;
-    padding: 0 10px;
+    padding: 0 39px;
     text-transform: uppercase;
 }
 
@@ -128,26 +139,13 @@
     width: 100%;
 }
 
-.pdf-shop-address-row {
-    text-align: center;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.pdf-shop-meta-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 14px;
-    font-weight: 800;
-}
 
 /* TOP ROW */
 .pdf-top-row {
     display: flex;
     justify-content: space-between;
-    margin-top: 15px;
     font-size: 13px;
-    padding: 0 10px;
+    padding: 0 39px;
 }
 
 .pdf-customer .bold {
@@ -159,17 +157,20 @@
     font-weight: 600;
 }
 
-/* 🔥 RATE PILL */
+
 .pdf-rate-pill {
     margin-top: 15px;
-    display: flex;
+    display: inline-flex;
+    margin-left: auto;
+    margin-right: auto;
     justify-content: space-between;
     border: 2px solid #1e40af;
     border-radius: 40px;
-    padding: 10px 20px;
+    padding: 10px 40px;
+    gap: 20px;
     font-weight: 700;
     background: #f8faff33;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 /* TABLE */
@@ -178,11 +179,12 @@
     margin-top: 20px;
     border-collapse: separate;
     border-spacing: 0;
+    padding: 0px 40px;
 }
 
 /* 🔥 HEADER */
 .pdf-table thead tr {
-    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    background: linear-gradient(90deg, #1e3b8aaf, #2564eb98);
     color: #fff;
 }
 
@@ -194,11 +196,12 @@
 
 /* rounded corners */
 .pdf-table thead tr th:first-child {
-    border-top-left-radius: 10px;
+    border-top-left-radius: 15px;
+    width: 62px;
 }
 
 .pdf-table thead tr th:last-child {
-    border-top-right-radius: 10px;
+    border-top-right-radius: 15px;
 }
 
 /* ROWS */
@@ -209,52 +212,89 @@
     text-align: center;
 }
 
+.old-calc-breakdown-row {
+    box-sizing: border-box;
+    width: calc(100% - 50px); 
+    margin-left: auto;
+    margin-right: auto;
+    justify-content: center;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    font-size: 13.5px;
+    font-weight: bolder;
+    
+    background-color: #f8faff8f;
+    border-radius: 6px;
+}
+
+
 /* SUMMARY HEAD */
 .pdf-summary-head {
     margin-top: 20px;
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    /* Changed to 6 columns to match your exact invoice metrics */
+    grid-template-columns: repeat(6, 1fr); 
+    background: linear-gradient(90deg, #1e3b8aaf, #2564eb98);
     color: #fff;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
-    padding: 10px 5px;
+    padding: 10px 0;
     text-align: center;
+    text-transform: uppercase;
+    align-items: center; /* Ensures short/long text stays vertically aligned */
 }
 
 /* SUMMARY VALUES */
 .pdf-summary-values {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    padding: 10px 5px;
-    font-size: 13px;
+    grid-template-columns: repeat(6, 1fr);
+    background: #f8faff; /* Light background tint matching image */
+    padding: 12px 0;
+    font-size: 12px;
+    font-weight: 600;
     text-align: center;
-    border-bottom: 2px solid #eee;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0;
 }
 
+/* SPECIAL UTILITIES */
 .red {
-    color: #e53935;
+    color: #dc2626; /* Slightly brighter red for high visibility print */
 }
 
 .bold {
     font-weight: 800;
+    color: #000000;
 }
 
-/* 🔥 AMOUNT STRIP */
+
 .pdf-amount-strip {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    margin-right: auto;
     margin-top: 15px;
-    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    background: linear-gradient(90deg, #1e3b8ab2, #2564ebb6);
     color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
     text-align: center;
-    padding: 12px;
+    padding: 10px 40px;
     border-radius: 25px;
     font-weight: 800;
-    font-size: 14px;
-    letter-spacing: 1px;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+
+    height: 39px;
+    box-sizing: border-box;
+    padding: 0 30px;
 }
 
 /* PAYMENT */
 .pdf-payment {
+    padding-left: 30px;
     margin-top: 20px;
     font-size: 13px;
     font-weight: 600;
@@ -267,6 +307,8 @@
     justify-content: space-between;
     align-items: flex-end;
     padding-top: 35px;
+    padding-left: 20px;
+    padding-right: 20px;
 }
 
 .signature {

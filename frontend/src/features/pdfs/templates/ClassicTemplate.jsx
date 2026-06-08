@@ -51,6 +51,9 @@ export default function ClassicTemplate({ data }) {
         payment = null,
         hideMetalValue = false,
         hideMaking = false,
+        designNotes = '',
+        designImages = [],
+        returnBreakdown = null,
     } = data;
 
     // ── Shop details with fallbacks ──
@@ -65,13 +68,13 @@ export default function ClassicTemplate({ data }) {
     const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
 
     // ── Derive which item columns have data (respecting hide flags) ──
-    const hasHuid     = items.some((i) => i.huid && i.huid.trim() && i.huid !== "—");
+    const hasHuid = items.some((i) => i.huid && i.huid.trim() && i.huid !== "—");
     const hasMetalVal = !hideMetalValue && items.some((i) => has(i.metalValue));
-    const hasMaking   = !hideMaking && items.some((i) => has(i.making));
+    const hasMaking = !hideMaking && items.some((i) => has(i.making));
 
     // ── Only compute totals if corresponding columns exist ──
-    const totalWeight     = items.reduce((sum, item) => sum + (Number(item.weight) || 0), 0);
-    const totalMaking     = hasMaking   ? items.reduce((sum, item) => sum + (Number(item.making) || 0), 0) : 0;
+    const totalWeight = items.reduce((sum, item) => sum + (Number(item.weight) || 0), 0);
+    const totalMaking = hasMaking ? items.reduce((sum, item) => sum + (Number(item.making) || 0), 0) : 0;
     const totalMetalValue = hasMetalVal ? items.reduce((sum, item) => sum + (Number(item.metalValue) || 0), 0) : 0;
 
     const isInvoice = docType.includes("INVOICE");
@@ -96,6 +99,14 @@ export default function ClassicTemplate({ data }) {
             ? "Old Metal (Direct Entry)"
             : `Old Metal (${Number(oldMetal.weight || 0).toFixed(3)}g)`)
         : "";
+
+    // ── Transaction direction ──
+    const transactionType = totals.transactionType || 'payable';
+    const isReturn = transactionType === 'return';
+    const finalLabel = isReturn ? 'RETURN TO CUSTOMER' : 'CUSTOMER PAYABLE';
+
+    // ── Is this an order receipt? ──
+    const isOrderReceipt = docType === 'ORDER RECEIPT';
 
     return (
         <div className={`pdf-print-wrapper theme-${theme.toLowerCase()}`}>
@@ -214,33 +225,16 @@ export default function ClassicTemplate({ data }) {
                     </tbody>
                 </table>
 
-                {/* Old Settlement Box — conditional on actual data */}
-                {hasOldMetal && (
-                    <div className="pdf-settlement-box">
-                        <div className="pdf-settlement-title">Old Metal Exchange Details</div>
-                        {has(oldMetal.weight) && oldMetal.mode !== "value" && (
-                            <div className="pdf-s-row">
-                                <span>Old Metal Weight Exchanged</span>
-                                <span>{Number(oldMetal.weight).toFixed(3)} g</span>
-                            </div>
-                        )}
-                        <div className="pdf-s-row negative">
-                            <span>Net Value of Old Metal (−)</span>
-                            <span>{fmt(oldMetal.value)}</span>
-                        </div>
-                    </div>
-                )}
-
                 {/* Bottom Summary Grid */}
                 <div className="pdf-summary-grid">
 
-                    {/* Left: Amount in Words + Payment */}
+                    {/* Left: Amount in Words + Payment + Design */}
                     <div className="pdf-sg-left">
-                        {totals.amountInWords && totals.amountInWords.trim() && (
-                            <div className="pdf-amount-words">
-                                Amount in Words: {totals.amountInWords}
-                            </div>
-                        )}
+                        <div className="pdf-amount-words">
+                            {totals.amountInWords && totals.amountInWords.trim()
+                                ? totals.amountInWords
+                                : '—'}
+                        </div>
                         {payment?.amounts?.filter(p => has(p.amount)).length > 0 && (
                             <div className="pdf-payment-info">
                                 <strong>Payment Received:</strong><br />
@@ -251,69 +245,104 @@ export default function ClassicTemplate({ data }) {
                                 ))}
                             </div>
                         )}
+                        {/* Design Notes (Order Receipts) */}
+                        {isOrderReceipt && designNotes && designNotes.trim() && (
+                            <div style={{ marginTop: 8, padding: '6px 10px', background: '#f5f5f5', borderRadius: 4, fontSize: '10px', lineHeight: 1.5 }}>
+                                <strong style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#666' }}>Design Notes:</strong><br />
+                                {designNotes}
+                            </div>
+                        )}
+                        {/* Design Images (Order Receipts) */}
+                        {isOrderReceipt && designImages && designImages.length > 0 && (
+                            <div style={{ marginTop: 8 }}>
+                                <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#666', marginBottom: 4 }}>Design References</div>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    {designImages.slice(0, 4).map((src, i) => (
+                                        <img key={i} src={src} alt={`Design ${i + 1}`} style={{ width: 55, height: 55, objectFit: 'cover', borderRadius: 4, border: '1px solid #ddd' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Right: Calculations — only rows with valid data */}
+                    {/* Right: Calculation Breakdown — vertical top-to-bottom flow */}
                     <div className="pdf-sg-right">
                         <table className="pdf-summary-table">
                             <tbody>
-                                {has(totals.subtotal) && (
-                                    <tr>
-                                        <td>Subtotal (Metal + Making)</td>
-                                        <td>{fmt(totals.subtotal)}</td>
-                                    </tr>
+                                {returnBreakdown ? (
+                                    <>
+                                        {/* ── Return Waterfall Breakdown ── */}
+                                        <tr>
+                                            <td style={{ fontSize: '10px', color: '#888' }}>Old: {Number(oldMetal?.weight || 0).toFixed(3)}g → New: {items.reduce((s, it) => s + Number(it.weight || 0), 0).toFixed(3)}g</td>
+                                            <td style={{ fontSize: '10px', color: '#2e7d32', fontWeight: 600 }}>+{returnBreakdown.excessWeight.toFixed(3)}g extra</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Excess Value ({returnBreakdown.excessWeight.toFixed(3)}g)</td>
+                                            <td>{fmt(returnBreakdown.excessMetalValue)}</td>
+                                        </tr>
+                                        {returnBreakdown.deductionAmt > 0 && (
+                                            <tr>
+                                                <td style={{ color: '#e53935' }}>Less Deduction ({returnBreakdown.deductionPct}%)</td>
+                                                <td style={{ color: '#e53935' }}>−{fmt(returnBreakdown.deductionAmt)}</td>
+                                            </tr>
+                                        )}
+                                        <tr style={{ borderTop: '1px solid #ccc' }}>
+                                            <td style={{ fontWeight: 700 }}>Return Base</td>
+                                            <td style={{ fontWeight: 700, color: '#2e7d32' }}>{fmt(returnBreakdown.afterDeduction)}</td>
+                                        </tr>
+                                        {returnBreakdown.steps.map((step, i) => (
+                                            <React.Fragment key={i}>
+                                                {step.isFlip && (
+                                                    <tr>
+                                                        <td colSpan={2} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#e65100', background: '#fff3e0', padding: '3px 0', letterSpacing: '0.03em' }}>
+                                                            ⚡ RETURN FULFILLED — CUSTOMER NOW PAYS
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                <tr>
+                                                    <td style={{ fontSize: '11px', paddingLeft: 8 }}>
+                                                        {step.isSubtract ? '(−)' : '(+)'} {step.label}
+                                                        {step.isFlip && <span style={{ color: '#999', fontSize: '9px' }}> ({fmt(step.absorbed)} absorbed)</span>}
+                                                    </td>
+                                                    <td style={{ fontSize: '11px', color: step.isSubtract ? '#e53935' : '#2e7d32' }}>
+                                                        {step.isSubtract ? '−' : '+'}{fmt(step.amount)}
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
+                                        ))}
+                                        {has(totals.roundOff) && (
+                                            <tr><td style={{ fontSize: '10px', color: '#888' }}>Round Off</td><td style={{ fontSize: '10px' }}>{Number(totals.roundOff).toFixed(2)}</td></tr>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* ── Normal / Old≤New Flow ── */}
+                                        {has(totals.subtotal) && (
+                                            <tr><td>Subtotal (Metal + Making)</td><td>{fmt(totals.subtotal)}</td></tr>
+                                        )}
+                                        {hasOldMetal && (
+                                            <>
+                                                {has(oldMetal.weight) && oldMetal.mode !== "value" && (
+                                                    <tr><td style={{ paddingLeft: 16, color: '#888', fontSize: '10px' }}>Old Metal: {Number(oldMetal.weight).toFixed(3)}g</td><td style={{ color: '#888', fontSize: '10px' }}>{has(oldMetal.rawValue) ? fmt(oldMetal.rawValue) : ''}</td></tr>
+                                                )}
+                                                {has(oldMetal.deductPct) && oldMetal.deductPct > 0 && (
+                                                    <tr><td style={{ paddingLeft: 16, color: '#aaa', fontSize: '10px' }}>Less {Number(oldMetal.deductPct).toFixed(1)}% Deduction</td><td style={{ color: '#e53935', fontSize: '10px' }}>−{fmt(oldMetal.deductAmt)}</td></tr>
+                                                )}
+                                                <tr><td style={{ color: '#e53935', fontWeight: 600 }}>{oldMetalLabel} (−)</td><td style={{ color: '#e53935', fontWeight: 600 }}>{fmt(oldMetal.value)}</td></tr>
+                                            </>
+                                        )}
+                                        {has(totals.hallmark) && <tr><td>Hallmark Charges (+)</td><td>{fmt(totals.hallmark)}</td></tr>}
+                                        {has(totals.otherCharges) && <tr><td>Other Charges (+)</td><td>{fmt(totals.otherCharges)}</td></tr>}
+                                        {has(totals.cgst) && <tr><td>CGST (1.5%) (+)</td><td>{fmt(totals.cgst)}</td></tr>}
+                                        {has(totals.sgst) && <tr><td>SGST (1.5%) (+)</td><td>{fmt(totals.sgst)}</td></tr>}
+                                        {has(totals.advance) && <tr><td style={{ color: '#e53935' }}>Advance Deducted (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.advance)}</td></tr>}
+                                        {has(totals.discount) && <tr><td style={{ color: '#e53935' }}>Discount (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.discount)}</td></tr>}
+                                        {has(totals.roundOff) && <tr><td>Round Off</td><td>{Number(totals.roundOff).toFixed(2)}</td></tr>}
+                                    </>
                                 )}
-                                {has(totals.otherCharges) && (
-                                    <tr>
-                                        <td>Other Charges (+)</td>
-                                        <td>{fmt(totals.otherCharges)}</td>
-                                    </tr>
-                                )}
-                                {has(totals.hallmark) && (
-                                    <tr>
-                                        <td>Hallmark Charges (+)</td>
-                                        <td>{fmt(totals.hallmark)}</td>
-                                    </tr>
-                                )}
-                                {has(totals.cgst) && (
-                                    <tr>
-                                        <td>CGST (1.5%) (+)</td>
-                                        <td>{fmt(totals.cgst)}</td>
-                                    </tr>
-                                )}
-                                {has(totals.sgst) && (
-                                    <tr>
-                                        <td>SGST (1.5%) (+)</td>
-                                        <td>{fmt(totals.sgst)}</td>
-                                    </tr>
-                                )}
-                                {hasOldMetal && (
-                                    <tr>
-                                        <td>{oldMetalLabel} (−)</td>
-                                        <td style={{ color: '#e53935' }}>{fmt(oldMetal.value)}</td>
-                                    </tr>
-                                )}
-                                {has(totals.advance) && (
-                                    <tr>
-                                        <td>Advance Deducted (−)</td>
-                                        <td style={{ color: '#e53935' }}>{fmt(totals.advance)}</td>
-                                    </tr>
-                                )}
-                                {has(totals.discount) && (
-                                    <tr>
-                                        <td>Discount (−)</td>
-                                        <td style={{ color: '#e53935' }}>{fmt(totals.discount)}</td>
-                                    </tr>
-                                )}
-                                {has(totals.roundOff) && (
-                                    <tr>
-                                        <td>Round Off</td>
-                                        <td>{Number(totals.roundOff).toFixed(2)}</td>
-                                    </tr>
-                                )}
-                                <tr className="pdf-grand-total">
-                                    <td>FINAL AMOUNT</td>
-                                    <td>{fmt(totals.finalAmount)}</td>
+                                <tr className="pdf-grand-total" style={isReturn ? { background: '#e8f5e9' } : undefined}>
+                                    <td style={isReturn ? { color: '#1b5e20' } : undefined}>{finalLabel}</td>
+                                    <td style={isReturn ? { color: '#1b5e20' } : undefined}>{fmt(totals.finalAmount)}</td>
                                 </tr>
                             </tbody>
                         </table>
