@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.103.0",
+    "@supabase/supabase-js": "^2.107.0",
     "axios": "1.16.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -17,6 +17,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
-    "vite": "^8.0.14"
+    "vite": "^8.0.16"
   }
 }
