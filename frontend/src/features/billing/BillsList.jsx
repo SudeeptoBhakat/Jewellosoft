@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -242,6 +243,8 @@ export default function BillsList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const navigate = useNavigate(); 
+  
 
   const mapBill = useCallback((b, type) => ({
     dbId: b.id,
@@ -465,7 +468,7 @@ export default function BillsList() {
           <h1 className="page-header__title">Bills List</h1>
           <div className="page-header__actions">
             <button className="btn btn--ghost btn--sm"><i className="fa-solid fa-download"></i> Export</button>
-            <button className="btn btn--primary" onClick={() => window.location.href = '/billing'}><i className="fa-solid fa-plus"></i> New Bill</button>
+            <button className="btn btn--primary" onClick={() => navigate('/billing')}><i className="fa-solid fa-plus"></i> New Bill</button>
           </div>
         </div>
         <p className="page-header__subtitle">View, search, and manage all invoices & estimates.</p>

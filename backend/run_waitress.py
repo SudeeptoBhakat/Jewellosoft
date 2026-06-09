@@ -1,33 +1,14 @@
-"""
-JewelloSoft Backend — Production Entry Point
-=============================================
-
-This is the single entry point compiled by PyInstaller into backend.exe.
-It boots Django, runs migrations, seeds defaults, and starts Waitress.
-
-Usage:
-    python run_waitress.py [port]         (development)
-    backend.exe [port]                    (production / packaged)
-"""
-
 import os
 import sys
 import traceback
 
-# ── Step 1: Set Django settings BEFORE any Django import ──────────
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.base')
 
 def log(msg):
-    """Flush-safe print that always appears in Electron's captured stdout."""
     print(f"[JewelloSoft Backend] {msg}", flush=True)
 
 def log_error(msg):
-    """Flush-safe error print that always appears in Electron's captured stderr."""
     print(f"[JewelloSoft Backend ERROR] {msg}", file=sys.stderr, flush=True)
-
-# ── Step 2: Validate critical imports one-by-one ──────────────────
-# If any import fails, we log the EXACT module name so the developer
-# knows precisely what to add to build_backend.py HIDDEN_IMPORTS.
 
 log("=" * 50)
 log("Starting JewelloSoft Backend...")
@@ -83,7 +64,6 @@ if import_failures:
 
 log("All critical imports verified")
 
-# ── Step 3: Initialize Django ─────────────────────────────────────
 try:
     import django
     django.setup()
@@ -93,7 +73,6 @@ except Exception as e:
     log_error(traceback.format_exc())
     sys.exit(1)
 
-# ── Step 4: Run database migrations ──────────────────────────────
 try:
     from django.core.management import execute_from_command_line
     log("Running database migrations...")
@@ -102,10 +81,9 @@ try:
 except Exception as e:
     log_error(f"Migration FAILED: {e}")
     log_error(traceback.format_exc())
-    # Don't exit — server might still work with existing DB
     log("WARNING: Continuing despite migration failure...")
 
-# ── Step 5: Seed default shop data ────────────────────────────────
+
 try:
     from apps.accounts.models import Shop
     if not Shop.objects.exists():
@@ -122,7 +100,6 @@ try:
 except Exception as e:
     log_error(f"Shop seeding failed (non-critical): {e}")
 
-# ── Step 6: Create default superuser if none exists ───────────────
 try:
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -139,7 +116,7 @@ try:
 except Exception as e:
     log_error(f"Admin user creation failed (non-critical): {e}")
 
-# ── Step 7: Start Waitress WSGI Server ────────────────────────────
+
 try:
     from waitress import serve
     from config.wsgi import application

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -343,6 +344,7 @@ export default function OrdersList() {
   const [viewOrder, setViewOrder] = useState(null);
   const [inventoryItem, setInventoryItem] = useState(null);
   const [printData, setPrintData] = useState(null);
+  const navigate = useNavigate(); 
 
   useEffect(() => {
     fetchOrders();
@@ -512,7 +514,7 @@ export default function OrdersList() {
         <div className="page-header__top">
           <h1 className="page-header__title">Orders List</h1>
           <div className="page-header__actions">
-            <button className="btn btn--primary" onClick={() => window.location.href = '/orders'}><i className="fa-solid fa-plus"></i> New Order</button>
+            <button className="btn btn--primary" onClick={() => navigate('/orders')}><i className="fa-solid fa-plus"></i> New Order</button>
           </div>
         </div>
         <p className="page-header__subtitle">Track, manage, and update all custom jewelry orders.</p>
