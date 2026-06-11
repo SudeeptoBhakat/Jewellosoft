@@ -28,6 +28,7 @@ export default function StandardTemplate({ data }) {
         theme = "gold",
         hideMetalValue = false,
         hideMaking = false,
+        hideCustomerDetails = false,
         designNotes = '',
         designImages = [],
         returnBreakdown = null,
@@ -105,7 +106,7 @@ export default function StandardTemplate({ data }) {
 
                 {/* CUSTOMER + META */}
                 <div className="pdf-top-row">
-                    <div className="pdf-customer">
+                    <div className="pdf-customer" style={hideCustomerDetails ? { visibility: 'hidden' } : {}}>
                         <div className="label">ISSUED TO:</div>
                         <div className="bold">{customer.name || "Walk-in Customer"}</div>
                         {customer.address && <div>{customer.address}</div>}

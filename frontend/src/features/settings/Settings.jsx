@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import api from '../../lib/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme, THEMES } from '../../contexts/ThemeContext';
+import { toast } from '../../utils/toast';
+import { getSuggestions, addSuggestion, updateSuggestion, deleteSuggestion, resetToDefaults } from '../../utils/productSuggestions';
+import ResetDataModal from './ResetDataModal';
 
-/* ─── Theme Card Mini-Preview ─────────────────────────────────── */
 const themeCardStyle = (preview, isActive) => ({
   position: 'relative',
   flex: '1 1 220px',
@@ -161,12 +163,11 @@ function ThemeCard({ themeDef, isActive, onClick }) {
   );
 }
 
-/* ─── Settings Component ──────────────────────────────────────── */
 export default function Settings() {
   const { syncShop } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
   const [tab, setTab] = useState('General');
-  const tabs = ['General', 'Business', 'Security'];
+  const tabs = ['General', 'Business', 'Suggestions', 'Security'];
 
   const [formData, setFormData] = useState({
     theme: 'default',
@@ -190,8 +191,17 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
 
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionSearch, setSuggestionSearch] = useState('');
+  const [newSuggestionName, setNewSuggestionName] = useState('');
+  const [editingIdx, setEditingIdx] = useState(-1);
+  const [editingValue, setEditingValue] = useState('');
+
   useEffect(() => {
     fetchSettings();
+    setSuggestions(getSuggestions());
   }, []);
 
   const fetchSettings = async () => {
@@ -199,7 +209,6 @@ export default function Settings() {
       const res = await api.get('/accounts/shop/current/');
       const data = { ...res.data };
 
-      // ── Migrate legacy theme values to new keys ──
       const legacyMap = {
         'System Default': 'default',
         'Dark Mode': 'dark',
@@ -209,17 +218,14 @@ export default function Settings() {
       if (data.theme && legacyMap[data.theme]) {
         data.theme = legacyMap[data.theme];
       }
-      // Ensure we only use known keys
       if (!THEMES.some((t) => t.key === data.theme)) {
         data.theme = 'default';
       }
 
       setFormData(prev => ({ ...prev, ...data }));
 
-      // Sync theme from backend → context so it takes effect immediately
       setTheme(data.theme);
 
-      // Update local storage for hallmark if changed via API
       if (res.data.hallmark_value) {
         localStorage.setItem('jewellosoft_hallmark_value', res.data.hallmark_value);
       }
@@ -232,7 +238,7 @@ export default function Settings() {
 
   const handleChange = (e) => {
     const { id, value } = e.target;
-    // Map IDs to JSON keys
+
     const fieldMap = {
       'settings-language': 'language',
       'settings-dateformat': 'date_format',
@@ -257,7 +263,6 @@ export default function Settings() {
     }
   };
 
-  /** Called when clicking a theme card — live-previews immediately */
   const handleThemeSelect = (themeKey) => {
     setFormData(prev => ({ ...prev, theme: themeKey }));
     setTheme(themeKey); // live apply
@@ -296,10 +301,6 @@ export default function Settings() {
     setMessage({ text: '', type: '' });
     
     try {
-      // ── Senior Engineer Hardening Strategy ──
-      // 1. Ensure numeric fields are actually numbers and not NaN
-      // 2. Trim string fields and provide fallbacks for mandatory ones
-      // 3. Remove fields that shouldn't be patched directly if they are read-only
       
       const sanitizedData = {
         ...formData,
@@ -316,14 +317,12 @@ export default function Settings() {
         pdf_template: formData.pdf_template || 'classic',
       };
 
-      // Remove read-only or sensitive keys that might be in formData from a previous GET
       delete sanitizedData.id;
       delete sanitizedData.supabase_email;
       delete sanitizedData.supabase_user_id;
 
       await api.patch('/accounts/shop/current/', sanitizedData);
       
-      // Refresh global shop state so Navbar etc. pick up changes
       if (syncShop) await syncShop();
       
       setMessage({ text: 'Settings saved successfully!', type: 'success' });
@@ -377,7 +376,6 @@ export default function Settings() {
         ))}
       </div>
 
-      {/* General Settings */}
       {tab === 'General' && (
         <div className="animate-fade-in-up">
           {/* ── Theme Picker ──────────────────────────────── */}
@@ -576,19 +574,229 @@ export default function Settings() {
                 <button className="btn btn--ghost" onClick={async () => {
                   if (window.electronAPI) {
                     const res = await window.electronAPI.backupDB();
-                    if (res.success) alert(`Backup saved successfully to: ${res.path}`);
-                    else if (res.reason !== 'canceled') alert(`Backup failed: ${res.error}`);
+                    if (res.success) toast.success(`Backup saved successfully to: ${res.path}`);
+                    else if (res.reason !== 'canceled') toast.error(`Backup failed: ${res.error}`);
                   } else {
-                    alert('Offline backups are only supported in the Desktop app.');
+                    toast.warning('Offline backups are only supported in the Desktop app.');
                   }
                 }}>
                   <i className="fa-solid fa-download"></i> Export All Data
                 </button>
-                <button className="btn btn--danger" style={{ marginLeft: 'auto' }}><i className="fa-solid fa-trash-can"></i> Reset Data</button>
+                <button className="btn btn--danger" style={{ marginLeft: 'auto' }} onClick={() => setShowResetModal(true)}><i className="fa-solid fa-trash-can"></i> Reset Data</button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ═══ Suggestions Tab ═══ */}
+      {tab === 'Suggestions' && (
+        <div className="animate-fade-in-up">
+          <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="billing-form__header">
+              <span className="billing-form__header-title">
+                <i className="fa-solid fa-lightbulb" style={{ marginRight: 8, opacity: 0.6 }}></i>
+                Product Name Suggestions
+              </span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
+                {suggestions.length} names in database
+              </span>
+            </div>
+            <div className="billing-form__body">
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)', lineHeight: 1.6 }}>
+                Manage the autocomplete suggestions shown when typing product names in Billing, Orders, and Inventory.
+                Names you type will also be auto-recorded into this list.
+              </p>
+
+              {/* Add new suggestion */}
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Enter a new product name..."
+                  value={newSuggestionName}
+                  onChange={(e) => setNewSuggestionName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newSuggestionName.trim()) {
+                      setSuggestions(addSuggestion(newSuggestionName));
+                      setNewSuggestionName('');
+                      toast.success(`Added "${newSuggestionName.trim()}"`);
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                  id="settings-add-suggestion"
+                />
+                <button
+                  className="btn btn--primary"
+                  disabled={!newSuggestionName.trim()}
+                  onClick={() => {
+                    setSuggestions(addSuggestion(newSuggestionName));
+                    toast.success(`Added "${newSuggestionName.trim()}"`);
+                    setNewSuggestionName('');
+                  }}
+                >
+                  <i className="fa-solid fa-plus" /> Add
+                </button>
+              </div>
+
+              {/* Search + Reset */}
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', pointerEvents: 'none' }} />
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="Search suggestions..."
+                    value={suggestionSearch}
+                    onChange={(e) => setSuggestionSearch(e.target.value)}
+                    style={{ paddingLeft: 34, height: 36, fontSize: 'var(--text-sm)' }}
+                    id="settings-search-suggestions"
+                  />
+                </div>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => {
+                    if (confirm('Reset all suggestions to the default list? This will remove any custom names you added.')) {
+                      setSuggestions(resetToDefaults());
+                      toast.info('Suggestions reset to defaults.');
+                    }
+                  }}
+                  style={{ height: 36, whiteSpace: 'nowrap' }}
+                >
+                  <i className="fa-solid fa-rotate-right" /> Reset to Defaults
+                </button>
+              </div>
+
+              {/* Suggestion List */}
+              <div style={{
+                maxHeight: 400,
+                overflowY: 'auto',
+                border: '1px solid var(--border-primary)',
+                borderRadius: 'var(--radius-md)',
+              }}>
+                {(() => {
+                  const q = suggestionSearch.toLowerCase();
+                  const filtered = q ? suggestions.filter(s => s.toLowerCase().includes(q)) : suggestions;
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--text-muted)' }}>
+                        <i className="fa-solid fa-search" style={{ fontSize: '1.2rem', opacity: 0.3, display: 'block', marginBottom: 8 }} />
+                        {q ? 'No matching suggestions found.' : 'No suggestions yet. Add some above!'}
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((name, idx) => {
+                    const globalIdx = suggestions.indexOf(name);
+                    const isEditing = editingIdx === globalIdx;
+
+                    return (
+                      <div
+                        key={name}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)',
+                          padding: '8px 12px',
+                          borderBottom: '1px solid var(--border-secondary)',
+                          fontSize: 'var(--text-sm)',
+                          transition: 'background 0.15s ease',
+                          background: isEditing ? 'var(--color-primary-muted)' : 'transparent',
+                        }}
+                      >
+                        {isEditing ? (
+                          <>
+                            <input
+                              className="form-input"
+                              type="text"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && editingValue.trim()) {
+                                  setSuggestions(updateSuggestion(name, editingValue));
+                                  setEditingIdx(-1);
+                                  setEditingValue('');
+                                  toast.success('Updated successfully.');
+                                } else if (e.key === 'Escape') {
+                                  setEditingIdx(-1);
+                                  setEditingValue('');
+                                }
+                              }}
+                              style={{ flex: 1, height: 30, fontSize: 'var(--text-sm)' }}
+                              autoFocus
+                            />
+                            <button
+                              className="btn btn--primary btn--sm btn--icon"
+                              onClick={() => {
+                                if (editingValue.trim()) {
+                                  setSuggestions(updateSuggestion(name, editingValue));
+                                  setEditingIdx(-1);
+                                  setEditingValue('');
+                                  toast.success('Updated successfully.');
+                                }
+                              }}
+                              title="Save"
+                            >
+                              <i className="fa-solid fa-check" />
+                            </button>
+                            <button
+                              className="btn btn--ghost btn--sm btn--icon"
+                              onClick={() => { setEditingIdx(-1); setEditingValue(''); }}
+                              title="Cancel"
+                            >
+                              <i className="fa-solid fa-xmark" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ flex: 1, color: 'var(--text-primary)' }}>{name}</span>
+                            <button
+                              className="btn btn--ghost btn--sm btn--icon"
+                              onClick={() => { setEditingIdx(globalIdx); setEditingValue(name); }}
+                              title="Edit"
+                              style={{ opacity: 0.5 }}
+                            >
+                              <i className="fa-solid fa-pen-to-square" />
+                            </button>
+                            <button
+                              className="btn btn--ghost btn--sm btn--icon"
+                              onClick={() => {
+                                setSuggestions(deleteSuggestion(name));
+                                toast.info(`Removed "${name}"`);
+                              }}
+                              title="Delete"
+                              style={{ opacity: 0.5, color: 'var(--color-danger)' }}
+                            >
+                              <i className="fa-solid fa-trash-can" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 'var(--space-2)' }}>
+                <i className="fa-solid fa-circle-info" style={{ marginRight: 4, opacity: 0.5 }} />
+                Tip: Product names you type during billing or order creation are automatically added to this list.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Reset Data Modal ═══ */}
+      {showResetModal && (
+        <ResetDataModal
+          onClose={() => setShowResetModal(false)}
+          onReset={() => {
+            // Re-fetch settings + clear local suggestion state
+            fetchSettings();
+            setSuggestions(getSuggestions());
+          }}
+        />
       )}
     </div>
   );

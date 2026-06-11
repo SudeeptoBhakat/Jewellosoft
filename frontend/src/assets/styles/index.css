@@ -2069,3 +2069,154 @@ a:hover {
   color: var(--color-danger);
 }
 
+/* ============================================
+   Chrome Multi-Tab Navigation
+   ============================================ */
+.chrome-tab-bar {
+  display: flex;
+  align-items: flex-end;
+  background: var(--bg-sidebar, #070707);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 6px 12px 0 12px;
+  height: 44px;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  user-select: none;
+  flex-shrink: 0;
+}
+.chrome-tab-bar::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+
+.chrome-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  min-width: 140px;
+  max-width: 200px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  color: var(--text-tertiary, #a1a1a1);
+  font-size: var(--text-xs, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  position: relative;
+  border-top: 2px solid transparent;
+}
+
+.chrome-tab:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+}
+
+.chrome-tab--active {
+  background: var(--bg-primary, #0d0d0d);
+  color: var(--color-primary, #C9A84C);
+  border-left: 1px solid var(--border-primary);
+  border-right: 1px solid var(--border-primary);
+  border-top: 2px solid var(--color-primary);
+  font-weight: 600;
+}
+
+.chrome-tab__icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.chrome-tab__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chrome-tab__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 9px;
+  cursor: pointer;
+  transition: all 120ms;
+  margin-left: 4px;
+}
+
+.chrome-tab__close:hover {
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
+.chrome-tab__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  margin-bottom: 6px;
+  transition: all 150ms;
+}
+
+.chrome-tab__add:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-primary);
+}
+
+/* Tab isolation containers */
+.tab-content-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-6);
+  scroll-behavior: smooth;
+  height: 100%;
+}
+
+/* Disable default app layout scroll in tab mode */
+.app-layout__content {
+  flex: 1;
+  overflow: hidden !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================
+   Toast Notifications
+   ============================================ */
+@keyframes toast-slide-in {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toast-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(120%); opacity: 0; }
+}
+
+.toast-card--show {
+  animation: toast-slide-in 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-card--hide {
+  animation: toast-slide-out 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+

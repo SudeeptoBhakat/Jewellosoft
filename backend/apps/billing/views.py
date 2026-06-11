@@ -17,7 +17,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     search_fields = ['invoice_no', 'customer__name', 'customer__phone']
 
     def create(self, request, *args, **kwargs):
-        # Transaction safely wrapped via service layer
+        
         try:
             invoice_obj = create_invoice(request.data)
             serializer = self.get_serializer(invoice_obj)
@@ -34,7 +34,7 @@ class EstimateViewSet(viewsets.ModelViewSet):
     search_fields = ['estimate_no', 'customer__name', 'customer__phone']
 
     def create(self, request, *args, **kwargs):
-        # Handle custom frontend estimate payload safely
+
         try:
             estimate_obj = create_estimate(request.data)
             serializer = self.get_serializer(estimate_obj)
@@ -54,9 +54,6 @@ class EstimateViewSet(viewsets.ModelViewSet):
             return Response({"detail": "An error occurred while converting the estimate."}, status=status.HTTP_400_BAD_REQUEST)
 
 class BillingPreviewViewSet(viewsets.ViewSet):
-    """
-    Stateless endpoint to preview calculations using BillingEngine before commit.
-    """
 
     def create(self, request):
         from .services.billing_engine import BillingEngine
@@ -70,7 +67,6 @@ class BillingPreviewViewSet(viewsets.ViewSet):
         engine = BillingEngine(items_data, rate_10gm, making_per_gm, extra)
         result = engine.calculate()
 
-        # Convert all Decimal values to float for JSON serialization
         serialized = {}
         for k, v in result.items():
             if isinstance(v, Decimal):
@@ -78,7 +74,6 @@ class BillingPreviewViewSet(viewsets.ViewSet):
             else:
                 serialized[k] = v
 
-        # Process items for UI display
         rate_per_g = Decimal(str(rate_10gm)) / Decimal(10) if rate_10gm else Decimal(0)
         processed_items = []
         for item in items_data:

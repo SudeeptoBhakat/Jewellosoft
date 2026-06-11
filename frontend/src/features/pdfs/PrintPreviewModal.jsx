@@ -1,6 +1,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import InvoicePDF from './pdf';
+import { toast } from '../../utils/toast';
 
 export default function PrintPreviewModal({ isOpen, onClose, data }) {
     const printRef = useRef(null);
@@ -9,6 +10,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
     /* ─── PDF Display Options ─── */
     const [hideMetalValue, setHideMetalValue] = useState(false);
     const [hideMaking, setHideMaking] = useState(false);
+    const [hideCustomerDetails, setHideCustomerDetails] = useState(false);
 
     /* ─── Inject hide flags into data for templates ─── */
     const pdfData = useMemo(() => {
@@ -18,8 +20,9 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
             ...data,
             hideMetalValue,
             hideMaking,
+            hideCustomerDetails,
         };
-    }, [data, hideMetalValue, hideMaking]);
+    }, [data, hideMetalValue, hideMaking, hideCustomerDetails]);
 
     const handlePrint = async () => {
         if (window.electronAPI) {
@@ -31,10 +34,10 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
                 if (res.success) {
                     onClose(); // Close on success
                 } else if (res.reason !== 'canceled') {
-                    alert(`Failed to save PDF: ${res.error}`);
+                    toast.error(`Failed to save PDF: ${res.error}`);
                 }
             } catch (err) {
-                alert(`Print Error: ${err.message}`);
+                toast.error(`Print Error: ${err.message}`);
             } finally {
                 setPrinting(false);
             }
@@ -101,6 +104,15 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
                             style={{ accentColor: 'var(--color-primary, #6366f1)', width: 16, height: 16, cursor: 'pointer' }}
                         />
                         <span>Hide Making Charge</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none', color: 'black' }}>
+                        <input
+                            type="checkbox"
+                            checked={hideCustomerDetails}
+                            onChange={e => setHideCustomerDetails(e.target.checked)}
+                            style={{ accentColor: 'var(--color-primary, #6366f1)', width: 16, height: 16, cursor: 'pointer' }}
+                        />
+                        <span>Hide Customer Details</span>
                     </label>
                 </div>
 

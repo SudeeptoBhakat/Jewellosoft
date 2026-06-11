@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
+import ProductNameInput from '../../components/elements/ProductNameInput';
 import { calculateBill, fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
+import { useTabs } from '../../contexts/TabContext';
+import { toast } from '../../utils/toast';
 
 /* ─── Default Workers (for auto-suggestion) ─── */
 const defaultWorkers = [
@@ -143,13 +146,18 @@ function WorkerInput({ value, onChange }) {
 /* ═══════════════════════════════════════════
    MAIN ORDERS COMPONENT
    ═══════════════════════════════════════════ */
-export default function Orders() {
+export default function Orders({ tabId, isActive }) {
   const navigate = useNavigate();
   const { shop } = useAuth();
+  const { closeTab, closeTabAndSwitch } = useTabs();
   const searchRef = useRef(null);
   const searchWrapRef = useRef(null);
   const fileInputRef = useRef(null);
   const custWrapRef = useRef(null);
+
+  /* ─── Customer Warning Modal State ─── */
+  const [showCustWarning, setShowCustWarning] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // 'save' | 'print'
 
   /* ─── Modal ─── */
   const [showModal, setShowModal] = useState(true);
@@ -311,21 +319,23 @@ export default function Orders() {
   /* ─── Click-outside ─── */
   useEffect(() => {
     const handler = (e) => { 
+        if (!isActive) return;
         if (custWrapRef.current && !custWrapRef.current.contains(e.target)) setShowCustSuggestions(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [isActive]);
 
   /* ─── Keyboard Shortcuts ─── */
   useEffect(() => {
     const handler = (e) => {
+      if (!isActive) return;
       if (e.ctrlKey && e.key === 's') { e.preventDefault(); handleSave(); }
       if (e.key === 'Escape' && !showModal) handleCancel();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [showModal]);
+  }, [showModal, isActive]);
 
   /* ─── Image Upload ─── */
   const handleImageUpload = (e) => {
@@ -361,20 +371,22 @@ export default function Orders() {
   const [printData, setPrintData] = useState(null);
 
   /* ─── Actions ─── */
-  const handleSave = async (redirectAfter = true) => {
-      if (!custName.trim()) {
-          alert('Validation Error: Customer name is required.');
+  const handleSave = async (redirectAfter = true, bypassWarning = false) => {
+      if (!custName.trim() && !bypassWarning) {
+          setPendingAction(redirectAfter ? 'save' : 'save_silent');
+          setShowCustWarning(true);
           return false;
       }
       if (items.length === 0) {
-          alert('Validation Error: Order must have at least one item.');
+          toast.warning('Validation Error: Order must have at least one item.');
           return false;
       }
       try {
+          const finalCustName = custName.trim() || 'Walk-in';
           let finalId = customerId;
           if (!finalId) {
              const cr = await api.post('/customers/', {
-                 shop: 1, name: custName, phone: custMobile || `NA-${Date.now().toString().slice(-8)}`, address: custAddress
+                 shop: 1, name: finalCustName, phone: custMobile || `NA-${Date.now().toString().slice(-8)}`, address: custAddress
              });
              finalId = cr.data.id;
              setCustomerId(finalId);
@@ -430,20 +442,30 @@ export default function Orders() {
           console.log("Payload:", payload);
           await api.post('/orders/', payload);
           if (redirectAfter) {
-            alert('Order saved successfully!');
-            navigate('/orders/list');
+            toast.success('Order saved successfully!');
+            closeTabAndSwitch(tabId, '/orders/list', 'Orders List');
           }
           return true;
       } catch (err) {
           console.error(err);
-          alert('Failed to save order. Make sure customer is selected and items are valid.');
+          toast.error('Failed to save order. Make sure customer is selected and items are valid.');
           return false;
       }
   };
 
   const handlePrint = async () => {
-      const success = await handleSave(false);
+      if (!custName.trim()) {
+          setPendingAction('print');
+          setShowCustWarning(true);
+          return;
+      }
+      await handleSaveAndPrint(true);
+  };
+
+  const handleSaveAndPrint = async (bypassWarning = false) => {
+      const success = await handleSave(false, bypassWarning);
       if (success) {
+          const finalCustName = custName.trim() || 'Walk-in';
           const docData = {
               template: shop?.pdf_template || 'classic',
               shop: {
@@ -457,7 +479,7 @@ export default function Orders() {
               },
               docType: 'ORDER RECEIPT',
               theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
-              customer: { name: custName, phone: custMobile, address: custAddress },
+              customer: { name: finalCustName, phone: custMobile, address: custAddress },
               meta: { number: orderNumber || 'NEW', date: new Date().toLocaleDateString('en-IN') },
               rates: { rate10gm: metalRate * 10, makingPerGm: makingRate, priority: priority },
               items: items.map(it => ({
@@ -492,7 +514,30 @@ export default function Orders() {
       }
   };
 
-  const handleCancel = () => { setShowModal(true); setItems([]); setDesignImages([]); };
+  const handleCancel = () => { 
+      closeTab(tabId);
+  };
+
+  const handleProceedWalkin = async () => {
+    setShowCustWarning(false);
+    if (pendingAction === 'save') {
+      await handleSave(true, true);
+    } else if (pendingAction === 'save_silent') {
+      await handleSave(false, true);
+    } else if (pendingAction === 'print') {
+      await handleSaveAndPrint(true);
+    }
+    setPendingAction(null);
+  };
+
+  const handleCancelWarning = () => {
+    setShowCustWarning(false);
+    setPendingAction(null);
+    setTimeout(() => {
+      const nameInput = document.getElementById('order-cust-name');
+      if (nameInput) nameInput.focus();
+    }, 100);
+  };
 
   const statusColors = { Pending: 'warning', 'In Progress': 'info', Completed: 'success', Delivered: 'primary' };
 
@@ -536,6 +581,7 @@ export default function Orders() {
                  placeholder="Search or enter customer..." 
                  value={custName} 
                  onChange={e => { setCustName(e.target.value); setCustomerId(null); setShowCustSuggestions(true); }} 
+                 id="order-cust-name"
               />
               {showCustSuggestions && custSuggestions.length > 0 && (
                 <div className="search-ac__dropdown">
@@ -657,7 +703,7 @@ export default function Orders() {
               ) : items.map((item, idx) => (
                 <tr key={item.id}>
                   <td style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{idx + 1}</td>
-                  <td><input className="form-input" type="text" placeholder="Product name" value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
+                  <td><ProductNameInput value={item.name} onChange={val => updateItem(item.id, 'name', val)} placeholder="Product name" style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
                   <td><input className="form-input" type="text" placeholder="—" value={item.size} onChange={e => updateItem(item.id, 'size', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
                   <td><input className="form-input" type="number" step="0.001" placeholder="0.000" value={item.weight} onChange={e => updateItem(item.id, 'weight', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
                   <td><span className="bill-readonly-val">{item.metalValue ? fmt(item.metalValue) : '—'}</span></td>
@@ -1003,6 +1049,30 @@ export default function Orders() {
         </div>
       </div>
       <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
+      {showCustWarning && (
+        <>
+          <div className="overlay" style={{ zIndex: 11000 }} onClick={handleCancelWarning} />
+          <div className="modal" style={{ maxWidth: 450, zIndex: 11001, padding: 'var(--space-5)' }}>
+            <div className="modal__header" style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border-primary)', paddingBottom: 'var(--space-3)' }}>
+              <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--color-warning, #f59e0b)', fontSize: 24 }}></i>
+              <h3 className="modal__title" style={{ margin: 0 }}>Missing Customer Details</h3>
+            </div>
+            <div className="modal__body" style={{ padding: 'var(--space-4) 0 var(--space-5)' }}>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Customer Name is blank. Would you like to proceed by adding a <strong>"Walk-in"</strong> customer, or go back to enter customer details?
+              </p>
+            </div>
+            <div className="modal__footer" style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', borderTop: 'none', paddingTop: 0 }}>
+              <button className="btn btn--ghost" onClick={handleCancelWarning}>
+                Go Back
+              </button>
+              <button className="btn btn--warning" onClick={handleProceedWalkin}>
+                Proceed as Walk-in
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

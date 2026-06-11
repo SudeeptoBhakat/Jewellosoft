@@ -1,16 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import api, { extractList } from '../../lib/axios';
+import ProductNameInput from '../../components/elements/ProductNameInput';
 
-/* ─── API Note ───
-   Mappings: 
-   Frontend metalType -> Backend metal_type
-   Frontend netWeight -> Backend net_weight
-   Frontend inStock -> Backend status ('available'/'sold')
-*/
 
-/* ═══════════════════════════════════════════
-   ADD / EDIT PRODUCT MODAL
-   ═══════════════════════════════════════════ */
 function ProductModal({ product, onClose, onSave }) {
   const isEdit = !!product;
   const [barcode, setBarcode] = useState(product?.barcode || '');
@@ -98,7 +90,7 @@ function ProductModal({ product, onClose, onSave }) {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Product Name *</label>
-                  <input className="form-input" type="text" placeholder="Gold Necklace — Rani Haar" value={name} onChange={e => setName(e.target.value)} id="product-name" autoFocus />
+                  <ProductNameInput value={name} onChange={val => setName(val)} placeholder="Gold Necklace — Rani Haar" id="product-name" autoFocus />
                 </div>
               </div>
             </div>

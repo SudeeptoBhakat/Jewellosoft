@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
+import ProductNameInput from '../../components/elements/ProductNameInput';
 import { calculateBill, fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
+import { useTabs } from '../../contexts/TabContext';
+import { toast } from '../../utils/toast';
+
+
 
 /* ─── Products are fetched from inventory API ─── */
 
@@ -136,12 +141,10 @@ function BillSetupModal({ onStart, onClose }) {
   );
 }
 
-/* ═══════════════════════════════════════════
-   MAIN BILLING COMPONENT
-   ═══════════════════════════════════════════ */
-export default function Billing() {
+export default function Billing({ tabId, isActive }) {
   const navigate = useNavigate();
   const { shop } = useAuth();
+  const { closeTab, closeTabAndSwitch } = useTabs();
   const searchRef = useRef(null);
   const searchWrapRef = useRef(null);
 
@@ -149,6 +152,11 @@ export default function Billing() {
   const [showModal, setShowModal] = useState(true);
   const [metalType, setMetalType] = useState('');
   const [billType, setBillType] = useState('');
+
+  /* ─── Customer Warning Modal State ─── */
+  const [showCustWarning, setShowCustWarning] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // 'save' | 'print'
+
 
   /* ─── Bill Info ─── */
   const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]);
@@ -326,6 +334,7 @@ export default function Billing() {
   /* ─── Click-outside & Keyboard Shortcuts ─── */
   useEffect(() => {
     const mouseHandler = (e) => {
+      if (!isActive) return;
       if (searchWrapRef.current && !searchWrapRef.current.contains(e.target)) {
         setShowSuggestions(false);
       }
@@ -335,6 +344,7 @@ export default function Billing() {
     };
 
     const keyHandler = (e) => {
+      if (!isActive) return;
       if (e.ctrlKey && e.key === 's') { e.preventDefault(); handleSave(); }
       if (e.ctrlKey && e.key === 'p') { e.preventDefault(); handlePrint(); }
       if (e.key === 'Escape' && !showModal) { handleCancel(); }
@@ -346,7 +356,8 @@ export default function Billing() {
       document.removeEventListener('mousedown', mouseHandler);
       document.removeEventListener('keydown', keyHandler);
     };
-  }, [showModal]);
+  }, [showModal, isActive]);
+
 
   const addEmptyItem = useCallback(() => {
     setItems(prev => [...prev, createEmptyItem()]);
@@ -432,16 +443,18 @@ export default function Billing() {
   };
 
   /* ─── Actions ─── */
-  const handleSave = async (redirectList = true) => {
-    if (!custName.trim()) {
-      alert('Validation Error: Customer name is required.');
+  const handleSave = async (redirectList = true, bypassWarning = false) => {
+    if (!custName.trim() && !bypassWarning) {
+      setPendingAction(redirectList ? 'save' : 'save_silent');
+      setShowCustWarning(true);
       return false;
     }
     try {
+      const finalCustName = custName.trim() || 'Walk-in';
       let finalId = customerId;
       if (!finalId) {
         const cr = await api.post('/customers/', {
-          shop: 1, name: custName, phone: custMobile || `NA-${Date.now().toString().slice(-8)}`, address: custAddress
+          shop: 1, name: finalCustName, phone: custMobile || `NA-${Date.now().toString().slice(-8)}`, address: custAddress
         });
         finalId = cr.data.id;
         setCustomerId(finalId);
@@ -450,7 +463,7 @@ export default function Billing() {
       const payload = {
         shop_id: 1,
         customer_id: finalId, // Explicit backend FK
-        customer_name: custName,
+        customer_name: finalCustName,
         customer_mobile: custMobile,
         customer_address: custAddress,
         metal_type: metalType,
@@ -498,21 +511,30 @@ export default function Billing() {
         await api.post('/billing/estimates/', payload);
       }
       if (redirectList) {
-        alert('Bill saved successfully!');
-        navigate('/billing/list');
+        toast.success('Bill saved successfully!');
+        closeTabAndSwitch(tabId, '/billing/list', 'Bills List');
       }
       return true;
     } catch (err) {
       console.error(err);
-      alert('Failed to save bill on backend.');
+      toast.error('Failed to save bill on backend.');
       return false;
     }
   };
 
   const handlePrint = async () => {
-    const success = await handleSave(false);
+    if (!custName.trim()) {
+      setPendingAction('print');
+      setShowCustWarning(true);
+      return;
+    }
+    await handleSaveAndPrint(true);
+  };
+
+  const handleSaveAndPrint = async (bypassWarning = false) => {
+    const success = await handleSave(false, bypassWarning);
     if (success) {
-      // console.log("CALC =", calc);
+      const finalCustName = custName.trim() || 'Walk-in';
       const docData = {
         template: shop?.pdf_template || 'classic',
         shop: {
@@ -526,7 +548,7 @@ export default function Billing() {
         },
         docType: billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
         theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
-        customer: { name: custName, phone: custMobile, address: custAddress },
+        customer: { name: finalCustName, phone: custMobile, address: custAddress },
         meta: { number: billNumber || 'TBD', date: orderDate || new Date().toLocaleDateString('en-IN') },
         rates: { rate10gm: metalRate * 10, makingPerGm: makingRate || 0 },
         items: items.map(it => ({
@@ -564,7 +586,31 @@ export default function Billing() {
     }
   };
 
-  const handleCancel = () => { setShowModal(true); setItems([createEmptyItem()]); };
+  const handleCancel = () => {
+    closeTab(tabId);
+  };
+
+  const handleProceedWalkin = async () => {
+    setShowCustWarning(false);
+    if (pendingAction === 'save') {
+      await handleSave(true, true);
+    } else if (pendingAction === 'save_silent') {
+      await handleSave(false, true);
+    } else if (pendingAction === 'print') {
+      await handleSaveAndPrint(true);
+    }
+    setPendingAction(null);
+  };
+
+  const handleCancelWarning = () => {
+    setShowCustWarning(false);
+    setPendingAction(null);
+    setTimeout(() => {
+      const nameInput = document.getElementById('bill-cust-name');
+      if (nameInput) nameInput.focus();
+    }, 100);
+  };
+
 
   /* ═══ RENDER ═══ */
   if (showModal) {
@@ -764,7 +810,7 @@ export default function Billing() {
                 <tr key={item.id}>
                   <td style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{idx + 1}</td>
                   <td>
-                    <input className="form-input" type="text" placeholder="Product name" value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} />
+                    <ProductNameInput value={item.name} onChange={val => updateItem(item.id, 'name', val)} placeholder="Product name" style={{ height: 32, fontSize: 'var(--text-sm)' }} />
                   </td>
                   {billType === 'Invoice' && (
                     <td>
@@ -1141,6 +1187,30 @@ export default function Billing() {
         </div>
       </div>
       <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
+      {showCustWarning && (
+        <>
+          <div className="overlay" style={{ zIndex: 11000 }} onClick={handleCancelWarning} />
+          <div className="modal" style={{ maxWidth: 450, zIndex: 11001, padding: 'var(--space-5)' }}>
+            <div className="modal__header" style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border-primary)', paddingBottom: 'var(--space-3)' }}>
+              <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--color-warning, #f59e0b)', fontSize: 24 }}></i>
+              <h3 className="modal__title" style={{ margin: 0 }}>Missing Customer Details</h3>
+            </div>
+            <div className="modal__body" style={{ padding: 'var(--space-4) 0 var(--space-5)' }}>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Customer Name is blank. Would you like to proceed by adding a <strong>"Walk-in"</strong> customer, or go back to enter customer details?
+              </p>
+            </div>
+            <div className="modal__footer" style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', borderTop: 'none', paddingTop: 0 }}>
+              <button className="btn btn--ghost" onClick={handleCancelWarning}>
+                Go Back
+              </button>
+              <button className="btn btn--warning" onClick={handleProceedWalkin}>
+                Proceed as Walk-in
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

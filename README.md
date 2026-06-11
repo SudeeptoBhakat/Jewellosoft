@@ -1,4 +1,4 @@
-# JewelloSoft – Production-Grade Jewellery Retail & Billing System
+# JewelloSoft - Jewellery Retail & Billing System
 
 JewelloSoft is a **modern, offline-first desktop application** meticulously engineered for jewellery shop owners. It provides a robust, seamless, and professional environment to manage **billing, inventory, customers, and orders**. 
 

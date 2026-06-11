@@ -48,9 +48,9 @@ export default function ClassicTemplate({ data }) {
         items = [],
         oldMetal = null,
         totals = {},
-        payment = null,
         hideMetalValue = false,
         hideMaking = false,
+        hideCustomerDetails = false,
         designNotes = '',
         designImages = [],
         returnBreakdown = null,
@@ -144,7 +144,7 @@ export default function ClassicTemplate({ data }) {
 
                 {/* Info Row: Customer & Rates */}
                 <div className="pdf-info-row">
-                    <div className="pdf-customer-box">
+                    <div className="pdf-customer-box" style={hideCustomerDetails ? { visibility: 'hidden' } : {}}>
                         <h4>Billed To</h4>
                         <p>{customer.name || "Walk-in Customer"}</p>
                         {customer.phone && <span>{customer.phone}</span>}

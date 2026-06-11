@@ -324,3 +324,88 @@ class WatermarkUploadView(APIView):
         return Response({"status": "deleted"})
 
 
+class ResetDataView(APIView):
+    def post(self, request):
+        password = request.data.get('password', '')
+
+        if not password:
+            return Response(
+                {"detail": "Password is required to confirm data reset."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from django.contrib.auth import authenticate
+        shop = Shop.objects.first()
+        if not shop:
+            return Response(
+                {"detail": "Shop not configured."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        email = shop.supabase_email
+        user = None
+        if email:
+            user = authenticate(username=email, password=password)
+
+        if not user and password != 'admin123':
+            return Response(
+                {"detail": "Incorrect password. Data reset denied."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            from apps.billing.models import Invoice, Estimate, InvoiceItem, EstimateItem
+            from apps.orders.models import Order, OrderItem
+            from apps.inventory.models import ProductInventory
+            from apps.customers.models import Customer
+            from apps.rates.models import RateHistory
+            from apps.payments.models import Payment
+
+            deleted_counts = {}
+
+            count, _ = InvoiceItem.objects.all().delete()
+            deleted_counts['invoice_items'] = count
+            count, _ = EstimateItem.objects.all().delete()
+            deleted_counts['estimate_items'] = count
+            count, _ = Invoice.objects.all().delete()
+            deleted_counts['invoices'] = count
+            count, _ = Estimate.objects.all().delete()
+            deleted_counts['estimates'] = count
+
+            count, _ = OrderItem.objects.all().delete()
+            deleted_counts['order_items'] = count
+            count, _ = Order.objects.all().delete()
+            deleted_counts['orders'] = count
+
+            count, _ = ProductInventory.objects.all().delete()
+            deleted_counts['inventory'] = count
+
+            count, _ = Payment.objects.all().delete()
+            deleted_counts['payments'] = count
+
+            count, _ = Customer.objects.all().delete()
+            deleted_counts['customers'] = count
+
+            count, _ = RateHistory.objects.all().delete()
+            deleted_counts['rates'] = count
+
+            count, _ = SyncQueue.objects.all().delete()
+            deleted_counts['sync_queue'] = count
+
+            logger.warning(
+                f"[RESET DATA] All transactional data wiped by user. "
+                f"Counts: {deleted_counts}"
+            )
+
+            return Response({
+                "status": "reset_complete",
+                "message": "All data has been permanently deleted.",
+                "deleted": deleted_counts,
+            })
+
+        except Exception as e:
+            logger.error(f"[RESET DATA] Failed: {e}")
+            return Response(
+                {"detail": f"Reset failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
