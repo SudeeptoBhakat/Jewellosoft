@@ -31,6 +31,7 @@ class Order(BaseModel):
     
     metal_type = models.CharField(max_length=10)
     metal_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    making_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
     priority = models.CharField(max_length=20, default="normal")
     worker = models.CharField(max_length=255, blank=True, null=True)
     design_notes = models.TextField(blank=True, null=True)

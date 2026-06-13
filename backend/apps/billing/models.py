@@ -13,6 +13,7 @@ class BaseBilling(BaseModel):
 
     metal_type = models.CharField(max_length=10)
     metal_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    making_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
 
     weight_total = models.DecimalField(max_digits=10, decimal_places=3)
     making_total = models.DecimalField(max_digits=12, decimal_places=2)
@@ -61,12 +62,10 @@ class BaseBilling(BaseModel):
         abstract = True
 
 class BillingItem(BaseModel):
-    # 🔥 Generic relation (can point to Invoice OR Estimate)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     billing_object = GenericForeignKey('content_type', 'object_id')
 
-    # Optional inventory link
     inventory = models.ForeignKey(
         "inventory.ProductInventory",
         on_delete=models.SET_NULL,

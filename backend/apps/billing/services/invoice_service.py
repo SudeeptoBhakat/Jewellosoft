@@ -22,7 +22,8 @@ def create_invoice(payload):
     payment_splits = payload.get("payments", [])
     totals = payload.get("totals", {})
     
-    rate_10gm = payload.get("rate_10gm", 0)
+    rate_10gm = payload.get("rate_10gm") or 0
+    making_rate_val = Decimal(str(payload.get("making_rate") or 0))
 
     # 1. Extract relationships
     shop_id = payload.get("shop_id")
@@ -51,6 +52,7 @@ def create_invoice(payload):
         invoice_no=invoice_no,
         metal_type=payload.get("metal_type", "gold"),
         metal_rate=rate_10gm,
+        making_rate=making_rate_val,
         weight_total=totals.get("total_weight", 0),
         making_total=totals.get("making_total", 0),
         subtotal=totals.get("subtotal", 0),
@@ -111,7 +113,8 @@ def create_estimate(payload):
     """
     items_data = payload.get("items", [])
     totals = payload.get("totals", {})
-    rate_10gm = payload.get("rate_10gm", 0)
+    rate_10gm = payload.get("rate_10gm") or 0
+    making_rate_val = Decimal(str(payload.get("making_rate") or 0))
 
     shop_id = payload.get("shop_id")
     customer_id = payload.get("customer_id")
@@ -138,6 +141,7 @@ def create_estimate(payload):
         estimate_no=estimate_no,
         metal_type=payload.get("metal_type", "gold"),
         metal_rate=rate_10gm,
+        making_rate=making_rate_val,
         weight_total=totals.get("total_weight", 0),
         making_total=totals.get("making_total", 0),
         subtotal=totals.get("subtotal", 0),
@@ -192,6 +196,7 @@ def convert_estimate_to_invoice(estimate_id, rate_override=None):
         invoice_no=generate_invoice_no(),
         metal_type=estimate.metal_type,
         metal_rate=rate_override or estimate.metal_rate,
+        making_rate=estimate.making_rate,
         weight_total=estimate.weight_total,
         making_total=estimate.making_total,
         subtotal=estimate.subtotal,

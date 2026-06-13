@@ -409,7 +409,7 @@ export default function OrdersList() {
         theme: (order.metal_type || 'gold').toLowerCase(),
         customer: { name: order.customer_detail?.name || 'Walk-in', phone: order.customer_detail?.phone, address: order.customer_detail?.address },
         meta: { number: order.order_no, date: new Date(order.created_at).toLocaleDateString('en-IN') },
-        rates: { rate10gm: parseFloat(order.metal_rate || 0), priority: order.priority },
+        rates: { rate10gm: parseFloat(order.metal_rate || 0), makingRate: parseFloat(order.making_rate || 0), makingPerGm: parseFloat(order.making_rate || 0), priority: order.priority },
         items: (order.items || []).map(i => ({ 
             name: i.product_name + (i.size ? ` (Size: ${i.size})` : ''), 
             weight: parseFloat(i.expected_weight) || 0, 

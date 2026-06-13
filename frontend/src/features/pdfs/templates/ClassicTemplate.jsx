@@ -1,31 +1,3 @@
-/**
- * ─── Classic Invoice Template ───────────────────────────────────
- * The original JewelloSoft signature design.
- *
- * Features:
- *   • Gold/Silver themed gradients on table headers & totals
- *   • Decorative borders with theme-colored accents
- *   • Custom SVG or uploaded watermark behind content
- *   • All shop details rendered dynamically from data.shop
- *   • Smart conditional rendering: columns & rows only show with valid data
- *   • hideMetalValue / hideMaking flags to suppress columns in PDF
- *
- * Data Contract:
- *   data.shop     — { name, address, phone, email, gst_number, pan_number, watermark_logo_url }
- *   data.docType  — "TAX INVOICE" | "ESTIMATE" | "ORDER RECEIPT"
- *   data.theme    — "gold" | "silver" (metal-based color scheme)
- *   data.customer — { name, phone, address }
- *   data.meta     — { number, date }
- *   data.rates    — { rate10gm, makingPerGm, priority }
- *   data.items    — [{ name, huid, weight, metalValue, making, total }]
- *   data.oldMetal — { weight, value, mode } | null
- *   data.totals   — { subtotal, cgst, sgst, otherCharges, hallmark, advance, discount, roundOff, finalAmount, amountInWords }
- *   data.payment  — { amounts: [{ mode, amount }] }
- *   data.hideMetalValue — boolean (suppress metal value column)
- *   data.hideMaking     — boolean (suppress making charge column)
- * ────────────────────────────────────────────────────────────────
- */
-
 import React from "react";
 import "../../../assets/styles/pdf.css";
 import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
@@ -168,10 +140,10 @@ export default function ClassicTemplate({ data }) {
                                 </div>
                             </>
                         )}
-                        {has(rates.makingPerGm) && (
+                        {has(rates.makingRate || rates.makingPerGm) && (
                             <div className="pdf-rate-item">
                                 <span>Making / 1g:</span>
-                                <span>{fmt(rates.makingPerGm)}</span>
+                                <span>{fmt(rates.makingRate || rates.makingPerGm)}</span>
                             </div>
                         )}
                         {rates.priority && (

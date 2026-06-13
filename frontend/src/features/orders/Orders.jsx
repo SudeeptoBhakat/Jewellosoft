@@ -24,13 +24,20 @@ function OrderSetupModal({ onStart, onClose }) {
   const [metal, setMetal] = useState('');
   const [orderType, setOrderType] = useState('');
   const [liveRates, setLiveRates] = useState({ Gold: 0, Silver: 0 });
+  const [ratesData, setRatesData] = useState({ Gold: { rate: 0, making: 0 }, Silver: { rate: 0, making: 0 } });
 
   useEffect(() => {
     api.get('/rates/latest/').then(res => {
       const d = res.data;
+      const goldRateObj = d.gold22k || d.gold24k || {};
+      const silverRateObj = d.silver925 || d.silver999 || {};
+      setRatesData({
+        Gold: { rate: goldRateObj.rate_per_gram || 0, making: goldRateObj.making_per_gram || 0 },
+        Silver: { rate: silverRateObj.rate_per_gram || 0, making: silverRateObj.making_per_gram || 0 }
+      });
       setLiveRates({
-        Gold: d.gold22k?.rate_per_gram || d.gold24k?.rate_per_gram || 0,
-        Silver: d.silver925?.rate_per_gram || d.silver999?.rate_per_gram || 0,
+        Gold: goldRateObj.rate_per_gram || 0,
+        Silver: silverRateObj.rate_per_gram || 0,
       });
     }).catch(() => {});
   }, []);
@@ -83,7 +90,7 @@ function OrderSetupModal({ onStart, onClose }) {
           </div>
         </div>
         <div className="modal__footer">
-          <button className="btn btn--primary btn--lg" style={{ width: '100%', gap: 10 }} disabled={!metal || !orderType} onClick={() => onStart(metal, orderType, liveRates[metal] || 0)}>
+          <button className="btn btn--primary btn--lg" style={{ width: '100%', gap: 10 }} disabled={!metal || !orderType} onClick={() => onStart(metal, orderType, ratesData[metal]?.rate || 0, ratesData[metal]?.making || 0)}>
             <i className="fa-solid fa-arrow-right"></i> Start Order
           </button>
         </div>
@@ -256,12 +263,11 @@ export default function Orders({ tabId, isActive }) {
   }, []);
 
   /* ─── Modal Handler ─── */
-  const handleStart = useCallback((metal, type, rate) => {
+  const handleStart = useCallback((metal, type, rate, making) => {
     setMetalType(metal);
     setOrderType(type);
     setMetalRate(rate || 0);
-    // Find the default making rate if allRates exists (this may execute before allRates is ready, fallback handled)
-    setMakingRate(0); 
+    setMakingRate(making || 0); 
     setItems([createEmptyItem()]);
     setShowModal(false);
     setTimeout(() => searchRef.current?.focus(), 100);
@@ -399,7 +405,8 @@ export default function Orders({ tabId, isActive }) {
               order_status: orderStatus.toLowerCase().replace(' ', '_'),
               order_type: orderType.toLowerCase(),
               metal_type: metalType,
-              metal_rate: metalRate,
+              metal_rate: (metalRate * 10) || 0,
+              making_rate: makingRate || 0,
               priority: priority,
               worker: assignedWorker,
               design_notes: designNotes,
@@ -481,7 +488,7 @@ export default function Orders({ tabId, isActive }) {
               theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
               customer: { name: finalCustName, phone: custMobile, address: custAddress },
               meta: { number: orderNumber || 'NEW', date: new Date().toLocaleDateString('en-IN') },
-              rates: { rate10gm: metalRate * 10, makingPerGm: makingRate, priority: priority },
+              rates: { rate10gm: metalRate * 10, makingPerGm: makingRate, makingRate: makingRate, priority: priority },
               items: items.map(it => ({
                   name: it.name + (it.size ? ` (Size: ${it.size})` : ''),
                   weight: it.weight || 0,

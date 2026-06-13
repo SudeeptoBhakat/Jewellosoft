@@ -7,7 +7,7 @@ from .models import Invoice, Estimate
 from .serializers import InvoiceSerializer, EstimateSerializer
 from .services.invoice_service import create_invoice, convert_estimate_to_invoice, create_estimate
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("jewellosoft")
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all()

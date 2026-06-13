@@ -19,13 +19,20 @@ function BillSetupModal({ onStart, onClose }) {
   const [metal, setMetal] = useState('');
   const [billType, setBillType] = useState('');
   const [liveRates, setLiveRates] = useState({ Gold: 0, Silver: 0 });
+  const [ratesData, setRatesData] = useState({ Gold: { rate: 0, making: 0 }, Silver: { rate: 0, making: 0 } });
 
   useEffect(() => {
     api.get('/rates/latest/').then(res => {
       const d = res.data;
+      const goldRateObj = d.gold22k || d.gold24k || {};
+      const silverRateObj = d.silver925 || d.silver999 || {};
+      setRatesData({
+        Gold: { rate: goldRateObj.rate_per_gram || 0, making: goldRateObj.making_per_gram || 0 },
+        Silver: { rate: silverRateObj.rate_per_gram || 0, making: silverRateObj.making_per_gram || 0 }
+      });
       setLiveRates({
-        Gold: d.gold22k?.rate_per_gram || d.gold24k?.rate_per_gram || 0,
-        Silver: d.silver925?.rate_per_gram || d.silver999?.rate_per_gram || 0,
+        Gold: goldRateObj.rate_per_gram || 0,
+        Silver: silverRateObj.rate_per_gram || 0,
       });
     }).catch(() => { });
   }, []);
@@ -130,7 +137,7 @@ function BillSetupModal({ onStart, onClose }) {
             className="btn btn--primary btn--lg"
             style={{ width: '100%', gap: 10 }}
             disabled={!metal || !billType}
-            onClick={() => onStart(metal, billType, liveRates[metal] || 0)}
+            onClick={() => onStart(metal, billType, ratesData[metal]?.rate || 0, ratesData[metal]?.making || 0)}
           >
             <i className="fa-solid fa-arrow-right"></i>
             Start Billing
@@ -202,6 +209,7 @@ export default function Billing({ tabId, isActive }) {
   /* ─── Metal Rate (editable) ─── */
   const [metalRate, setMetalRate] = useState(0);
   const [makingRate, setMakingRate] = useState(0);
+  // console.log(makingRate);
   const [allRates, setAllRates] = useState({});
 
   useEffect(() => {
@@ -274,11 +282,11 @@ export default function Billing({ tabId, isActive }) {
   }, []);
 
   /* ─── Modal Handler ─── */
-  const handleStart = useCallback((metal, type, rate) => {
+  const handleStart = useCallback((metal, type, rate, making) => {
     setMetalType(metal);
     setBillType(type);
     setMetalRate(rate || 0);
-    setMakingRate(0);
+    setMakingRate(making || 0);
     setItems([createEmptyItem()]);
     setShowModal(false);
     setTimeout(() => searchRef.current?.focus(), 100);
@@ -467,7 +475,8 @@ export default function Billing({ tabId, isActive }) {
         customer_mobile: custMobile,
         customer_address: custAddress,
         metal_type: metalType,
-        rate_10gm: metalRate * 10,
+        rate_10gm: (metalRate * 10) || 0,
+        making_rate: makingRate || 0,
         invoice_no: billType === 'Invoice' ? null : undefined, // Trigger auto-gen
         items: items.map(it => ({
           inventory_id: it.inventory_id,
@@ -550,7 +559,7 @@ export default function Billing({ tabId, isActive }) {
         theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: finalCustName, phone: custMobile, address: custAddress },
         meta: { number: billNumber || 'TBD', date: orderDate || new Date().toLocaleDateString('en-IN') },
-        rates: { rate10gm: metalRate * 10, makingPerGm: makingRate || 0 },
+        rates: { rate10gm: metalRate * 10, makingRate: makingRate },
         items: items.map(it => ({
           name: it.name,
           huid: billType === 'Invoice' ? it.huid : undefined,

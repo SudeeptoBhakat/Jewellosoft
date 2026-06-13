@@ -8,12 +8,11 @@ const fmt = (n) =>
         maximumFractionDigits: 2,
     })}`;
 
-/** Returns true only if value is a real, non-zero number */
 const has = (v) => Number(v) !== 0 && Number.isFinite(Number(v));
 
 export default function StandardTemplate({ data }) {
     if (!data) return null;
-    console.log(data);
+    // console.log(data);
 
     const {
         docType = "INVOICE",
@@ -36,26 +35,23 @@ export default function StandardTemplate({ data }) {
 
     const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
 
-    // ── Derive which item columns have data (respecting hide flags) ──
     const hasHuid = items.some((i) => i.huid && i.huid.trim() && i.huid !== "—");
     const hasMetalVal = !hideMetalValue && items.some((i) => has(i.metalValue));
     const hasMaking = !hideMaking && items.some((i) => has(i.making));
+    // console.log(hasMaking);
+    const isInvoice = docType.includes("INVOICE");
 
-    // ── Derive rate display values ──
     const ratePerGm = has(rates.rate10gm) ? Number(rates.rate10gm) / 10 : 0;
     const rateLabel = theme?.toLowerCase() === "silver" ? "SILVER" : "GOLD";
 
-    // ── Transaction direction ──
     const transactionType = totals.transactionType || 'payable';
     const isReturn = transactionType === 'return';
     const finalLabel = isReturn ? 'RETURN TO CUSTOMER' : 'CUSTOMER PAYABLE';
     const isOrderReceipt = docType === 'ORDER RECEIPT';
 
-    // ── Old metal ──
     const hasOldMetal = oldMetal && (has(oldMetal.value) || has(oldMetal.weight));
     // console.log(oldMetal.weight);
 
-    // ── Pad items array to always have at least 5 rows ──
     const displayItems = [...items];
     while (displayItems.length < 5) {
         displayItems.push({ _isEmpty: true });
@@ -64,7 +60,6 @@ export default function StandardTemplate({ data }) {
     return (
         <div className="pdf-root">
 
-            {/* WATERMARK */}
             <img
                 src={watermarkSrc}
                 alt="watermark"
@@ -75,7 +70,6 @@ export default function StandardTemplate({ data }) {
             <div className="pdf-container">
 
                 <div className="pdf-header">
-                    {/* TOP DESIGN STRIP */}
                     <div className="pdf-top-strip-right"></div>
                     <div className="pdf-top-strip-left"></div>
 
@@ -87,7 +81,6 @@ export default function StandardTemplate({ data }) {
                         {(shop.name || "JEWELLERY SHOP").toUpperCase()}
                     </div>
 
-                    {/* Shop address & phone — only if available */}
                     {(shop.address || shop.phone) && (
                         <div className="pdf-shop-address-row">
                             {shop.address && <span>{shop.address}</span>}
@@ -95,7 +88,6 @@ export default function StandardTemplate({ data }) {
                         </div>
                     )}
 
-                    {/* GST & PAN — only if available */}
                     {(shop.gst_number || shop.pan_number) && (
                         <div className="pdf-shop-meta-row">
                             {shop.gst_number && <span><strong>GSTIN:</strong> {shop.gst_number}</span>}
@@ -124,7 +116,7 @@ export default function StandardTemplate({ data }) {
                     <div className="pdf-rate-pill">
                         <span>RATE OF {rateLabel}: ₹ {ratePerGm.toLocaleString("en-IN")}/g</span>
                         <span>PER 10GM: ₹ {Number(rates.rate10gm).toLocaleString("en-IN")}</span>
-                        {has(rates.makingPerGm) && <span>MC PER GM: ₹ {Number(rates.makingPerGm).toLocaleString("en-IN")}</span>}
+                        {has(rates.makingRate || rates.makingPerGm) && <span>MAKING RATE: ₹ {Number(rates.makingRate || rates.makingPerGm).toLocaleString("en-IN")}</span>}
                     </div>
                 )}
 
@@ -187,17 +179,13 @@ export default function StandardTemplate({ data }) {
                     const isOldHeavier = oldW > newW;
                     const diffWeight = Math.abs(oldW - newW);
                     const diffMetalValue = isOldHeavier
-                        ? Number(oldMetal.value) 
+                        ? Number(oldMetal.value)
                         : diffWeight * ratePerGram;
 
                     return (
                         <div className="old-calc-breakdown-row">
-                            {/* <span>Old Gold: {oldW.toFixed(2)}g</span>
-                            <span style={{ color: '#64748b', margin: '0 4px' }}>|</span>
 
-                            <span>New Gold: {newW.toFixed(2)}g</span> */}
-
-                            <span style={{ color: isOldHeavier ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
+                            <span style={{ fontWeight: 700 }}>
 
                                 {isOldHeavier
                                     ? `Old Metal: ${oldW.toFixed(3)} - New Metal: ${newW.toFixed(3)} `
@@ -228,7 +216,6 @@ export default function StandardTemplate({ data }) {
 
                 {/* Old Breakdown End */}
 
-                {/* ── CALCULATION BREAKDOWN ── */}
                 {returnBreakdown ? (
                     <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: '0 25px' }}>
                         {/* Return Waterfall */}
@@ -273,21 +260,53 @@ export default function StandardTemplate({ data }) {
                 ) : (
                     <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: "0 25px" }}>
                         {/* Normal Summary Banner */}
-                        <div className="pdf-summary-head">
+                        <div
+                            className="pdf-summary-head"
+                            style={{
+                                gridTemplateColumns: isInvoice
+                                    ? "repeat(8, 1fr)"
+                                    : "repeat(6, 1fr)"
+                            }}
+                        >
                             <div>GRAND TOTAL</div>
                             <div>ROUND OFF</div>
                             <div>LESS ADVANCE</div>
-                            <div>HALLMARK CHARGES</div>
+                            <div>HALLMARK</div>
                             <div>OTHER CHARGES</div>
+
+                            {isInvoice && (
+                                <>
+                                    <div>CGST</div>
+                                    <div>SGST</div>
+                                </>
+                            )}
+
                             <div>TOTAL</div>
                         </div>
-                        <div className="pdf-summary-values" style={{ borderBottomLeftRadius: '15px', borderBottomRightRadius: '15px' }}>
+                        <div className="pdf-summary-values"
+                            style={{ gridTemplateColumns: isInvoice ? "repeat(8, 1fr)" : "repeat(6, 1fr)",
+                                    borderBottomLeftRadius: '15px',
+                                    borderBottomRightRadius: '15px'
+                                }}
+                                >
                             <div className="bold">{fmt(totals.finalAmount)}</div>
-                            <div className="red">{has(totals.roundOff) ? `${Number(totals.roundOff).toFixed(2)}` : '₹ 0.00'}</div>
-                            <div>{has(totals.advance) ? `${fmt(totals.advance)}` : '₹ 0.00'}</div>
-                            <div>{has(totals.hallmark) ? `${fmt(totals.hallmark)}` : '₹ 0.00'}</div>
-                            <div>{has(totals.otherCharges) ? `${fmt(totals.otherCharges)}` : '₹ 0.00'}</div>
-                            <div className="bold">{fmt(totals.subtotal)}</div>
+
+                            <div className="red">{has(totals.roundOff) ? Number(totals.roundOff).toFixed(2) : '₹ 0.00'}</div>
+
+                            <div>{has(totals.advance) ? fmt(totals.advance) : '₹ 0.00'}</div>
+
+                            <div>{has(totals.hallmark) ? fmt(totals.hallmark) : '₹ 0.00'}</div>
+
+                            <div>{has(totals.otherCharges) ? fmt(totals.otherCharges) : '₹ 0.00'}</div>
+
+                            {isInvoice && (
+                                <>
+                                    <div>{fmt(totals.cgst)}</div>
+                                    <div>{fmt(totals.sgst)}</div>
+                                </>
+                            )}
+
+                            <div className="bold"> {fmt(totals.subtotal)}</div>
                         </div>
                     </div>
                 )}

@@ -12,8 +12,8 @@ export default function ProductNameInput({
 }) {
   
   const allSuggestions = getSuggestions();
-  console.log("Suggestions Count:", allSuggestions.length);
-console.log("Suggestions:", allSuggestions.slice(0, 5));
+  // console.log("Suggestions Count:", allSuggestions.length);
+// console.log("Suggestions:", allSuggestions.slice(0, 5));
   const datalistId = useRef(id ? `suggestions-${id}` : `suggestions-${Math.random().toString(36).substring(2, 9)}`).current;
 
   const handleChange = (e) => {

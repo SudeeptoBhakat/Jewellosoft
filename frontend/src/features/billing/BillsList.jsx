@@ -8,9 +8,7 @@ import { fmtCurrency as fmt, fmtInt, amountWords } from '../../utils/billingCalc
 const statusMap = { Paid: 'success', Pending: 'warning', Partial: 'info', Cancelled: 'danger' };
 const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'primary'}`}>{s}</span>;
 
-/* ═══════════════════════════════════════════
-   BILL DETAIL MODAL
-   ═══════════════════════════════════════════ */
+
 function BillDetailModal({ bill, onClose, onPrint }) {
   if (!bill) return null;
 
@@ -166,9 +164,7 @@ function BillDetailModal({ bill, onClose, onPrint }) {
   );
 }
 
-/* ═══════════════════════════════════════════
-   DELETE CONFIRM MODAL (Password Protected)
-   ═══════════════════════════════════════════ */
+
 function DeleteModal({ bill, onClose, onConfirm }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -227,9 +223,7 @@ function DeleteModal({ bill, onClose, onConfirm }) {
   );
 }
 
-/* ═══════════════════════════════════════════
-   BILLS LIST PAGE
-   ═══════════════════════════════════════════ */
+
 export default function BillsList() {
   const { shop } = useAuth();
   const [search, setSearch] = useState('');
@@ -284,6 +278,7 @@ export default function BillsList() {
     finalAmount: parseFloat(b.grand_total) || 0,
     transactionType: b.transaction_type || 'payable',
     rate10gm: parseFloat(b.metal_rate || 0),
+    makingRate: parseFloat(b.making_rate || 0),
     payment: b.payment_method?.toUpperCase() || 'CASH',
     paidCash: b.payment_method === 'cash' ? parseFloat(b.grand_total) || 0 : 0,
     paidOnline: b.payment_method !== 'cash' ? parseFloat(b.grand_total) || 0 : 0,
@@ -427,7 +422,7 @@ export default function BillsList() {
         theme: bill.metal.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: bill.customer, phone: bill.phone, address: bill.address },
         meta: { number: bill.id, date: new Date(bill.date).toLocaleDateString('en-IN') },
-        rates: { rate10gm: bill.rate10gm, makingCharge: bill.makingCharge },
+        rates: { rate10gm: bill.rate10gm, makingCharge: bill.makingCharge, makingRate: bill.makingRate, makingPerGm: bill.makingRate },
         items: bill.items,
         oldMetal,
         totals: {
