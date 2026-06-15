@@ -12,7 +12,7 @@ const has = (v) => Number(v) !== 0 && Number.isFinite(Number(v));
 
 export default function StandardTemplate({ data }) {
     if (!data) return null;
-    // console.log(data);
+    console.log(data);
 
     const {
         docType = "INVOICE",
@@ -216,100 +216,59 @@ export default function StandardTemplate({ data }) {
 
                 {/* Old Breakdown End */}
 
-                {returnBreakdown ? (
-                    <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: '0 25px' }}>
-                        {/* Return Waterfall */}
-                        <div className="pdf-summary-head" style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 14px' }}>
-                            <span>OLD METAL RETURN BREAKDOWN</span>
-                            <span>Old: {Number(oldMetal?.weight || 0).toFixed(3)}g → New: {items.reduce((s, it) => s + Number(it.weight || 0), 0).toFixed(3)}g | Extra: {returnBreakdown.excessWeight.toFixed(3)}g</span>
-                        </div>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', border: '1px solid #ddd' }}>
-                            <tbody>
-                                <tr style={{ background: '#f9f9f9' }}>
-                                    <td style={{ padding: '4px 10px' }}>Excess Value ({returnBreakdown.excessWeight.toFixed(3)}g)</td>
-                                    <td style={{ padding: '4px 10px', textAlign: 'right' }}>{fmt(returnBreakdown.excessMetalValue)}</td>
-                                </tr>
-                                {returnBreakdown.deductionAmt > 0 && (
-                                    <tr><td style={{ padding: '4px 10px', color: '#e53935' }}>Less Deduction ({returnBreakdown.deductionPct}%)</td><td style={{ padding: '4px 10px', textAlign: 'right', color: '#e53935' }}>−{fmt(returnBreakdown.deductionAmt)}</td></tr>
-                                )}
-                                <tr style={{ borderTop: '2px solid #333', fontWeight: 700 }}>
-                                    <td style={{ padding: '5px 10px' }}>Return Base</td>
-                                    <td style={{ padding: '5px 10px', textAlign: 'right', color: '#2e7d32' }}>{fmt(returnBreakdown.afterDeduction)}</td>
-                                </tr>
-                                {returnBreakdown.steps.map((step, i) => (
-                                    <React.Fragment key={i}>
-                                        {step.isFlip && (
-                                            <tr><td colSpan={2} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#e65100', background: '#fff3e0', padding: '4px 0' }}>RETURN FULFILLED — REMAINING CHARGED TO CUSTOMER</td></tr>
-                                        )}
-                                        <tr style={{ background: i % 2 === 0 ? '#fafafa' : '#fff' }}>
-                                            <td style={{ padding: '3px 10px' }}>{step.isSubtract ? '(−)' : '(+)'} {step.label}{step.isFlip ? ` (${fmt(step.absorbed)} absorbed)` : ''}</td>
-                                            <td style={{ padding: '3px 10px', textAlign: 'right', color: step.isSubtract ? '#e53935' : '#2e7d32' }}>{step.isSubtract ? '−' : '+'}{fmt(step.amount)}</td>
-                                        </tr>
-                                    </React.Fragment>
-                                ))}
-                                {has(totals.roundOff) && (
-                                    <tr><td style={{ padding: '3px 10px', color: '#888', fontSize: '10px' }}>Round Off</td><td style={{ padding: '3px 10px', textAlign: 'right', fontSize: '10px' }}>{Number(totals.roundOff).toFixed(2)}</td></tr>
-                                )}
-                                <tr style={{ background: isReturn ? '#e8f5e9' : '#e3f2fd', fontWeight: 700, fontSize: '13px' }}>
-                                    <td style={{ padding: '6px 10px', color: isReturn ? '#1b5e20' : '#1565c0' }}>{finalLabel}</td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right', color: isReturn ? '#1b5e20' : '#1565c0' }}>{fmt(totals.finalAmount)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
+
+                <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: "0 25px" }}>
+                    {/* Normal Summary Banner */}
+                    <div
+                        className="pdf-summary-head"
+                        style={{
+                            gridTemplateColumns: isInvoice
+                                ? "repeat(8, 1fr)"
+                                : "repeat(6, 1fr)"
+                        }}
+                    >
+                        <div>GRAND TOTAL</div>
+                        <div>ROUND OFF</div>
+                        <div>LESS ADVANCE</div>
+                        <div>HALLMARK</div>
+                        <div>OTHER CHARGES</div>
+
+                        {isInvoice && (
+                            <>
+                                <div>CGST</div>
+                                <div>SGST</div>
+                            </>
+                        )}
+
+                        <div>TOTAL</div>
                     </div>
-                ) : (
-                    <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: "0 25px" }}>
-                        {/* Normal Summary Banner */}
-                        <div
-                            className="pdf-summary-head"
-                            style={{
-                                gridTemplateColumns: isInvoice
-                                    ? "repeat(8, 1fr)"
-                                    : "repeat(6, 1fr)"
-                            }}
-                        >
-                            <div>GRAND TOTAL</div>
-                            <div>ROUND OFF</div>
-                            <div>LESS ADVANCE</div>
-                            <div>HALLMARK</div>
-                            <div>OTHER CHARGES</div>
+                    <div className="pdf-summary-values"
+                        style={{
+                            gridTemplateColumns: isInvoice ? "repeat(8, 1fr)" : "repeat(6, 1fr)",
+                            borderBottomLeftRadius: '15px',
+                            borderBottomRightRadius: '15px'
+                        }}
+                    >
+                        <div className="bold">{fmt(totals.finalAmount)}</div>
 
-                            {isInvoice && (
-                                <>
-                                    <div>CGST</div>
-                                    <div>SGST</div>
-                                </>
-                            )}
+                        <div className="red">{has(totals.roundOff) ? Number(totals.roundOff).toFixed(2) : '₹ 0.00'}</div>
 
-                            <div>TOTAL</div>
-                        </div>
-                        <div className="pdf-summary-values"
-                            style={{ gridTemplateColumns: isInvoice ? "repeat(8, 1fr)" : "repeat(6, 1fr)",
-                                    borderBottomLeftRadius: '15px',
-                                    borderBottomRightRadius: '15px'
-                                }}
-                                >
-                            <div className="bold">{fmt(totals.finalAmount)}</div>
+                        <div>{has(totals.advance) ? fmt(totals.advance) : '₹ 0.00'}</div>
 
-                            <div className="red">{has(totals.roundOff) ? Number(totals.roundOff).toFixed(2) : '₹ 0.00'}</div>
+                        <div>{has(totals.hallmark) ? fmt(totals.hallmark) : '₹ 0.00'}</div>
 
-                            <div>{has(totals.advance) ? fmt(totals.advance) : '₹ 0.00'}</div>
+                        <div>{has(totals.otherCharges) ? fmt(totals.otherCharges) : '₹ 0.00'}</div>
 
-                            <div>{has(totals.hallmark) ? fmt(totals.hallmark) : '₹ 0.00'}</div>
+                        {isInvoice && (
+                            <>
+                                <div>{fmt(totals.cgst)}</div>
+                                <div>{fmt(totals.sgst)}</div>
+                            </>
+                        )}
 
-                            <div>{has(totals.otherCharges) ? fmt(totals.otherCharges) : '₹ 0.00'}</div>
-
-                            {isInvoice && (
-                                <>
-                                    <div>{fmt(totals.cgst)}</div>
-                                    <div>{fmt(totals.sgst)}</div>
-                                </>
-                            )}
-
-                            <div className="bold"> {fmt(totals.subtotal)}</div>
-                        </div>
+                        <div className="bold"> {fmt(totals.subtotal)}</div>
                     </div>
-                )}
+                </div>
 
                 {/* AMOUNT IN WORDS */}
                 <div className="pdf-amount-strip">
@@ -319,14 +278,26 @@ export default function StandardTemplate({ data }) {
                 </div>
 
                 {/* PAYMENT — only if amounts exist */}
-                {payment?.amounts?.filter(p => has(p.amount)).length > 0 && (
+                {totals?.transactionType === "payable" ? (
+                    payment?.amounts?.filter(p => has(p.amount)).length > 0 && (
+                        <div className="pdf-payment">
+                            <div className="label">PAYMENT METHOD</div>
+
+                            {payment.amounts
+                                .filter(p => has(p.amount))
+                                .map((p, i) => (
+                                    <div key={i}>
+                                        {p.mode.toUpperCase()} : {fmt(p.amount)}
+                                    </div>
+                                ))}
+                        </div>
+                    )
+                ) : (
                     <div className="pdf-payment">
-                        <div className="label">PAYMENT METHOD</div>
-                        {payment.amounts.filter(p => has(p.amount)).map((p, i) => (
-                            <div key={i}>
-                                {p.mode.toUpperCase()} : {fmt(p.amount)}
-                            </div>
-                        ))}
+                        <div className="label">TRANSACTION TYPE</div>
+                        <div style={{ color: '#dc2626', fontWeight: 700 }}>
+                            RETURN AMOUNT TO CUSTOMER : {fmt(totals?.finalAmount)}
+                        </div>
                     </div>
                 )}
 

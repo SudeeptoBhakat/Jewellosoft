@@ -571,6 +571,7 @@ export default function Billing({ tabId, isActive }) {
         oldMetal: calc.hasOld ? { weight: calc.oldWt, value: calc.effectiveOldValue, mode: calc.oldMode, rawValue: calc.oldMV, deductPct: calc.oldDeductPct, deductAmt: calc.oldDeductAmt } : null,
         returnBreakdown: calc.returnBreakdown || null,
         totals: {
+          makingTotal: calc.totalMaking,
           subtotal: calc.subtotal,
           cgst: calc.cgst,
           sgst: calc.sgst,
@@ -1073,7 +1074,7 @@ export default function Billing({ tabId, isActive }) {
                       {step.isFlip && (
                         <div style={{ textAlign: 'center', margin: '6px 0', padding: '4px 0' }}>
                           <span style={{ fontSize: '0.65rem', padding: '3px 12px', background: 'rgba(251,191,36,0.15)', color: '#b45309', borderRadius: 12, fontWeight: 700, letterSpacing: '0.03em' }}>
-                            ⚡ Return Fulfilled — Customer Now Pays
+                            Return Fulfilled — Customer Now Pays
                           </span>
                         </div>
                       )}

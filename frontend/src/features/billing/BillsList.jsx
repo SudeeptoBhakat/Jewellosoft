@@ -299,6 +299,7 @@ export default function BillsList() {
           const invRes = await api.get(`/billing/invoices/${queryParams}`);
           const invData = extractList(invRes.data);
           allResults = [...allResults, ...invData.map(b => mapBill(b, 'Invoice'))];
+          // console.log(allResults);
           total += invRes.data?.count || invData.length;
         } catch (e) {
           console.error('Failed to fetch invoices:', e);
@@ -381,8 +382,6 @@ export default function BillsList() {
   };
 
   const handlePrint = (bill) => {
-    // console.log(bill);
-    // Build oldMetal with full breakdown from stored data
     let oldMetal = null;
     if (bill.oldSettlementMode === 'weight' && bill.oldWt > 0) {
       oldMetal = {
@@ -406,7 +405,7 @@ export default function BillsList() {
       // Legacy fallback
       oldMetal = { weight: bill.oldWt, value: bill.oldValue, mode: 'weight', rawValue: bill.oldValue, deductPct: 0, deductAmt: 0 };
     }
-
+    
     const docData = {
         template: shop?.pdf_template || 'classic',
         shop: {

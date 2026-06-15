@@ -4,6 +4,7 @@ import InvoicePDF from './pdf';
 import { toast } from '../../utils/toast';
 
 export default function PrintPreviewModal({ isOpen, onClose, data }) {
+    // console.log(data);
     const printRef = useRef(null);
     const [printing, setPrinting] = useState(false);
 
