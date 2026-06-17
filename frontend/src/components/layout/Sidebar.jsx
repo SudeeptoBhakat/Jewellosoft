@@ -92,7 +92,7 @@ export default function Sidebar() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '0.7rem', color: 'white', fontWeight: 700,
           }}>
-            <i className="fa-solid fa-gem"></i>
+            <img src="frontend\src\assets\icons\b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png" alt="" />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)', lineHeight: 1.3 }}>

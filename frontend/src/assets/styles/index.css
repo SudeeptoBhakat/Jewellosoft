@@ -1249,7 +1249,7 @@ a:hover {
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .billing-form__header {
@@ -1628,26 +1628,79 @@ a:hover {
 }
 
 /* ============================================
+   Doc Type Toggle  (Invoice / Estimate)
+   ============================================ */
+.doc-type-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-primary);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.doc-type-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 13px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.doc-type-toggle__btn:hover:not(.doc-type-toggle__btn--active) {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.doc-type-toggle__btn--invoice.doc-type-toggle__btn--active {
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.doc-type-toggle__btn--estimate.doc-type-toggle__btn--active {
+  background: var(--color-info, #3b82f6);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
    Product Search Autocomplete
    ============================================ */
 
 .search-ac {
   position: relative;
+  width: 100%;
+  overflow: visible;
 }
 
 .search-ac__dropdown {
   position: absolute;
-  top: 100%;
+  /* bottom: calc(100% + 4px); */
   left: 0;
   right: 0;
+
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  max-height: 260px;
+
+  max-height: 240px;
   overflow-y: auto;
-  z-index: 50;
-  margin-top: 4px;
+
+  z-index: 99999;
   animation: fadeInUp 120ms ease-out;
 }
 

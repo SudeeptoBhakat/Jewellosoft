@@ -562,6 +562,22 @@ export default function Orders({ tabId, isActive }) {
             <span className="badge badge--warning" style={{ fontSize: 'var(--text-sm)', padding: '4px 12px' }}>
               <i className="fa-solid fa-coins" style={{ marginRight: 4 }}></i>{metalType} @ {fmt(metalRate)}/g
             </span>
+            <div className="doc-type-toggle" title="Switch between Invoice and Estimate at any time">
+              <button
+                type="button"
+                className={`doc-type-toggle__btn doc-type-toggle__btn--invoice${orderType === 'Invoice' ? ' doc-type-toggle__btn--active' : ''}`}
+                onClick={() => setOrderType('Invoice')}
+              >
+                <i className="fa-solid fa-file-invoice"></i> Invoice
+              </button>
+              <button
+                type="button"
+                className={`doc-type-toggle__btn doc-type-toggle__btn--estimate${orderType === 'Estimate' ? ' doc-type-toggle__btn--active' : ''}`}
+                onClick={() => setOrderType('Estimate')}
+              >
+                <i className="fa-solid fa-file-lines"></i> Estimate
+              </button>
+            </div>
             {orderType === 'Invoice' && <span className="badge badge--success" style={{ fontSize: 'var(--text-xs)', padding: '3px 8px' }}>GST 3%</span>}
             <span className={`badge badge--${statusColors[orderStatus]}`} style={{ fontSize: 'var(--text-sm)', padding: '4px 12px' }}>{orderStatus}</span>
           </div>
@@ -686,7 +702,7 @@ export default function Orders({ tabId, isActive }) {
             <button className="btn btn--primary btn--sm" onClick={addEmptyItem}><i className="fa-solid fa-plus"></i> Add Item Details</button>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflow: 'visible' }}>
           <table className="billing-items-table">
             <thead>
               <tr>
@@ -902,12 +918,34 @@ export default function Orders({ tabId, isActive }) {
         <div className="bill-summary-card animate-fade-in-up" style={{ animationDelay: '120ms', animationFillMode: 'both' }}>
           <div className="billing-form__header" style={{ padding: 'var(--space-3) var(--space-5)' }}>
             <span className="billing-form__header-title" style={{ fontSize: 'var(--text-sm)' }}><i className="fa-solid fa-receipt" style={{ marginRight: 8, opacity: 0.6 }}></i>Order Summary</span>
+            <span
+              style={{
+                fontSize: 'var(--text-xs)', fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                background: orderType === 'Invoice' ? 'rgba(34,197,94,0.12)' : 'rgba(59,130,246,0.12)',
+                color: orderType === 'Invoice' ? 'var(--color-success)' : 'var(--color-info, #3b82f6)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <i className={`fa-solid ${orderType === 'Invoice' ? 'fa-file-invoice' : 'fa-file-lines'}`} style={{ marginRight: 4 }}></i>
+              {orderType === 'Invoice' ? 'Invoice — GST 3% Applied' : 'Estimate — No GST'}
+            </span>
           </div>
           <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
             {/* Order Details Recap */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', padding: 'var(--space-3)', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
               <div><span style={{ color: 'var(--text-muted)' }}>Type</span></div>
               <div style={{ textAlign: 'right' }}><span className={`badge ${orderType === 'Invoice' ? 'badge--primary' : 'badge--info'}`}>{orderType}</span></div>
+              <div><span style={{ color: 'var(--text-muted)' }}>GST</span></div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{
+                  fontSize: 'var(--text-xs)', fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                  background: orderType === 'Invoice' ? 'rgba(34,197,94,0.12)' : 'rgba(59,130,246,0.12)',
+                  color: orderType === 'Invoice' ? 'var(--color-success)' : 'var(--color-info, #3b82f6)',
+                  transition: 'all 0.2s ease',
+                }}>
+                  {orderType === 'Invoice' ? '3% Applied' : 'Not Applied'}
+                </span>
+              </div>
               <div><span style={{ color: 'var(--text-muted)' }}>Metal</span></div>
               <div style={{ textAlign: 'right', fontWeight: 600 }}>{metalType} @ {fmt(metalRate)}/g</div>
               <div><span style={{ color: 'var(--text-muted)' }}>Delivery</span></div>

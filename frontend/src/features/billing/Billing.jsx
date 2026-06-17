@@ -643,6 +643,22 @@ export default function Billing({ tabId, isActive }) {
               <i className="fa-solid fa-coins" style={{ marginRight: 4 }}></i>
               {metalType} @ {fmt(metalRate)}/g
             </span>
+            <div className="doc-type-toggle" title="Switch between Invoice and Estimate at any time">
+              <button
+                type="button"
+                className={`doc-type-toggle__btn doc-type-toggle__btn--invoice${billType === 'Invoice' ? ' doc-type-toggle__btn--active' : ''}`}
+                onClick={() => setBillType('Invoice')}
+              >
+                <i className="fa-solid fa-file-invoice"></i> Invoice
+              </button>
+              <button
+                type="button"
+                className={`doc-type-toggle__btn doc-type-toggle__btn--estimate${billType === 'Estimate' ? ' doc-type-toggle__btn--active' : ''}`}
+                onClick={() => setBillType('Estimate')}
+              >
+                <i className="fa-solid fa-file-lines"></i> Estimate
+              </button>
+            </div>
             {billType === 'Invoice' && (
               <span className="badge badge--success" style={{ fontSize: 'var(--text-xs)', padding: '3px 8px' }}>GST 3%</span>
             )}
@@ -794,7 +810,7 @@ export default function Billing({ tabId, isActive }) {
         </div>
 
         {/* Items Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflow: 'visible' }}>
           <table className="billing-items-table">
             <thead>
               <tr>
@@ -1034,6 +1050,17 @@ export default function Billing({ tabId, isActive }) {
             <span className="billing-form__header-title" style={{ fontSize: 'var(--text-sm)' }}>
               <i className="fa-solid fa-receipt" style={{ marginRight: 8, opacity: 0.6 }}></i>
               Bill Summary
+            </span>
+            <span
+              style={{
+                fontSize: 'var(--text-xs)', fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                background: billType === 'Invoice' ? 'rgba(34,197,94,0.12)' : 'rgba(59,130,246,0.12)',
+                color: billType === 'Invoice' ? 'var(--color-success)' : 'var(--color-info, #3b82f6)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <i className={`fa-solid ${billType === 'Invoice' ? 'fa-file-invoice' : 'fa-file-lines'}`} style={{ marginRight: 4 }}></i>
+              {billType === 'Invoice' ? 'Invoice — GST 3% Applied' : 'Estimate — No GST'}
             </span>
           </div>
           <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
