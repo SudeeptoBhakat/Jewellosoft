@@ -1,3 +1,8 @@
+#
+# JewelloSoft Community Edition
+# Copyright (c) 2026 Sudeepta Bhakat
+# Licensed under the JewelloSoft Community License.
+#
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings

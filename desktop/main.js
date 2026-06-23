@@ -1,3 +1,9 @@
+/*
+ * JewelloSoft Community Edition
+ * Copyright (c) 2026 Sudeepta Bhakat
+ * Licensed under the JewelloSoft Community License.
+ */
+
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -552,6 +558,19 @@ app.on('ready', async () => {
     await startDjango();
     createWindow();
 
+    // Configure About Panel details
+    app.setAboutPanelOptions({
+      applicationName: 'JewelloSoft',
+      applicationVersion: `v${app.getVersion()}`,
+      copyright: 'Copyright © 2026 Sudeepta Bhakat\n\nCommunity Edition\nCommercial rights reserved.',
+      version: app.getVersion(),
+      credits: 'For commercial licensing: sudeeptabhakat84645@gmail.com',
+      website: 'https://github.com/SudeeptoBhakat/Jewellosoft',
+      iconPath: isDev
+        ? path.join(__dirname, '../frontend/src/assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png')
+        : path.join(__dirname, 'build/icon.ico')
+    });
+
     // ─── Electron-level CSP override (production-safe) ───────────
     const { session } = require('electron');
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -821,4 +840,20 @@ ipcMain.handle('backup-db', async (event) => {
     log(`Backup Error: ${error.message}`);
     return { success: false, error: error.message };
   }
+});
+
+// IPC Handler to show native About Dialog
+ipcMain.on('show-about-dialog', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+  const version = app.getVersion();
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'About JewelloSoft',
+    message: `JewelloSoft v${version}`,
+    detail: 'Copyright © 2026 Sudeepta Bhakat\n\nCommunity Edition\nCommercial rights reserved.',
+    buttons: ['OK'],
+    icon: isDev
+      ? path.join(__dirname, '../frontend/src/assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png')
+      : path.join(__dirname, 'build/icon.ico')
+  });
 });

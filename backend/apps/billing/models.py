@@ -1,3 +1,8 @@
+#
+# JewelloSoft Community Edition
+# Copyright (c) 2026 Sudeepta Bhakat
+# Licensed under the JewelloSoft Community License.
+#
 from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType

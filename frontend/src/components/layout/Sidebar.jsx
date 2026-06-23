@@ -1,3 +1,9 @@
+/*
+ * JewelloSoft Community Edition
+ * Copyright (c) 2026 Sudeepta Bhakat
+ * Licensed under the JewelloSoft Community License.
+ */
+
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import api from '../../lib/axios';
@@ -85,18 +91,28 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="sidebar__footer">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 6,
-            background: 'linear-gradient(135deg, var(--color-primary), #a78bfa)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.7rem', color: 'white', fontWeight: 700,
-          }}>
-            <img src="frontend\src\assets\icons\b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png" alt="" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 6,
+              background: 'linear-gradient(135deg, var(--color-primary), #a78bfa)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.7rem', color: 'white', fontWeight: 700,
+            }}>
+              <img src="frontend\src\assets\icons\b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png" alt="" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                JewelloSoft v{appVersion}
+              </div>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-              JewelloSoft v{appVersion}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingLeft: 2 }}>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+              Powered by JewelloSoft
+            </div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', opacity: 0.8 }}>
+              Copyright © 2026 Sudeepta Bhakat
             </div>
           </div>
         </div>

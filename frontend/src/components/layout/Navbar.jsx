@@ -1,3 +1,9 @@
+/*
+ * JewelloSoft Community Edition
+ * Copyright (c) 2026 Sudeepta Bhakat
+ * Licensed under the JewelloSoft Community License.
+ */
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/axios';
@@ -247,6 +253,18 @@ export default function Navbar() {
             <button className="navbar__dropdown-item" onClick={() => { navigate('/settings'); setShowProfile(false); }}>
               <i className="fa-solid fa-gear"></i>
               <span>Preferences</span>
+            </button>
+            <div className="navbar__dropdown-divider"></div>
+            <button className="navbar__dropdown-item" onClick={() => {
+              if (window.electronAPI?.showAboutDialog) {
+                window.electronAPI.showAboutDialog();
+              } else {
+                alert('JewelloSoft Community Edition\nVersion: 1.0.0\nCopyright © 2026 Sudeepta Bhakat\nCommercial rights reserved.');
+              }
+              setShowProfile(false);
+            }}>
+              <i className="fa-solid fa-circle-info"></i>
+              <span>About JewelloSoft</span>
             </button>
             <div className="navbar__dropdown-divider"></div>
             <button className="navbar__dropdown-item navbar__dropdown-item--danger" onClick={handleLogout}>

@@ -1,3 +1,9 @@
+/*
+ * JewelloSoft Community Edition
+ * Copyright (c) 2026 Sudeepta Bhakat
+ * Licensed under the JewelloSoft Community License.
+ */
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AutoUpdater from './components/elements/AutoUpdater';
 import ToastContainer from './components/elements/ToastContainer';

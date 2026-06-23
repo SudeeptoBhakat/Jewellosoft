@@ -14,14 +14,18 @@
   "build": {
     "appId": "com.jewellosoft.desktop",
     "productName": "JewelloSoft",
-    "copyright": "Copyright © 2026 JewelloSoft",
+    "copyright": "Copyright © 2026 Sudeepta Bhakat",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "forceCodeSigning": false,
+      "signtoolOptions": {
+        "publisherName": null
+      }
     },
     "nsis": {
       "artifactName": "${productName}.Setup.${version}.${ext}",
@@ -63,7 +67,8 @@
   },
   "devDependencies": {
     "electron": "^42.2.0",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "stat-mode": "^1.0.0"
   },
   "dependencies": {
     "electron-log": "^5.4.4",

@@ -1,3 +1,29 @@
+# JewelloSoft Community Edition
+
+JewelloSoft is a jewellery billing and inventory management software.
+
+## License
+
+This repository is available under the JewelloSoft Community License.
+
+### Allowed
+- Personal use
+- Educational use
+- Internal business use
+- Modification
+- Contribution
+
+### Not Allowed
+- Resale
+- Paid subscriptions
+- Paid SaaS
+- Commercial redistribution
+
+Commercial rights are reserved exclusively by Sudeepta Bhakat.
+
+
+---
+
 # JewelloSoft - Jewellery Retail & Billing System
 
 JewelloSoft is a **modern, offline-first desktop application** meticulously engineered for jewellery shop owners. It provides a robust, seamless, and professional environment to manage **billing, inventory, customers, and orders**. 
@@ -141,4 +167,3 @@ Output artifact available at: `desktop/dist/JewelloSoft Setup.exe`
 **Sudeepto Bhakat**  
 Lead Backend Engineer & Systems Architect  
 📧 [sudeeptabhakat84645@gmail.com](mailto:sudeeptabhakat84645@gmail.com)
-

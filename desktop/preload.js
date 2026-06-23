@@ -1,3 +1,9 @@
+/*
+ * JewelloSoft Community Edition
+ * Copyright (c) 2026 Sudeepta Bhakat
+ * Licensed under the JewelloSoft Community License.
+ */
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -7,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     backupDB: () => ipcRenderer.invoke('backup-db'),
     getLogPath: () => ipcRenderer.invoke('get-log-path'),
     openLogFolder: () => ipcRenderer.invoke('open-log-folder'),
+    showAboutDialog: () => ipcRenderer.send('show-about-dialog'),
     
     // ─── Auto-Updater IPC ────────────────────────────────────────
     // Events FROM main → renderer  (listeners)
