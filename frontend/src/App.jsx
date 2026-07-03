@@ -17,6 +17,7 @@ import Inventory from './features/inventory/Inventory';
 import RateChart from './features/rates/RateChart';
 import Customers from './features/customers/Customers';
 import Settings from './features/settings/Settings';
+import Advances from './features/advances/Advances';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="/rates" element={<RateChart />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/advances" element={<Advances />} />
             </Route>
           </Routes>
         </TabProvider>

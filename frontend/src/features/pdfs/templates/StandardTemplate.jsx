@@ -24,6 +24,7 @@ export default function StandardTemplate({ data }) {
         oldMetal = null,
         totals = {},
         payment = null,
+        advanceHistory = [],
         theme = "gold",
         hideMetalValue = false,
         hideMaking = false,
@@ -31,6 +32,8 @@ export default function StandardTemplate({ data }) {
         designNotes = '',
         designImages = [],
         returnBreakdown = null,
+        isCancelled = false,
+        paymentStatus = null,
     } = data;
 
     const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
@@ -66,6 +69,18 @@ export default function StandardTemplate({ data }) {
                 className="pdf-watermark"
                 onError={(e) => (e.target.style.display = "none")}
             />
+
+            {/* CANCELLED overlay */}
+            {isCancelled && (
+                <div style={{
+                    position: 'absolute', top: '50%', left: '50%',
+                    transform: 'translate(-50%, -50%) rotate(-35deg)',
+                    fontSize: '72px', fontWeight: 900,
+                    color: 'rgba(220,38,38,0.14)',
+                    letterSpacing: '0.1em', whiteSpace: 'nowrap',
+                    pointerEvents: 'none', zIndex: 10, userSelect: 'none',
+                }}>CANCELLED</div>
+            )}
 
             <div className="pdf-container">
 
@@ -297,6 +312,41 @@ export default function StandardTemplate({ data }) {
                         <div className="label">TRANSACTION TYPE</div>
                         <div style={{ color: '#dc2626', fontWeight: 700 }}>
                             RETURN AMOUNT TO CUSTOMER : {fmt(totals?.finalAmount)}
+                        </div>
+                    </div>
+                )}
+
+                {/* Advance Payment History — shown when bill is linked to an order with advance receipts */}
+                {advanceHistory && advanceHistory.length > 0 && (
+                    <div style={{ margin: '6px 0', padding: '8px 14px', background: '#fff9e6', borderRadius: 6, border: '1px solid #f0d060', fontSize: '10px', lineHeight: 1.7 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <div style={{ fontWeight: 700, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7a5a00' }}>Advance Payment History</div>
+                            {paymentStatus && (
+                                <span style={{ fontSize: '8px', fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                                    background: paymentStatus === 'paid' ? 'rgba(16,185,129,0.15)' : paymentStatus === 'partially_paid' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)',
+                                    color: paymentStatus === 'paid' ? '#065f46' : paymentStatus === 'partially_paid' ? '#854d0e' : '#991b1b',
+                                    textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    {paymentStatus.replace(/_/g, ' ')}
+                                </span>
+                            )}
+                        </div>
+                        {advanceHistory.map((adv, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: idx < advanceHistory.length - 1 ? '1px dashed #e8d08a' : 'none', padding: '2px 0',
+                                opacity: adv.status === 'cancelled' ? 0.5 : 1 }}>
+                                <span style={{ textDecoration: adv.status === 'cancelled' ? 'line-through' : 'none' }}>
+                                    {adv.receiptNo}&nbsp;({adv.date})&nbsp;
+                                    <span style={{ color: '#888', textTransform: 'uppercase' }}>{adv.paymentMode}</span>
+                                    {adv.status === 'cancelled' ? ' [CANCELLED]' : ''}
+                                    {adv.isRefund ? ' [REFUND]' : ''}
+                                </span>
+                                <span style={{ fontWeight: 600, color: adv.isRefund ? '#dc2626' : 'inherit' }}>
+                                    {adv.isRefund ? '−' : ''}{fmt(adv.amount)}
+                                </span>
+                            </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e8d08a', marginTop: 4, paddingTop: 4, fontWeight: 700 }}>
+                            <span>Total Advance Paid</span>
+                            <span>{fmt(advanceHistory.filter(a => a.status !== 'cancelled' && !a.isRefund).reduce((s, a) => s + a.amount, 0))}</span>
                         </div>
                     </div>
                 )}

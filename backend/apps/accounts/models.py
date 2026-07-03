@@ -37,6 +37,7 @@ class Shop(BaseModel):
     default_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=3.0)
     decimal_precision = models.IntegerField(default=2)
     hallmark_value = models.DecimalField(max_digits=10, decimal_places=2, default=53.0)
+    require_full_payment_for_delivery = models.BooleanField(default=False, help_text="Require full payment before order delivery")
 
     # Supabase Tracking
     supabase_email = models.EmailField(max_length=254, unique=True, db_index=True, null=True, blank=True, help_text='Supabase login email')
@@ -68,3 +69,26 @@ class SyncQueue(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.model_name} {self.object_id} ({self.status})"
+
+
+class NumberingSequence(BaseModel):
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name='numbering_sequences')
+    sequence_type = models.CharField(max_length=50)
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('shop', 'sequence_type')
+
+    @classmethod
+    def get_next_number(cls, shop, sequence_type):
+        from django.db import transaction
+        with transaction.atomic():
+            seq, created = cls.objects.select_for_update().get_or_create(
+                shop=shop,
+                sequence_type=sequence_type,
+                defaults={'last_number': 0}
+            )
+            seq.last_number += 1
+            seq.save()
+            return seq.last_number
+

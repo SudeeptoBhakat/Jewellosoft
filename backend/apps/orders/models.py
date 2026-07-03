@@ -67,6 +67,16 @@ class Order(BaseModel):
     round_off = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('partially_paid', 'Partially Paid'),
+            ('paid', 'Paid'),
+            ('overpaid', 'Overpaid')
+        ],
+        default='pending'
+    )
 
     TRANSACTION_TYPE_CHOICES = [
         ('payable', 'Customer Payable'),
@@ -82,6 +92,28 @@ class Order(BaseModel):
     payment_method = models.CharField(max_length=10, choices=PAYMENT_CHOICES, blank=True, null=True)
 
     delivery_date = models.DateTimeField(null=True, blank=True)
+
+    def recalculate_payment_state(self):
+        from decimal import Decimal
+        active_payments = self.advance_payments.filter(status='active')
+        receipt_total = Decimal('0.00')
+        for p in active_payments:
+            receipt_total -= p.amount if p.is_refund else -p.amount
+
+        order_advance = self.advance or Decimal('0')
+        total_collected = order_advance + receipt_total
+        due = self.grand_total - total_collected
+
+        if total_collected == 0:
+            self.payment_status = 'pending'
+        elif due > 0:
+            self.payment_status = 'partially_paid'
+        elif due == 0:
+            self.payment_status = 'paid'
+        else:
+            self.payment_status = 'overpaid'
+
+        self.save(update_fields=['payment_status'])
 
     class Meta:
         ordering = ['-created_at']

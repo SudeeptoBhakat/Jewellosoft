@@ -9,7 +9,7 @@ const has = (v) => Number(v) !== 0 && Number.isFinite(Number(v));
 
 export default function ClassicTemplate({ data }) {
     if (!data) return null;
-
+    console.log(data);
     const {
         docType = "TAX INVOICE",
         theme = "gold",
@@ -20,12 +20,16 @@ export default function ClassicTemplate({ data }) {
         items = [],
         oldMetal = null,
         totals = {},
+        payment = null,
+        advanceHistory = [],
         hideMetalValue = false,
         hideMaking = false,
         hideCustomerDetails = false,
         designNotes = '',
         designImages = [],
         returnBreakdown = null,
+        isCancelled = false,
+        paymentStatus = null,
     } = data;
 
     // ── Shop details with fallbacks ──
@@ -90,6 +94,18 @@ export default function ClassicTemplate({ data }) {
                 className="pdf-watermark"
                 onError={(e) => { e.target.style.display = 'none'; }}
             />
+
+            {/* CANCELLED overlay — shown only for cancelled receipts */}
+            {isCancelled && (
+                <div style={{
+                    position: 'absolute', top: '50%', left: '50%',
+                    transform: 'translate(-50%, -50%) rotate(-35deg)',
+                    fontSize: '72px', fontWeight: 900,
+                    color: 'rgba(220,38,38,0.14)',
+                    letterSpacing: '0.1em', whiteSpace: 'nowrap',
+                    pointerEvents: 'none', zIndex: 10, userSelect: 'none',
+                }}>CANCELLED</div>
+            )}
 
             <div className="pdf-content-layer">
 
@@ -207,6 +223,8 @@ export default function ClassicTemplate({ data }) {
                                 ? totals.amountInWords
                                 : '—'}
                         </div>
+
+                        {/* Payment Received */}
                         {payment?.amounts?.filter(p => has(p.amount)).length > 0 && (
                             <div className="pdf-payment-info">
                                 <strong>Payment Received:</strong><br />
@@ -217,6 +235,36 @@ export default function ClassicTemplate({ data }) {
                                 ))}
                             </div>
                         )}
+
+                        {/* Advance Payment History — rendered when order had linked advance receipts */}
+                        {advanceHistory && advanceHistory.length > 0 && (
+                            <div style={{ marginTop: 8, padding: '6px 10px', background: '#fff9e6', borderRadius: 4, border: '1px solid #f0d060', fontSize: '10px', lineHeight: 1.6 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                    <strong style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#7a5a00' }}>Advance Payment History:</strong>
+                                    {paymentStatus && (
+                                        <span style={{ fontSize: '8px', fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                                            background: paymentStatus === 'paid' ? 'rgba(16,185,129,0.15)' : paymentStatus === 'partially_paid' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)',
+                                            color: paymentStatus === 'paid' ? '#065f46' : paymentStatus === 'partially_paid' ? '#854d0e' : '#991b1b',
+                                            textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            {paymentStatus.replace(/_/g, ' ')}
+                                        </span>
+                                    )}
+                                </div>
+                                {advanceHistory.map((adv, idx) => (
+                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, borderBottom: idx < advanceHistory.length - 1 ? '1px dashed #e8d08a' : 'none', padding: '2px 0' }}>
+                                        <span style={{ opacity: adv.status === 'cancelled' ? 0.5 : 1, textDecoration: adv.status === 'cancelled' ? 'line-through' : 'none' }}>
+                                            {adv.receiptNo}&nbsp;({adv.date}){adv.status === 'cancelled' ? ' [CANCELLED]' : ''}
+                                        </span>
+                                        <span style={{ fontWeight: 600, opacity: adv.status === 'cancelled' ? 0.5 : 1 }}>{fmt(adv.amount)}</span>
+                                    </div>
+                                ))}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e8d08a', marginTop: 3, paddingTop: 3, fontWeight: 700 }}>
+                                    <span>Total Advance</span>
+                                    <span>{fmt(advanceHistory.filter(a => a.status !== 'cancelled').reduce((s, a) => s + a.amount, 0))}</span>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Design Notes (Order Receipts) */}
                         {isOrderReceipt && designNotes && designNotes.trim() && (
                             <div style={{ marginTop: 8, padding: '6px 10px', background: '#f5f5f5', borderRadius: 4, fontSize: '10px', lineHeight: 1.5 }}>
@@ -307,7 +355,14 @@ export default function ClassicTemplate({ data }) {
                                         {has(totals.otherCharges) && <tr><td>Other Charges (+)</td><td>{fmt(totals.otherCharges)}</td></tr>}
                                         {has(totals.cgst) && <tr><td>CGST (1.5%) (+)</td><td>{fmt(totals.cgst)}</td></tr>}
                                         {has(totals.sgst) && <tr><td>SGST (1.5%) (+)</td><td>{fmt(totals.sgst)}</td></tr>}
-                                        {has(totals.advance) && <tr><td style={{ color: '#e53935' }}>Advance Deducted (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.advance)}</td></tr>}
+                                        {has(totals.prevAdvance) || has(totals.newAdvance) ? (
+                                            <>
+                                                {has(totals.prevAdvance) && <tr><td style={{ color: '#2e7d32' }}>Prev Advance Paid (−)</td><td style={{ color: '#2e7d32' }}>{fmt(totals.prevAdvance)}</td></tr>}
+                                                {has(totals.newAdvance) && <tr><td style={{ color: '#e53935' }}>New Advance/Payment (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.newAdvance)}</td></tr>}
+                                            </>
+                                        ) : (
+                                            has(totals.advance) && <tr><td style={{ color: '#e53935' }}>Advance Deducted (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.advance)}</td></tr>
+                                        )}
                                         {has(totals.discount) && <tr><td style={{ color: '#e53935' }}>Discount (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.discount)}</td></tr>}
                                         {has(totals.roundOff) && <tr><td>Round Off</td><td>{Number(totals.roundOff).toFixed(2)}</td></tr>}
                                     </>

@@ -38,7 +38,8 @@ export function TabProvider({ children }) {
       '/inventory': { title: 'Inventory', closable: true },
       '/rates': { title: 'Rates Chart', closable: true },
       '/customers': { title: 'Customers', closable: true },
-      '/settings': { title: 'Settings', closable: true }
+      '/settings': { title: 'Settings', closable: true },
+      '/advances': { title: 'Advance Payments', closable: true }
     };
 
     setTabs(prevTabs => {

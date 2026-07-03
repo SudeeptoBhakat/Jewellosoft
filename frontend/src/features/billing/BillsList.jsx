@@ -29,7 +29,7 @@ function BillDetailModal({ bill, onClose, onPrint }) {
               {bill.id}
             </h2>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-              {bill.billType} • {bill.metal} • {new Date(bill.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {bill.billType} • {bill.metal} • {new Date(bill.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
             </div>
           </div>
           <div className="flex gap-2">
@@ -420,7 +420,7 @@ export default function BillsList() {
         docType: bill.billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
         theme: bill.metal.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: bill.customer, phone: bill.phone, address: bill.address },
-        meta: { number: bill.id, date: new Date(bill.date).toLocaleDateString('en-IN') },
+        meta: { number: bill.id, date: new Date(bill.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) },
         rates: { rate10gm: bill.rate10gm, makingCharge: bill.makingCharge, makingRate: bill.makingRate, makingPerGm: bill.makingRate },
         items: bill.items,
         oldMetal,
@@ -583,7 +583,7 @@ export default function BillsList() {
                 <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(bill.finalAmount)}</td>
                 <td style={{ fontSize: 'var(--text-sm)' }}>{bill.payment}</td>
                 <td>{statusBadge(bill.status)}</td>
-                <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{new Date(bill.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
+                <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{new Date(bill.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                 <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
                   <div className="flex gap-2" style={{ justifyContent: 'center' }}>
                     <button className="btn btn--ghost btn--sm btn--icon" title="View" onClick={() => setViewBill(bill)}><i className="fa-solid fa-eye"></i></button>

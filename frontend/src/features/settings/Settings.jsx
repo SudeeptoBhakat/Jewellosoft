@@ -184,7 +184,8 @@ export default function Settings() {
     address: '',
     pan_number: '',
     pdf_template: 'classic',
-    watermark_logo: null
+    watermark_logo: null,
+    require_full_payment_for_delivery: false,
   });
 
   const [loading, setLoading] = useState(true);
@@ -547,6 +548,58 @@ export default function Settings() {
               </div>
             </div>
           </div>
+
+          {/* Order Management */}
+          <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="billing-form__header">
+              <span className="billing-form__header-title"><i className="fa-solid fa-cart-flatbed" style={{ marginRight: 8, opacity: 0.6 }}></i>Order Management</span>
+            </div>
+            <div className="billing-form__body">
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-4)', padding: 'var(--space-3) 0' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)', marginBottom: 4 }}>
+                    Block Delivery Without Full Payment
+                  </div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    When enabled, orders cannot be marked as <strong>Delivered</strong> or <strong>Completed</strong> unless the customer's balance due is ₹0.00.
+                  </div>
+                </div>
+                <button
+                  id="settings-delivery-block-toggle"
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, require_full_payment_for_delivery: !prev.require_full_payment_for_delivery }))}
+                  style={{
+                    flexShrink: 0,
+                    width: 48,
+                    height: 26,
+                    borderRadius: 13,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: formData.require_full_payment_for_delivery ? 'var(--color-primary)' : 'var(--border-primary)',
+                    position: 'relative',
+                    transition: 'background 0.2s ease',
+                    padding: 0,
+                  }}
+                  aria-label="Toggle delivery block"
+                  aria-checked={formData.require_full_payment_for_delivery}
+                  role="switch"
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: formData.require_full_payment_for_delivery ? 25 : 3,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'left 0.2s ease',
+                    display: 'block',
+                  }} />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -570,7 +623,7 @@ export default function Settings() {
               <span className="billing-form__header-title"><i className="fa-solid fa-database" style={{ marginRight: 8, opacity: 0.6 }}></i>Data & Backup</span>
             </div>
             <div className="billing-form__body">
-              <div className="flex gap-3">
+              <div className="flex gap-3" style={{ flexWrap: 'wrap', gap: 10 }}>
                 <button className="btn btn--ghost" onClick={async () => {
                   if (window.electronAPI) {
                     const res = await window.electronAPI.backupDB();
@@ -581,6 +634,18 @@ export default function Settings() {
                   }
                 }}>
                   <i className="fa-solid fa-download"></i> Export All Data
+                </button>
+                <button className="btn btn--outline" onClick={async () => {
+                  if (confirm("Are you sure you want to reset all bill and order numbering sequences to start from 001? This is typically done at the end of a commercial year. Subsequent bills/orders will restart from 1.")) {
+                    try {
+                      const res = await api.post('/accounts/shop/reset-numbering/');
+                      toast.success(res.data.detail || 'Numbering sequences reset successfully!');
+                    } catch (err) {
+                      toast.error(err.response?.data?.detail || 'Failed to reset numbering sequences.');
+                    }
+                  }
+                }}>
+                  <i className="fa-solid fa-rotate-left"></i> Reset Bill Numbering
                 </button>
                 <button className="btn btn--danger" style={{ marginLeft: 'auto' }} onClick={() => setShowResetModal(true)}><i className="fa-solid fa-trash-can"></i> Reset Data</button>
               </div>

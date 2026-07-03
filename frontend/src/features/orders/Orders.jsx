@@ -447,16 +447,18 @@ export default function Orders({ tabId, isActive }) {
           };
           
           console.log("Payload:", payload);
-          await api.post('/orders/', payload);
+          const res = await api.post('/orders/', payload);
+          const savedNo = res.data?.order_no || '';
+          if (savedNo) setOrderNumber(savedNo);
           if (redirectAfter) {
             toast.success('Order saved successfully!');
             closeTabAndSwitch(tabId, '/orders/list', 'Orders List');
           }
-          return true;
+          return { success: true, order_no: savedNo, created_at: res.data?.created_at };
       } catch (err) {
           console.error(err);
           toast.error('Failed to save order. Make sure customer is selected and items are valid.');
-          return false;
+          return { success: false };
       }
   };
 
@@ -470,8 +472,13 @@ export default function Orders({ tabId, isActive }) {
   };
 
   const handleSaveAndPrint = async (bypassWarning = false) => {
-      const success = await handleSave(false, bypassWarning);
+      const result = await handleSave(false, bypassWarning);
+      const success = result === true || result?.success;
       if (success) {
+          const assignedOrderNo = result?.order_no || orderNumber || 'NEW';
+          const assignedDate = result?.created_at
+              ? new Date(result.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+              : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
           const finalCustName = custName.trim() || 'Walk-in';
           const docData = {
               template: shop?.pdf_template || 'classic',
@@ -487,7 +494,7 @@ export default function Orders({ tabId, isActive }) {
               docType: 'ORDER RECEIPT',
               theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
               customer: { name: finalCustName, phone: custMobile, address: custAddress },
-              meta: { number: orderNumber || 'NEW', date: new Date().toLocaleDateString('en-IN') },
+              meta: { number: assignedOrderNo, date: assignedDate },
               rates: { rate10gm: metalRate * 10, makingPerGm: makingRate, makingRate: makingRate, priority: priority },
               items: items.map(it => ({
                   name: it.name + (it.size ? ` (Size: ${it.size})` : ''),

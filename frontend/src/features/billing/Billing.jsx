@@ -169,7 +169,11 @@ export default function Billing({ tabId, isActive }) {
   const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderDate, setOrderDate] = useState('');
-  const billNumber = billType === 'Invoice' ? 'INV-2024-0848' : 'EST-2024-0023';
+  const [orderAdvances, setOrderAdvances] = useState([]);
+  const [linkedOrderId, setLinkedOrderId] = useState(null);
+  const [loadedOrderTotal, setLoadedOrderTotal] = useState(0);
+  const [orderTimeAdvance, setOrderTimeAdvance] = useState(0);
+  const [billNumber, setBillNumber] = useState('');  // populated from API response after save
 
   /* ─── Customer ─── */
   const [customerId, setCustomerId] = useState(null);
@@ -382,6 +386,15 @@ export default function Billing({ tabId, isActive }) {
     }
   }, [metalRate, makingRate]);
 
+  const prevAdvanceTotal = useMemo(() => {
+    return orderAdvances
+      .filter(p => p.status === 'active' && !p.is_refund)
+      .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+    - orderAdvances
+      .filter(p => p.status === 'active' && p.is_refund)
+      .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+  }, [orderAdvances]);
+
   /* ═══ INSTANT LOCAL CALCULATIONS (Shared Engine) ═══ */
   const calc = useMemo(() => {
     return calculateBill({
@@ -395,12 +408,12 @@ export default function Billing({ tabId, isActive }) {
       hallmarkValue,
       isInvoice: billType === 'Invoice',
       otherCharges,
-      advance,
+      advance: orderTimeAdvance + prevAdvanceTotal + (parseFloat(advance) || 0),
       discount,
       cashAmt,
       onlineAmt,
     });
-  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, billType, otherCharges, advance, discount, cashAmt, onlineAmt]);
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, cashAmt, onlineAmt]);
 
   /* ─── Order Integration ─── */
   const [orderLoading, setOrderLoading] = useState(false);
@@ -409,26 +422,52 @@ export default function Billing({ tabId, isActive }) {
     setOrderLoading(true);
     try {
       const res = await api.get(`/orders/?search=${encodeURIComponent(orderNumber)}`);
-      const orders = res.data.results || res.data || [];
-      const ord = orders.length > 0 ? orders[0] : null;
-
-      if (!ord || ord.order_no !== orderNumber) {
+      const ordersList = extractList(res.data);
+      const targetNo = orderNumber.trim().toLowerCase();
+      const ord = ordersList.find(o => {
+        const orderNoLower = o.order_no.trim().toLowerCase();
+        return orderNoLower === targetNo || orderNoLower.endsWith(targetNo) || orderNoLower.includes(targetNo);
+      }) || ordersList[0];
+      console.log(ord);
+      if (!ord) {
         alert('Order not found or invalid.');
         return;
       }
-      if (ord.order_status !== 'complete') {
-        alert('Billing is only allowed for Orders in "complete" status.');
+      
+      // Allow billing for completed, delivered, pending, or in_progress orders (any non-cancelled status)
+      const BILLABLE_STATUSES = ['completed', 'delivered', 'complete', 'pending', 'in_progress'];
+      if (!BILLABLE_STATUSES.includes(ord.order_status)) {
+        alert(`Billing is only allowed for Orders in "Completed", "Delivered", "Pending" or "In Progress" status. Current status: ${ord.order_status}`);
         return;
       }
 
-      // Map complete order to UI
       setCustomerId(ord.customer);
       setCustName(ord.customer_detail?.name || '');
       setCustMobile(ord.customer_detail?.phone || '');
       setCustAddress(ord.customer_detail?.address || '');
       setOrderDate(ord.created_at?.split('T')[0] || '');
+      setLinkedOrderId(ord.id);
+      setLoadedOrderTotal(parseFloat(ord.grand_total || 0));
 
-      // Pull items
+      // Order-time advance — stored on Order.advance, NOT an AdvancePayment record
+      const orderAdv = parseFloat(ord.advance || 0);
+      setOrderTimeAdvance(orderAdv);
+
+      // Explicit advance receipts (AdvancePayment records created after order booking)
+      let receiptsList = ord.advance_payments || [];
+      if (!receiptsList.length) {
+        try {
+          const advRes = await api.get(`/payments/advances/?order=${ord.id}`);
+          receiptsList = extractList(advRes.data);
+        } catch (advErr) {
+          console.error('Error fetching advance receipts:', advErr);
+        }
+      }
+      setOrderAdvances(receiptsList.filter(p => p.status === 'active'));
+
+      // advance input = blank; user can optionally enter additional payment today at billing
+      setAdvance('');
+
       if (ord.items && ord.items.length > 0) {
         const mappedItems = ord.items.map(i => ({
           id: Date.now() + Math.random(),
@@ -436,10 +475,9 @@ export default function Billing({ tabId, isActive }) {
           huid: i.huid || '',
           weight: i.expected_weight || i.weight || '',
           makingCharges: i.making_charge || '',
-          metalValue: 0, total: 0
+          metalValue: 0, total: 0,
         }));
         setItems(mappedItems);
-        // Force recalc based on current UI metal rate
         setTimeout(() => setMetalRate(prev => prev), 50);
       }
     } catch (err) {
@@ -511,19 +549,24 @@ export default function Billing({ tabId, isActive }) {
         payments: [
           { mode: 'cash', amount: cashAmt },
           { mode: 'upi', amount: onlineAmt }
-        ].filter(p => p.amount > 0)
+        ].filter(p => p.amount > 0),
+        ...(linkedOrderId ? { order_id: linkedOrderId } : {}),
       };
 
+      let savedNo = '';
       if (billType === 'Invoice') {
-        await api.post('/billing/invoices/', payload);
+        const res = await api.post('/billing/invoices/', payload);
+        savedNo = res.data?.invoice_no || res.data?.data?.invoice_no || '';
       } else {
-        await api.post('/billing/estimates/', payload);
+        const res = await api.post('/billing/estimates/', payload);
+        savedNo = res.data?.estimate_no || res.data?.data?.estimate_no || '';
       }
+      if (savedNo) setBillNumber(savedNo);
       if (redirectList) {
         toast.success('Bill saved successfully!');
         closeTabAndSwitch(tabId, '/billing/list', 'Bills List');
       }
-      return true;
+      return { success: true, billNo: savedNo };
     } catch (err) {
       console.error(err);
       toast.error('Failed to save bill on backend.');
@@ -541,8 +584,10 @@ export default function Billing({ tabId, isActive }) {
   };
 
   const handleSaveAndPrint = async (bypassWarning = false) => {
-    const success = await handleSave(false, bypassWarning);
+    const result = await handleSave(false, bypassWarning);
+    const success = result === true || result?.success;
     if (success) {
+      const assignedBillNo = (result?.billNo) || billNumber || 'TBD';
       const finalCustName = custName.trim() || 'Walk-in';
       const docData = {
         template: shop?.pdf_template || 'classic',
@@ -558,7 +603,10 @@ export default function Billing({ tabId, isActive }) {
         docType: billType === 'Invoice' ? 'TAX INVOICE' : 'ESTIMATE',
         theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
         customer: { name: finalCustName, phone: custMobile, address: custAddress },
-        meta: { number: billNumber || 'TBD', date: orderDate || new Date().toLocaleDateString('en-IN') },
+        meta: {
+          number: assignedBillNo,
+          date: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),
+        },
         rates: { rate10gm: metalRate * 10, makingRate: makingRate },
         items: items.map(it => ({
           name: it.name,
@@ -578,18 +626,36 @@ export default function Billing({ tabId, isActive }) {
           otherCharges: calc.otherChargesVal,
           hallmark: calc.hallmarkAmt,
           advance: calc.advanceVal,
+          orderAdvance: orderTimeAdvance,
+          receiptAdvance: prevAdvanceTotal,
+          newAdvance: parseFloat(advance) || 0,
           discount: calc.discountVal,
           roundOff: calc.roundOffVal,
           finalAmount: calc.finalAmt,
           amountInWords: calc.amountInWords,
-          transactionType: calc.transactionType
+          transactionType: calc.transactionType,
         },
         payment: {
           amounts: [
             { mode: 'CASH', amount: parseFloat(cashAmt) || 0 },
             { mode: 'ONLINE', amount: parseFloat(onlineAmt) || 0 }
           ].filter(x => x.amount > 0)
-        }
+        },
+        // Advance payment receipts from the linked order — for detailed breakdown in PDF
+        advanceHistory: orderAdvances && orderAdvances.length > 0
+          ? orderAdvances.map(adv => ({
+              receiptNo: adv.receipt_no || '',
+              amount: parseFloat(adv.amount) || 0,
+              paymentMode: adv.payment_mode || 'cash',
+              date: adv.payment_date
+                ? new Date(adv.payment_date).toLocaleDateString('en-IN')
+                : '',
+              notes: adv.notes || '',
+              status: adv.status || 'active',  // pass through for CANCELLED strikethrough
+              isRefund: adv.is_refund || false,
+            }))
+          : []
+
       };
 
       setPrintData(docData);
@@ -637,7 +703,7 @@ export default function Billing({ tabId, isActive }) {
               New {metalType} {billType}
             </h1>
             <span className={`badge ${billType === 'Invoice' ? 'badge--primary' : 'badge--info'}`} style={{ fontSize: 'var(--text-sm)', padding: '4px 12px' }}>
-              {billNumber}
+              {billNumber || (billType === 'Invoice' ? 'INV-2026-TBD' : 'EST-2026-TBD')}
             </span>
             <span className="badge badge--warning" style={{ fontSize: 'var(--text-sm)', padding: '4px 12px' }}>
               <i className="fa-solid fa-coins" style={{ marginRight: 4 }}></i>
@@ -1010,8 +1076,35 @@ export default function Billing({ tabId, isActive }) {
               </div>
               <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
-                  <label className="form-label">Less Advance (₹)</label>
+                  {/* Advance breakdown — auto-populated when order is loaded */}
+                  {(orderTimeAdvance > 0 || prevAdvanceTotal > 0) && (
+                    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: 8, fontSize: 'var(--text-xs)' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Already Collected</div>
+                      {orderTimeAdvance > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--text-secondary)' }}>
+                          <span><i className="fa-solid fa-file-invoice" style={{ marginRight: 5, opacity: 0.6 }} />Order Advance (at booking)</span>
+                          <span style={{ fontWeight: 600 }}>₹{orderTimeAdvance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {prevAdvanceTotal > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--text-secondary)' }}>
+                          <span><i className="fa-solid fa-receipt" style={{ marginRight: 5, opacity: 0.6 }} />Advance Receipts ({orderAdvances.filter(p => !p.is_refund && p.status === 'active').length})</span>
+                          <span style={{ fontWeight: 600 }}>₹{prevAdvanceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      <div style={{ borderTop: '1px dashed var(--border-secondary)', paddingTop: 5, marginTop: 3, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                        <span style={{ color: 'var(--color-primary)' }}>Balance Due</span>
+                        <span style={{ color: 'var(--color-primary)', fontSize: '0.85rem' }}>
+                          ₹{Math.max(loadedOrderTotal - orderTimeAdvance - prevAdvanceTotal, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <label className="form-label">Additional Payment Today (₹)</label>
                   <input className="form-input" type="number" step="1" placeholder="0" value={advance} onChange={e => setAdvance(e.target.value)} id="bill-advance" />
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 3 }}>
+                    Any extra amount paid by customer on bill day (added to advance deduction)
+                  </div>
                 </div>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
                   <label className="form-label">Discount (₹)</label>
@@ -1157,7 +1250,25 @@ export default function Billing({ tabId, isActive }) {
                     </>
                   )}
                   {calc.otherChargesVal > 0 && <div className="bill-sline"><span>(+) Other Charges</span><span>{fmt(calc.otherChargesVal)}</span></div>}
-                  {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
+                  
+                  {orderTimeAdvance > 0 && (
+                    <div className="bill-sline bill-sline--deduct" style={{ color: '#059669' }}>
+                      <span>(−) Order Advance (booking)</span>
+                      <span>{fmt(orderTimeAdvance)}</span>
+                    </div>
+                  )}
+                  {prevAdvanceTotal > 0 && (
+                    <div className="bill-sline bill-sline--deduct" style={{ color: '#059669' }}>
+                      <span>(−) Advance Receipts</span>
+                      <span>{fmt(prevAdvanceTotal)}</span>
+                    </div>
+                  )}
+                  {(parseFloat(advance) || 0) > 0 && (
+                    <div className="bill-sline bill-sline--deduct" style={{ color: 'var(--color-info, #3b82f6)' }}>
+                      <span>(−) Payment Today</span>
+                      <span>{fmt(parseFloat(advance) || 0)}</span>
+                    </div>
+                  )}
                   {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Discount</span><span>{fmt(calc.discountVal)}</span></div>}
                   <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                     <span>Round Off</span>

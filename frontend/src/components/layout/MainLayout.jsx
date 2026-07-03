@@ -19,6 +19,7 @@ import Inventory from '../../features/inventory/Inventory';
 import RateChart from '../../features/rates/RateChart';
 import Customers from '../../features/customers/Customers';
 import Settings from '../../features/settings/Settings';
+import Advances from '../../features/advances/Advances';
 
 export default function MainLayout() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTabId } = useTabs();
@@ -36,6 +37,7 @@ export default function MainLayout() {
       case '/rates': return 'fa-solid fa-coins';
       case '/customers': return 'fa-solid fa-users';
       case '/settings': return 'fa-solid fa-gear';
+      case '/advances': return 'fa-solid fa-hand-holding-dollar';
       default: return 'fa-solid fa-file';
     }
   };
@@ -54,6 +56,7 @@ export default function MainLayout() {
       case '/rates': return <RateChart {...props} />;
       case '/customers': return <Customers {...props} />;
       case '/settings': return <Settings {...props} />;
+      case '/advances': return <Advances {...props} />;
       default: return <div>Page not found: {path}</div>;
     }
   };

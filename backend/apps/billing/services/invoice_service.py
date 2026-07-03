@@ -7,16 +7,24 @@ from .inventory_service import deduct_inventory
 from .payment_service import process_payments
 from apps.billing.models import Invoice, BillingItem, Estimate
 
-def generate_invoice_no():
-    return f"INV-{int(time.time())}"
+def generate_invoice_no(shop):
+    from apps.accounts.models import NumberingSequence
+    next_num = NumberingSequence.get_next_number(shop, 'invoice')
+    return f"INV-2026-{next_num:03d}"
 
-def generate_estimate_no():
-    return f"EST-{int(time.time())}"
+def generate_estimate_no(shop):
+    from apps.accounts.models import NumberingSequence
+    next_num = NumberingSequence.get_next_number(shop, 'estimate')
+    return f"EST-2026-{next_num:03d}"
+
 
 @transaction.atomic
 def create_invoice(payload):
     """
     Core implementation to securely lock down an invoice transaction.
+    Links the invoice to a pending order (if order_id is supplied), posts
+    Customer Ledger credit entries for payments received, updates Cash Book,
+    and recalculates the order's payment_status.
     """
     items_data = payload.get("items", [])
     payment_splits = payload.get("payments", [])
@@ -28,6 +36,7 @@ def create_invoice(payload):
     # 1. Extract relationships
     shop_id = payload.get("shop_id")
     customer_id = payload.get("customer_id")
+    order_id = payload.get("order_id")  # Optional: link to a pending order
     
     if not customer_id:
         from apps.customers.models import Customer
@@ -43,12 +52,34 @@ def create_invoice(payload):
         )
         customer_id = customer.id
 
-    invoice_no = payload.get("invoice_no") or generate_invoice_no()
+    from apps.accounts.models import Shop
+    shop = Shop.objects.get(id=shop_id)
+    invoice_no = payload.get("invoice_no") or generate_invoice_no(shop)
+
+    # Resolve linked order + optional delivery block
+    linked_order = None
+    if order_id:
+        try:
+            from apps.orders.models import Order
+            linked_order = Order.objects.select_for_update().get(id=order_id)
+
+            # Delivery block: if shop requires full payment and order balance is unpaid
+            if shop.require_full_payment_for_delivery and linked_order.payment_status != 'paid':
+                balance = linked_order.grand_total - (linked_order.advance or 0)
+                raise ValueError(
+                    f"Invoice blocked: order {linked_order.order_no} has an outstanding balance of "
+                    f"₹{balance:,.2f}. Collect full payment before finalising the invoice."
+                )
+        except ValueError:
+            raise
+        except Exception:
+            linked_order = None
 
     # Create Invoice Header from exact frontend totals
     invoice = Invoice.objects.create(
         shop_id=shop_id,
         customer_id=customer_id,
+        order=linked_order,
         invoice_no=invoice_no,
         metal_type=payload.get("metal_type", "gold"),
         metal_rate=rate_10gm,
@@ -97,12 +128,56 @@ def create_invoice(payload):
             total=item.get("total", 0)
         )
 
-    # 4. deduct_inventory(huid_list)
+    # 4. Deduct inventory
     deduct_inventory(inventory_ids_to_deduct)
 
-    # 5. process_payments(invoice, payments)
+    # 5. Process payments (existing payment_service)
     if payment_splits:
         process_payments(invoice, payment_splits)
+
+    # 6. Post Customer Ledger + Cash Book entries for invoice payments
+    from apps.payments.models import LedgerEntry, CashBookEntry
+    total_paid_now = sum(
+        Decimal(str(p.get("amount", 0)))
+        for p in payment_splits
+        if Decimal(str(p.get("amount", 0))) > 0
+    )
+
+    if total_paid_now > 0:
+        # Determine customer for ledger
+        from apps.customers.models import Customer as CustomerModel
+        try:
+            customer_obj = CustomerModel.objects.get(id=customer_id)
+        except CustomerModel.DoesNotExist:
+            customer_obj = None
+
+        if customer_obj:
+            LedgerEntry.objects.create(
+                shop=shop,
+                customer=customer_obj,
+                entry_type='credit',
+                amount=total_paid_now,
+                description=f"Invoice payment received: {invoice_no}",
+                reference_type='invoice',
+                reference_id=str(invoice.id)
+            )
+
+        # Cash book entries per mode
+        for p in payment_splits:
+            split_amt = Decimal(str(p.get("amount", 0)))
+            if split_amt > 0:
+                CashBookEntry.objects.create(
+                    shop=shop,
+                    entry_type='in',
+                    amount=split_amt,
+                    payment_mode=p.get("mode", "cash"),
+                    reference_number=invoice_no,
+                    notes=f"Invoice {invoice_no} payment"
+                )
+
+        # Recalculate linked order's payment status
+        if linked_order:
+            linked_order.recalculate_payment_state()
 
     return invoice
 
@@ -133,7 +208,9 @@ def create_estimate(payload):
         )
         customer_id = customer.id
 
-    estimate_no = payload.get("invoice_no") or payload.get("estimate_no") or generate_estimate_no()
+    from apps.accounts.models import Shop
+    shop = Shop.objects.get(id=shop_id)
+    estimate_no = payload.get("invoice_no") or payload.get("estimate_no") or generate_estimate_no(shop)
 
     estimate = Estimate.objects.create(
         shop_id=shop_id,
@@ -193,7 +270,7 @@ def convert_estimate_to_invoice(estimate_id, rate_override=None):
     invoice = Invoice.objects.create(
         shop=estimate.shop,
         customer=estimate.customer,
-        invoice_no=generate_invoice_no(),
+        invoice_no=generate_invoice_no(estimate.shop),
         metal_type=estimate.metal_type,
         metal_rate=rate_override or estimate.metal_rate,
         making_rate=estimate.making_rate,

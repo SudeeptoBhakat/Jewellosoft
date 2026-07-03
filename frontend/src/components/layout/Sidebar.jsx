@@ -22,6 +22,7 @@ const navSections = [
     items: [
       { path: '/billing/list', icon: 'fa-solid fa-receipt', label: 'Bills List' },
       { path: '/orders/list', icon: 'fa-solid fa-clipboard-list', label: 'Orders List' },
+      { path: '/advances', icon: 'fa-solid fa-hand-holding-dollar', label: 'Advance' },
     ],
   },
   {

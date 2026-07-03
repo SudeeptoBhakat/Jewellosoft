@@ -68,7 +68,7 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
               {order.order_no}
             </h2>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-              {order.metal_type} Order • {order.priority} Priority • {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {order.metal_type} Order • {order.priority} Priority • {new Date(order.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
             </div>
           </div>
           <div className="flex gap-2">
@@ -408,7 +408,7 @@ export default function OrdersList() {
         docType: 'ORDER RECEIPT',
         theme: (order.metal_type || 'gold').toLowerCase(),
         customer: { name: order.customer_detail?.name || 'Walk-in', phone: order.customer_detail?.phone, address: order.customer_detail?.address },
-        meta: { number: order.order_no, date: new Date(order.created_at).toLocaleDateString('en-IN') },
+        meta: { number: order.order_no, date: new Date(order.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) },
         rates: { rate10gm: parseFloat(order.metal_rate || 0), makingRate: parseFloat(order.making_rate || 0), makingPerGm: parseFloat(order.making_rate || 0), priority: order.priority },
         items: (order.items || []).map(i => ({ 
             name: i.product_name + (i.size ? ` (Size: ${i.size})` : ''), 
@@ -596,7 +596,7 @@ export default function OrdersList() {
                   <td style={{ color: 'var(--color-accent)' }}>{fmtInt(order.advance)}</td>
                   <td><span className={`badge badge--${order.priority === 'urgent' ? 'danger' : order.priority === 'high' ? 'warning' : 'primary'}`} style={{ fontSize: '0.6rem', textTransform: 'capitalize' }}>{order.priority}</span></td>
                   <td><span className={`badge badge--${orderStatusMap[orderSt] || 'info'}`} style={{ textTransform: 'capitalize' }}>{orderSt.replace('_', ' ')}</span></td>
-                  <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{new Date(order.created_at).toLocaleDateString()}</td>
+                  <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{new Date(order.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                   <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
                     <div className="flex gap-2" style={{ justifyContent: 'center' }}>
                       <button className="btn btn--ghost btn--sm btn--icon" title="View" onClick={() => setViewOrder(order)}><i className="fa-solid fa-eye"></i></button>

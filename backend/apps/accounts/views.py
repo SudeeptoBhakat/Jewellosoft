@@ -409,3 +409,35 @@ class ResetDataView(APIView):
                 {"detail": f"Reset failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class ResetNumberingView(APIView):
+    """
+    POST: Reset all numbering sequences for the shop back to 0.
+    """
+    def post(self, request):
+        shop = Shop.objects.first()
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            from .models import NumberingSequence
+            NumberingSequence.objects.filter(shop=shop).update(last_number=0)
+            
+            # Also log warning
+            try:
+                logger.warning(f"[RESET NUMBERING] All numbering sequences reset to 0 by user.")
+            except:
+                pass
+                
+            return Response({"status": "success", "message": "Bill and order numbering sequences reset successfully."})
+        except Exception as e:
+            try:
+                logger.error(f"[RESET NUMBERING] Failed: {e}")
+            except:
+                pass
+            return Response(
+                {"detail": f"Reset failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
