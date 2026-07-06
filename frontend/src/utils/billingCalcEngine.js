@@ -56,6 +56,9 @@ export function calculateBill(p) {
   const cashP          = safe(p.cashAmt);
   const onlineP        = safe(p.onlineAmt);
   const isInvoice      = !!p.isInvoice;
+  const isIgst         = !!p.isIgst;
+  const gstRate        = safe(p.gstRate) || 3.0;
+  const igstRate       = safe(p.igstRate) || 3.0;
 
   const oldMode        = p.oldSettlementMode || 'none';
   const oldWt          = safe(p.oldWeight);
@@ -76,9 +79,20 @@ export function calculateBill(p) {
 
   // ── 4. GST Base — ALWAYS on full new product + hallmark ──
   const gstBase  = r2(newProductValue + hallmarkAmt);
-  const cgst     = isInvoice ? r2(gstBase * 0.015) : 0;
-  const sgst     = isInvoice ? r2(gstBase * 0.015) : 0;
-  const totalGst = r2(cgst + sgst);
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
+
+  if (isInvoice) {
+    if (isIgst) {
+      igst = r2(gstBase * (igstRate / 100));
+    } else {
+      cgst = r2(gstBase * ((gstRate / 2) / 100));
+      sgst = r2(gstBase * ((gstRate / 2) / 100));
+    }
+  }
+
+  const totalGst = r2(cgst + sgst + igst);
 
   // ── 5. Determine old settlement value ──
   let effectiveOldValue = 0; // The credit value of old metal
@@ -240,6 +254,8 @@ export function calculateBill(p) {
     gstBase,
     cgst,
     sgst,
+    igst,
+    isIgst,
 
     // Totals
     subtotal,

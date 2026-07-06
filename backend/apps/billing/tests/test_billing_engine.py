@@ -48,12 +48,14 @@ def test_old_gold_less_than_new():
         rate=1000,
         making_rate=10,
         extra={
-            "old_weight": 6
+            "old_weight": 6,
+            "old_settlement_mode": "weight"
         }
     )
 
     assert result["grand_total"] == Decimal("170")
     assert result["transaction_type"] == "payable"
+
 
 
 # ----------------------------------------
@@ -69,12 +71,14 @@ def test_old_gold_more_than_new():
         making_rate=10,
         extra={
             "old_weight": 8,
-            "old_less_percent": 10
+            "old_less_percent": 10,
+            "old_settlement_mode": "weight"
         }
     )
 
     assert result["grand_total"] == Decimal("20")
     assert result["transaction_type"] == "return"
+
 
 
 # ----------------------------------------
@@ -142,12 +146,14 @@ def test_large_values():
         extra={
             "old_weight": 500,
             "old_less_percent": 20,
+            "old_settlement_mode": "weight",
             "advance": 100000
         }
     )
 
     assert result["grand_total"] >= Decimal("0")
     assert result["transaction_type"] == "payable"
+
 
 
 # ----------------------------------------

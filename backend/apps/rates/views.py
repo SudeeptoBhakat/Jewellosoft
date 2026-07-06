@@ -11,14 +11,16 @@ class RateHistoryViewSet(viewsets.ModelViewSet):
     serializer_class = RateHistorySerializer
 
     def get_queryset(self):
-        queryset = RateHistory.objects.all().order_by('-created_at')
-        shop_id = self.request.query_params.get('shop', None)
-        if shop_id:
-            queryset = queryset.filter(shop_id=shop_id)
-        return queryset
+        shop = self.request.shop
+        if not shop:
+            return RateHistory.objects.none()
+        return RateHistory.objects.filter(shop=shop).order_by('-created_at')
 
     def perform_create(self, serializer):
         logger.info("Rate entry created: %s = %s",
                      serializer.validated_data.get('metal_type'),
                      serializer.validated_data.get('rate_per_10gm'))
-        serializer.save()
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)

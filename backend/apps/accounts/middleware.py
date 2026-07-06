@@ -1,14 +1,3 @@
-"""
-─── Supabase Auth Middleware ──────────────────────────────────────
-Extracts and verifies the Supabase JWT from the Authorization header.
-Attaches `request.supabase_user` = {"id": ..., "email": ...} on success.
-
-Non-blocking:
-  • If no token / invalid token → request.supabase_user = None
-  • Views decide their own permission policy.
-────────────────────────────────────────────────────────────────────
-"""
-
 import logging
 import jwt
 from django.conf import settings
@@ -51,6 +40,19 @@ class SupabaseAuthMiddleware:
                     'id': payload.get('user_id'),
                     'email': payload.get('email')
                 }
+
+        # 2.5 Resolve active shop context
+        request.shop = None
+        if request.supabase_user:
+            user_id = request.supabase_user.get('id')
+            email = request.supabase_user.get('email')
+            from apps.accounts.models import Shop
+            shop = None
+            if user_id:
+                shop = Shop.objects.filter(supabase_user_id=user_id).first()
+            if not shop and email:
+                shop = Shop.objects.filter(supabase_email=email).first()
+            request.shop = shop
 
         # 3. Block access to non-auth/health endpoints if no valid session/license exists
         path = request.path_info

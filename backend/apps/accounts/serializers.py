@@ -7,7 +7,7 @@ class ShopSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'owner_name', 'phone', 'email', 'gst_number', 'address',
             'language', 'theme', 'pdf_template', 'watermark_logo', 'pan_number',
-            'date_format', 'default_gst_rate',
+            'date_format', 'default_gst_rate', 'default_igst_rate', 
             'decimal_precision', 'hallmark_value', 'supabase_email',
             'require_full_payment_for_delivery'
         ]

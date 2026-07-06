@@ -25,11 +25,22 @@ class DashboardStatsView(APIView):
         from apps.customers.models import Customer
         from apps.rates.models import RateHistory
 
+        shop = request.shop
+        if not shop:
+            return Response({
+                'today_sales': 0.0,
+                'pending_orders': 0,
+                'stock_count': 0,
+                'active_customers': 0,
+                'recent_bills': [],
+                'rates': {},
+            })
+
         today = timezone.now().date()
 
         # --- Sales Today ---
-        today_invoices = Invoice.objects.filter(created_at__date=today)
-        today_estimates = Estimate.objects.filter(created_at__date=today)
+        today_invoices = Invoice.objects.filter(shop=shop, created_at__date=today)
+        today_estimates = Estimate.objects.filter(shop=shop, created_at__date=today)
         today_sales = (
             (today_invoices.aggregate(s=Sum('grand_total'))['s'] or 0) +
             (today_estimates.aggregate(s=Sum('grand_total'))['s'] or 0)
@@ -37,24 +48,27 @@ class DashboardStatsView(APIView):
 
         # --- Pending Orders ---
         pending_orders = Order.objects.filter(
+            shop=shop,
             order_status__in=['pending', 'in_progress']
         ).count()
 
         # --- Items in Stock ---
-        stock_count = ProductInventory.objects.filter(status='available').count()
+        stock_count = ProductInventory.objects.filter(shop=shop, status='available').count()
 
         # --- Active Customers (have at least one invoice or order) ---
-        active_customers = Customer.objects.count()
+        active_customers = Customer.objects.filter(shop=shop).count()
 
         # --- Recent Bills (last 10) ---
         recent_invoices = list(
-            Invoice.objects.select_related('customer')
+            Invoice.objects.filter(shop=shop)
+            .select_related('customer')
             .order_by('-created_at')[:5]
             .values('id', 'invoice_no', 'grand_total', 'created_at',
                     'customer__name', 'payment_method')
         )
         recent_estimates = list(
-            Estimate.objects.select_related('customer')
+            Estimate.objects.filter(shop=shop)
+            .select_related('customer')
             .order_by('-created_at')[:5]
             .values('id', 'estimate_no', 'grand_total', 'created_at',
                     'customer__name', 'payment_method')
@@ -84,7 +98,7 @@ class DashboardStatsView(APIView):
 
         # --- Latest Rates ---
         latest_rates = {}
-        for entry in RateHistory.objects.order_by('-created_at')[:20]:
+        for entry in RateHistory.objects.filter(shop=shop).order_by('-created_at')[:20]:
             if entry.metal_type not in latest_rates:
                 latest_rates[entry.metal_type] = {
                     'rate_per_gram': float(entry.rate_per_10gm / 10),
@@ -92,14 +106,41 @@ class DashboardStatsView(APIView):
                     'updated_at': entry.created_at.isoformat() if entry.created_at else '',
                 }
 
+        # --- Dues & Credits from Customer Ledger ---
+        # Aggregate each customer's net balance from LedgerEntry
+        # Debit = customer owes shop, Credit = shop owes customer
+        from apps.payments.models import LedgerEntry
+        from decimal import Decimal
+
+
+        ledger_qs = LedgerEntry.objects.filter(shop=shop)
+        debit_by_customer  = ledger_qs.filter(entry_type='debit').values('customer').annotate(total=Sum('amount'))
+        credit_by_customer = ledger_qs.filter(entry_type='credit').values('customer').annotate(total=Sum('amount'))
+
+        debit_map  = {row['customer']: row['total'] for row in debit_by_customer}
+        credit_map = {row['customer']: row['total'] for row in credit_by_customer}
+
+        all_customers = set(debit_map.keys()) | set(credit_map.keys())
+        total_dues    = Decimal('0')
+        total_credits = Decimal('0')
+        for cid in all_customers:
+            balance = (debit_map.get(cid) or Decimal('0')) - (credit_map.get(cid) or Decimal('0'))
+            if balance > 0:
+                total_dues += balance
+            elif balance < 0:
+                total_credits += abs(balance)
+
         return Response({
             'today_sales': float(today_sales),
             'pending_orders': pending_orders,
             'stock_count': stock_count,
             'active_customers': active_customers,
+            'total_dues': float(total_dues),
+            'total_credits': float(total_credits),
             'recent_bills': recent_bills,
             'rates': latest_rates,
         })
+
 
 
 class GlobalSearchView(APIView):
@@ -119,10 +160,14 @@ class GlobalSearchView(APIView):
         from apps.orders.models import Order
         from apps.inventory.models import ProductInventory
 
+        shop = request.shop
+        if not shop:
+            return Response({'results': []})
+
         results = []
 
         # Customers
-        customers = Customer.objects.filter(
+        customers = Customer.objects.filter(shop=shop).filter(
             Q(name__icontains=q) | Q(phone__icontains=q)
         )[:5]
         for c in customers:
@@ -135,7 +180,7 @@ class GlobalSearchView(APIView):
             })
 
         # Invoices
-        invoices = Invoice.objects.filter(
+        invoices = Invoice.objects.filter(shop=shop).filter(
             Q(invoice_no__icontains=q) | Q(customer__name__icontains=q)
         ).select_related('customer')[:5]
         for inv in invoices:
@@ -148,7 +193,7 @@ class GlobalSearchView(APIView):
             })
 
         # Estimates
-        estimates = Estimate.objects.filter(
+        estimates = Estimate.objects.filter(shop=shop).filter(
             Q(estimate_no__icontains=q) | Q(customer__name__icontains=q)
         ).select_related('customer')[:5]
         for est in estimates:
@@ -161,7 +206,7 @@ class GlobalSearchView(APIView):
             })
 
         # Orders
-        orders = Order.objects.filter(
+        orders = Order.objects.filter(shop=shop).filter(
             Q(order_no__icontains=q) | Q(customer__name__icontains=q)
         ).select_related('customer')[:5]
         for o in orders:
@@ -174,7 +219,7 @@ class GlobalSearchView(APIView):
             })
 
         # Inventory
-        inventory = ProductInventory.objects.filter(
+        inventory = ProductInventory.objects.filter(shop=shop).filter(
             Q(name__icontains=q) | Q(barcode__icontains=q) | Q(huid__icontains=q)
         )[:5]
         for item in inventory:
@@ -198,8 +243,12 @@ class LatestRatesView(APIView):
     def get(self, request):
         from apps.rates.models import RateHistory
 
+        shop = request.shop
+        if not shop:
+            return Response({})
+
         latest = {}
-        for entry in RateHistory.objects.order_by('-created_at')[:20]:
+        for entry in RateHistory.objects.filter(shop=shop).order_by('-created_at')[:20]:
             if entry.metal_type not in latest:
                 latest[entry.metal_type] = {
                     'rate_per_gram': float(entry.rate_per_10gm / 10),

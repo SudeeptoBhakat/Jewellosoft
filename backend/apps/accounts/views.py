@@ -16,14 +16,14 @@ class ShopCurrentView(APIView):
     PATCH: Update Settings/Business info and add to SyncQueue for backup.
     """
     def get(self, request):
-        shop = Shop.objects.first()
+        shop = request.shop
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
         serializer = ShopSerializer(shop)
         return Response(serializer.data)
 
     def patch(self, request):
-        shop = Shop.objects.first()
+        shop = request.shop
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
             
@@ -52,9 +52,14 @@ class AuthMeView(APIView):
     authentication_classes = []
     permission_classes = []
     def get(self, request):
-        shop = Shop.objects.first()
+        email = None
+        if request.supabase_user:
+            email = request.supabase_user.get("email")
+        if not email:
+            shop = request.shop or Shop.objects.first()
+            email = shop.supabase_email if shop else "offline@jewellosoft.local"
         user_data = {
-            "email": shop.supabase_email if shop else "offline@jewellosoft.local",
+            "email": email,
             "is_offline": True
         }
         return Response({"user": user_data})
@@ -167,15 +172,12 @@ class LicenseActivateView(APIView):
             payload = LicenseManager.generate_license(request.supabase_user, sub_data)
             
             # Persist Shop Info seamlessly and OVERWRITE with the latest cloud truth
-            # We enforce a local Singleton pattern to avoid accidentally creating ghost rows
-            shop = Shop.objects.first()
+            # Query shop belonging specifically to this user / email
+            shop = Shop.objects.filter(supabase_user_id=user_id).first()
+            if not shop and email:
+                shop = Shop.objects.filter(supabase_email=email).first()
+
             if shop:
-                # If a different user authenticates OR a fresh registration occurs, clear legacy local-only data
-                if shop.supabase_user_id != user_id or is_registering:
-                    shop.gst_number = None
-                    shop.address = ""
-                    shop.email = None
-                    
                 shop.supabase_user_id = user_id
                 shop.name = profile.get('shop_name') or profile.get('shopName') or shop.name or "My Jewellery Shop"
                 shop.owner_name = profile.get('owner_name') or profile.get('ownerName') or shop.owner_name or ""
@@ -267,7 +269,7 @@ class WatermarkUploadView(APIView):
     permission_classes = []
 
     def post(self, request):
-        shop = Shop.objects.first()
+        shop = request.shop
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -308,7 +310,7 @@ class WatermarkUploadView(APIView):
         return Response(ShopSerializer(shop).data)
 
     def delete(self, request):
-        shop = Shop.objects.first()
+        shop = request.shop
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -335,7 +337,7 @@ class ResetDataView(APIView):
             )
 
         from django.contrib.auth import authenticate
-        shop = Shop.objects.first()
+        shop = request.shop
         if not shop:
             return Response(
                 {"detail": "Shop not configured."},
@@ -354,42 +356,67 @@ class ResetDataView(APIView):
             )
 
         try:
-            from apps.billing.models import Invoice, Estimate, InvoiceItem, EstimateItem
+            from apps.billing.models import Invoice, Estimate, BillingItem
             from apps.orders.models import Order, OrderItem
             from apps.inventory.models import ProductInventory
             from apps.customers.models import Customer
             from apps.rates.models import RateHistory
-            from apps.payments.models import Payment
+            from apps.payments.models import Payment, AdvancePayment, LedgerEntry, CashBookEntry
+            from django.contrib.contenttypes.models import ContentType
+            from django.db.models import Q
 
             deleted_counts = {}
 
-            count, _ = InvoiceItem.objects.all().delete()
-            deleted_counts['invoice_items'] = count
-            count, _ = EstimateItem.objects.all().delete()
-            deleted_counts['estimate_items'] = count
-            count, _ = Invoice.objects.all().delete()
+            # Scope deletes to current shop
+            invoice_ids = list(Invoice.objects.filter(shop=shop).values_list('id', flat=True))
+            estimate_ids = list(Estimate.objects.filter(shop=shop).values_list('id', flat=True))
+            
+            invoice_ct = ContentType.objects.get_for_model(Invoice)
+            estimate_ct = ContentType.objects.get_for_model(Estimate)
+
+            count, _ = BillingItem.objects.filter(
+                (Q(content_type=invoice_ct) & Q(object_id__in=invoice_ids)) |
+                (Q(content_type=estimate_ct) & Q(object_id__in=estimate_ids))
+            ).delete()
+            deleted_counts['billing_items'] = count
+
+            count, _ = Invoice.objects.filter(shop=shop).delete()
             deleted_counts['invoices'] = count
-            count, _ = Estimate.objects.all().delete()
+            
+            count, _ = Estimate.objects.filter(shop=shop).delete()
             deleted_counts['estimates'] = count
 
-            count, _ = OrderItem.objects.all().delete()
+            count, _ = OrderItem.objects.filter(order__shop=shop).delete()
             deleted_counts['order_items'] = count
-            count, _ = Order.objects.all().delete()
+            
+            count, _ = Order.objects.filter(shop=shop).delete()
             deleted_counts['orders'] = count
 
-            count, _ = ProductInventory.objects.all().delete()
+            count, _ = ProductInventory.objects.filter(shop=shop).delete()
             deleted_counts['inventory'] = count
 
-            count, _ = Payment.objects.all().delete()
+            count, _ = Payment.objects.filter(shop=shop).delete()
             deleted_counts['payments'] = count
+            
+            count, _ = AdvancePayment.objects.filter(shop=shop).delete()
+            deleted_counts['advance_payments'] = count
 
-            count, _ = Customer.objects.all().delete()
+            count, _ = LedgerEntry.objects.filter(shop=shop).delete()
+            deleted_counts['ledger_entries'] = count
+
+            count, _ = CashBookEntry.objects.filter(shop=shop).delete()
+            deleted_counts['cash_book_entries'] = count
+
+            count, _ = Customer.objects.filter(shop=shop).delete()
             deleted_counts['customers'] = count
 
-            count, _ = RateHistory.objects.all().delete()
+            count, _ = RateHistory.objects.filter(shop=shop).delete()
             deleted_counts['rates'] = count
 
-            count, _ = SyncQueue.objects.all().delete()
+            count, _ = SyncQueue.objects.filter(
+                (Q(model_name='Shop') & Q(object_id=shop.id)) |
+                (Q(model_name='Customer') & Q(object_id__in=Customer.objects.filter(shop=shop).values_list('id', flat=True)))
+            ).delete()
             deleted_counts['sync_queue'] = count
 
             logger.warning(
@@ -416,7 +443,7 @@ class ResetNumberingView(APIView):
     POST: Reset all numbering sequences for the shop back to 0.
     """
     def post(self, request):
-        shop = Shop.objects.first()
+        shop = request.shop
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
         

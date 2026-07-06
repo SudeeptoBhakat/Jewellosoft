@@ -52,6 +52,7 @@ backend/out.txt
 backend/test.txt
 backend/config.json
 backend/config.json.enc
+backend/conftest.py
 
 # PyInstaller temporary
 /build/

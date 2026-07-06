@@ -39,11 +39,14 @@ class RateHistorySerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # Default shop to 1 for demo if not provided
         if 'shop' not in validated_data or validated_data['shop'] is None:
-            from apps.accounts.models import Shop
-            try:
-                validated_data['shop'] = Shop.objects.first()
-            except Shop.DoesNotExist:
-                raise serializers.ValidationError({"shop": "No shop exists. Create a shop first."})
+            request = self.context.get('request')
+            if request and hasattr(request, 'shop') and request.shop:
+                validated_data['shop'] = request.shop
+            else:
+                from apps.accounts.models import Shop
+                try:
+                    validated_data['shop'] = Shop.objects.first()
+                except Shop.DoesNotExist:
+                    raise serializers.ValidationError({"shop": "No shop exists. Create a shop first."})
         return super().create(validated_data)

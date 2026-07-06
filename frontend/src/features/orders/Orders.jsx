@@ -170,6 +170,7 @@ export default function Orders({ tabId, isActive }) {
   const [showModal, setShowModal] = useState(true);
   const [metalType, setMetalType] = useState('');
   const [orderType, setOrderType] = useState('');
+  const [isIgst, setIsIgst] = useState(false);
 
   /* ─── Order Info ─── */
   const [orderNumber, setOrderNumber] = useState('');
@@ -370,8 +371,11 @@ export default function Orders({ tabId, isActive }) {
       otherCharges,
       advance,
       discount,
+      isIgst,
+      gstRate: parseFloat(shop?.default_gst_rate) || 3.0,
+      igstRate: parseFloat(shop?.default_igst_rate) || 3.0,
     });
-  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, orderType, otherCharges, advance, discount]);
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, orderType, otherCharges, advance, discount, isIgst, shop]);
 
   /* ─── Print Preview ─── */
   const [printData, setPrintData] = useState(null);
@@ -423,6 +427,7 @@ export default function Orders({ tabId, isActive }) {
               advance: Number(calc.advanceVal || 0).toFixed(2),
               cgst: Number(calc.cgst || 0).toFixed(2),
               sgst: Number(calc.sgst || 0).toFixed(2),
+              igst: Number(calc.igst || 0).toFixed(2),
               hallmark: Number(calc.hallmarkAmt || 0).toFixed(2),
               others: Number(calc.otherChargesVal || 0).toFixed(2),
               discount: Number(calc.discountVal || 0).toFixed(2),
@@ -492,6 +497,7 @@ export default function Orders({ tabId, isActive }) {
                   watermark_logo_url: shop?.watermark_logo || null,
               },
               docType: 'ORDER RECEIPT',
+              orderType: orderType,
               theme: metalType.toLowerCase() === 'silver' ? 'silver' : 'gold',
               customer: { name: finalCustName, phone: custMobile, address: custAddress },
               meta: { number: assignedOrderNo, date: assignedDate },
@@ -509,6 +515,10 @@ export default function Orders({ tabId, isActive }) {
                   subtotal: calc.subtotal,
                   cgst: calc.cgst,
                   sgst: calc.sgst,
+                  igst: calc.igst,
+                  isIgst: isIgst,
+                  gstRate: shop?.default_gst_rate || 3,
+                  igstRate: shop?.default_igst_rate || 3,
                   otherCharges: calc.otherChargesVal,
                   hallmark: calc.hallmarkAmt,
                   advance: calc.advanceVal,
@@ -516,14 +526,18 @@ export default function Orders({ tabId, isActive }) {
                   roundOff: calc.roundOffVal,
                   finalAmount: calc.finalAmt,
                   amountInWords: calc.amountInWords,
-                  transactionType: calc.transactionType
+                  transactionType: calc.transactionType,
+                  weightTotal: Number(calc.totalWeight || 0).toFixed(2),
+                  makingTotal: Number(calc.totalMaking || 0).toFixed(2),
               },
               payment: { amounts: [
                   { mode: 'ADVANCE', amount: calc.advanceVal }
               ].filter(x => x.amount > 0) },
+              advanceHistory: [],
               designNotes: designNotes || '',
               designImages: designImages.map(img => img.url),
           };
+          console.log(docData);
           setPrintData(docData);
       }
   };
@@ -899,6 +913,36 @@ export default function Orders({ tabId, isActive }) {
                   <input className="form-input" type="number" step="1" placeholder="0" value={hallmarkCount} onChange={e => setHallmarkCount(e.target.value)} />
                 </div>
               </div>
+              {/* IGST Toggle — only for Invoice type orders */}
+              {orderType === 'Invoice' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 4px', marginBottom: 6 }}>
+                  <div
+                    onClick={() => setIsIgst(v => !v)}
+                    role="switch"
+                    aria-checked={isIgst}
+                    id="order-igst-toggle"
+                    style={{
+                      width: 40, height: 22, borderRadius: 11, cursor: 'pointer', transition: 'background 0.2s',
+                      background: isIgst ? 'var(--color-primary, #8b5cf6)' : 'var(--border-primary)',
+                      position: 'relative', flexShrink: 0,
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 2, left: isIgst ? 20 : 2,
+                      width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                    }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: isIgst ? 'var(--color-primary, #8b5cf6)' : 'var(--text-secondary)' }}>
+                      {isIgst ? `Inter-State Sale IGST @ ${shop?.default_igst_rate || 3}% Applied` : 'Same-State Sale CGST + SGST Applied'}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
+                      ON for inter-state / out-of-state customers
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
                   <label className="form-label">Add Advance (₹)</label>
@@ -1049,8 +1093,12 @@ export default function Orders({ tabId, isActive }) {
                     </div>
                   )}
                   {orderType === 'Invoice' && (<>
-                    <div className="bill-sline"><span>(+) CGST @ 1.5%</span><span>{fmt(calc.cgst)}</span></div>
-                    <div className="bill-sline"><span>(+) SGST @ 1.5%</span><span>{fmt(calc.sgst)}</span></div>
+                    {calc.isIgst ? (
+                      <div className="bill-sline"><span>(+) IGST @ {shop?.default_igst_rate || 3}%</span><span>{fmt(calc.igst)}</span></div>
+                    ) : (<>
+                      <div className="bill-sline"><span>(+) CGST @ {(shop?.default_gst_rate || 3) / 2}%</span><span>{fmt(calc.cgst)}</span></div>
+                      <div className="bill-sline"><span>(+) SGST @ {(shop?.default_gst_rate || 3) / 2}%</span><span>{fmt(calc.sgst)}</span></div>
+                    </>)}
                     <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                       <span>GST Base: {fmt(calc.gstBase)}</span><span></span>
                     </div>

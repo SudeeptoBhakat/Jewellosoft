@@ -174,6 +174,7 @@ export default function Settings() {
     language: 'English',
     date_format: 'DD/MM/YYYY',
     default_gst_rate: 3,
+    default_igst_rate: 3,
     decimal_precision: 2,
     hallmark_value: 53,
     name: '',
@@ -244,6 +245,7 @@ export default function Settings() {
       'settings-language': 'language',
       'settings-dateformat': 'date_format',
       'settings-gst': 'default_gst_rate',
+      'settings-igst': 'default_igst_rate',
       'settings-decimal': 'decimal_precision',
       'settings-hallmark-value': 'hallmark_value',
       'settings-shop-name': 'name',
@@ -306,6 +308,7 @@ export default function Settings() {
       const sanitizedData = {
         ...formData,
         default_gst_rate: parseFloat(formData.default_gst_rate) || 0,
+        default_igst_rate: parseFloat(formData.default_igst_rate) || 0,
         decimal_precision: parseInt(formData.decimal_precision) || 2,
         hallmark_value: parseFloat(formData.hallmark_value) || 0,
         name: (formData.name || '').trim() || 'My Jewellery Shop',
@@ -445,6 +448,13 @@ export default function Settings() {
                 <div className="form-group">
                   <label className="form-label">Default GST Rate (%)</label>
                   <input className="form-input" type="number" step="0.01" id="settings-gst" value={formData.default_gst_rate} onChange={handleChange} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Default IGST Rate (%)</label>
+                  <input className="form-input" type="number" step="0.01" id="settings-igst" value={formData.default_igst_rate} onChange={handleChange} />
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                    Applicable only for Interstate Billing / Orders
+                </span>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Decimal Precision</label>

@@ -12,7 +12,7 @@ const has = (v) => Number(v) !== 0 && Number.isFinite(Number(v));
 
 export default function StandardTemplate({ data }) {
     if (!data) return null;
-    console.log(data);
+    // console.log(data);
 
     const {
         docType = "INVOICE",
@@ -42,7 +42,7 @@ export default function StandardTemplate({ data }) {
     const hasMetalVal = !hideMetalValue && items.some((i) => has(i.metalValue));
     const hasMaking = !hideMaking && items.some((i) => has(i.making));
     // console.log(hasMaking);
-    const isInvoice = docType.includes("INVOICE");
+    const isInvoice = docType.includes("INVOICE") || data.orderType?.toLowerCase() === "invoice";
 
     const ratePerGm = has(rates.rate10gm) ? Number(rates.rate10gm) / 10 : 0;
     const rateLabel = theme?.toLowerCase() === "silver" ? "SILVER" : "GOLD";
@@ -232,13 +232,13 @@ export default function StandardTemplate({ data }) {
                 {/* Old Breakdown End */}
 
 
-                <div style={{ width: '100%', marginTop: '20px', fontFamily: 'Arial, sans-serif', padding: "0 25px" }}>
+                <div style={{ width: '100%', fontFamily: 'Arial, sans-serif', padding: "0 25px" }}>
                     {/* Normal Summary Banner */}
                     <div
                         className="pdf-summary-head"
                         style={{
                             gridTemplateColumns: isInvoice
-                                ? "repeat(8, 1fr)"
+                                ? (totals.isIgst ? "repeat(7, 1fr)" : "repeat(8, 1fr)")
                                 : "repeat(6, 1fr)"
                         }}
                     >
@@ -250,8 +250,12 @@ export default function StandardTemplate({ data }) {
 
                         {isInvoice && (
                             <>
-                                <div>CGST</div>
-                                <div>SGST</div>
+                                {totals.isIgst ? (
+                                    <div>IGST</div>
+                                ) : (<>
+                                    <div>CGST</div>
+                                    <div>SGST</div>
+                                </>)}
                             </>
                         )}
 
@@ -259,7 +263,7 @@ export default function StandardTemplate({ data }) {
                     </div>
                     <div className="pdf-summary-values"
                         style={{
-                            gridTemplateColumns: isInvoice ? "repeat(8, 1fr)" : "repeat(6, 1fr)",
+                            gridTemplateColumns: isInvoice ? (totals.isIgst ? "repeat(7, 1fr)" : "repeat(8, 1fr)") : "repeat(6, 1fr)",
                             borderBottomLeftRadius: '15px',
                             borderBottomRightRadius: '15px'
                         }}
@@ -276,8 +280,12 @@ export default function StandardTemplate({ data }) {
 
                         {isInvoice && (
                             <>
-                                <div>{fmt(totals.cgst)}</div>
-                                <div>{fmt(totals.sgst)}</div>
+                                {totals.isIgst ? (
+                                    <div>{has(totals.igst) ? fmt(totals.igst) : '₹ 0.00'}</div>
+                                ) : (<>
+                                    <div>{fmt(totals.cgst)}</div>
+                                    <div>{fmt(totals.sgst)}</div>
+                                </>)}
                             </>
                         )}
 
@@ -316,13 +324,13 @@ export default function StandardTemplate({ data }) {
                     </div>
                 )}
 
-                {/* Advance Payment History — shown when bill is linked to an order with advance receipts */}
+                {/* Advance Payment History */}
                 {advanceHistory && advanceHistory.length > 0 && (
-                    <div style={{ margin: '6px 0', padding: '8px 14px', background: '#fff9e6', borderRadius: 6, border: '1px solid #f0d060', fontSize: '10px', lineHeight: 1.7 }}>
+                    <div style={{ fontSize: '10px'}}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <div style={{ fontWeight: 700, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7a5a00' }}>Advance Payment History</div>
+                            {/* <div style={{ fontWeight: 700, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7a5a00' }}>Advance Payment History</div> */}
                             {paymentStatus && (
-                                <span style={{ fontSize: '8px', fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                                <span style={{ fontSize: '8px', fontWeight: 700, borderRadius: 3,
                                     background: paymentStatus === 'paid' ? 'rgba(16,185,129,0.15)' : paymentStatus === 'partially_paid' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)',
                                     color: paymentStatus === 'paid' ? '#065f46' : paymentStatus === 'partially_paid' ? '#854d0e' : '#991b1b',
                                     textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -331,11 +339,12 @@ export default function StandardTemplate({ data }) {
                             )}
                         </div>
                         {advanceHistory.map((adv, idx) => (
-                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: idx < advanceHistory.length - 1 ? '1px dashed #e8d08a' : 'none', padding: '2px 0',
-                                opacity: adv.status === 'cancelled' ? 0.5 : 1 }}>
+                            <div key={idx} style={{ borderBottom: idx < advanceHistory.length - 1 ? '1px dashed #e8d08a' : 'none',
+                                opacity: adv.status === 'cancelled' ? 0.5 : 1, paddingLeft: '30px'}}>
+     
                                 <span style={{ textDecoration: adv.status === 'cancelled' ? 'line-through' : 'none' }}>
                                     {adv.receiptNo}&nbsp;({adv.date})&nbsp;
-                                    <span style={{ color: '#888', textTransform: 'uppercase' }}>{adv.paymentMode}</span>
+                                    <span style={{ color: '#414141', textTransform: 'uppercase' }}>{adv.paymentMode}</span> : 
                                     {adv.status === 'cancelled' ? ' [CANCELLED]' : ''}
                                     {adv.isRefund ? ' [REFUND]' : ''}
                                 </span>
@@ -344,10 +353,6 @@ export default function StandardTemplate({ data }) {
                                 </span>
                             </div>
                         ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e8d08a', marginTop: 4, paddingTop: 4, fontWeight: 700 }}>
-                            <span>Total Advance Paid</span>
-                            <span>{fmt(advanceHistory.filter(a => a.status !== 'cancelled' && !a.isRefund).reduce((s, a) => s + a.amount, 0))}</span>
-                        </div>
                     </div>
                 )}
 

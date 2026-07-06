@@ -10,16 +10,26 @@ from .services.invoice_service import create_invoice, convert_estimate_to_invoic
 logger = logging.getLogger("jewellosoft")
 
 class InvoiceViewSet(viewsets.ModelViewSet):
-    queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
     
     filterset_fields = ['shop', 'customer']
     search_fields = ['invoice_no', 'customer__name', 'customer__phone']
 
+    def get_queryset(self):
+        shop = self.request.shop
+        if not shop:
+            return Invoice.objects.none()
+        return Invoice.objects.filter(shop=shop)
+
     def create(self, request, *args, **kwargs):
-        
         try:
-            invoice_obj = create_invoice(request.data)
+            payload = request.data.copy()
+            if request.shop:
+                payload["shop_id"] = request.shop.id
+            elif "shop_id" not in payload:
+                payload["shop_id"] = 1
+                
+            invoice_obj = create_invoice(payload)
             serializer = self.get_serializer(invoice_obj)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -27,16 +37,26 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Response({"detail": "An error occurred while creating the invoice."}, status=status.HTTP_400_BAD_REQUEST)
 
 class EstimateViewSet(viewsets.ModelViewSet):
-    queryset = Estimate.objects.all()
     serializer_class = EstimateSerializer
     
     filterset_fields = ['shop', 'customer']
     search_fields = ['estimate_no', 'customer__name', 'customer__phone']
 
-    def create(self, request, *args, **kwargs):
+    def get_queryset(self):
+        shop = self.request.shop
+        if not shop:
+            return Estimate.objects.none()
+        return Estimate.objects.filter(shop=shop)
 
+    def create(self, request, *args, **kwargs):
         try:
-            estimate_obj = create_estimate(request.data)
+            payload = request.data.copy()
+            if request.shop:
+                payload["shop_id"] = request.shop.id
+            elif "shop_id" not in payload:
+                payload["shop_id"] = 1
+                
+            estimate_obj = create_estimate(payload)
             serializer = self.get_serializer(estimate_obj)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:

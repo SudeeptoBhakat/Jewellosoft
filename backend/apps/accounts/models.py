@@ -35,6 +35,7 @@ class Shop(BaseModel):
     pan_number = models.CharField(max_length=20, blank=True, help_text='PAN card number for invoices')
     date_format = models.CharField(max_length=20, default='DD/MM/YYYY')
     default_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=3.0)
+    default_igst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=3.0)
     decimal_precision = models.IntegerField(default=2)
     hallmark_value = models.DecimalField(max_digits=10, decimal_places=2, default=53.0)
     require_full_payment_for_delivery = models.BooleanField(default=False, help_text="Require full payment before order delivery")

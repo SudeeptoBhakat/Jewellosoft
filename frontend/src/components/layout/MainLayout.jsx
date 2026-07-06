@@ -20,6 +20,8 @@ import RateChart from '../../features/rates/RateChart';
 import Customers from '../../features/customers/Customers';
 import Settings from '../../features/settings/Settings';
 import Advances from '../../features/advances/Advances';
+import DuesCreditsList from '../../features/dashboard/DuesCreditsList';
+
 
 export default function MainLayout() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTabId } = useTabs();
@@ -38,9 +40,11 @@ export default function MainLayout() {
       case '/customers': return 'fa-solid fa-users';
       case '/settings': return 'fa-solid fa-gear';
       case '/advances': return 'fa-solid fa-hand-holding-dollar';
+      case '/dues-credits': return 'fa-solid fa-scale-balanced';
       default: return 'fa-solid fa-file';
     }
   };
+
 
   const renderTabContent = (tab, isActive) => {
     const path = tab.path.split('?')[0];
@@ -57,9 +61,11 @@ export default function MainLayout() {
       case '/customers': return <Customers {...props} />;
       case '/settings': return <Settings {...props} />;
       case '/advances': return <Advances {...props} />;
+      case '/dues-credits': return <DuesCreditsList {...props} />;
       default: return <div>Page not found: {path}</div>;
     }
   };
+
 
   return (
     <div className="app-layout">

@@ -159,6 +159,7 @@ export default function Billing({ tabId, isActive }) {
   const [showModal, setShowModal] = useState(true);
   const [metalType, setMetalType] = useState('');
   const [billType, setBillType] = useState('');
+  const [isIgst, setIsIgst] = useState(false);
 
   /* ─── Customer Warning Modal State ─── */
   const [showCustWarning, setShowCustWarning] = useState(false);
@@ -395,7 +396,6 @@ export default function Billing({ tabId, isActive }) {
       .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
   }, [orderAdvances]);
 
-  /* ═══ INSTANT LOCAL CALCULATIONS (Shared Engine) ═══ */
   const calc = useMemo(() => {
     return calculateBill({
       items,
@@ -412,8 +412,11 @@ export default function Billing({ tabId, isActive }) {
       discount,
       cashAmt,
       onlineAmt,
+      isIgst,
+      gstRate: parseFloat(shop?.default_gst_rate) || 3.0,
+      igstRate: parseFloat(shop?.default_igst_rate) || 3.0,
     });
-  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, cashAmt, onlineAmt]);
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, cashAmt, onlineAmt, isIgst, shop]);
 
   /* ─── Order Integration ─── */
   const [orderLoading, setOrderLoading] = useState(false);
@@ -428,28 +431,81 @@ export default function Billing({ tabId, isActive }) {
         const orderNoLower = o.order_no.trim().toLowerCase();
         return orderNoLower === targetNo || orderNoLower.endsWith(targetNo) || orderNoLower.includes(targetNo);
       }) || ordersList[0];
-      console.log(ord);
+
       if (!ord) {
-        alert('Order not found or invalid.');
-        return;
-      }
-      
-      // Allow billing for completed, delivered, pending, or in_progress orders (any non-cancelled status)
-      const BILLABLE_STATUSES = ['completed', 'delivered', 'complete', 'pending', 'in_progress'];
-      if (!BILLABLE_STATUSES.includes(ord.order_status)) {
-        alert(`Billing is only allowed for Orders in "Completed", "Delivered", "Pending" or "In Progress" status. Current status: ${ord.order_status}`);
+        toast.error('Order not found or invalid.');
         return;
       }
 
-      setCustomerId(ord.customer);
-      setCustName(ord.customer_detail?.name || '');
-      setCustMobile(ord.customer_detail?.phone || '');
-      setCustAddress(ord.customer_detail?.address || '');
+      console.log('[OrderLoad] Loaded order:', ord);
+
+      // Allow billing for completed, delivered, pending, or in_progress orders (any non-cancelled status)
+      const BILLABLE_STATUSES = ['completed', 'delivered', 'complete', 'pending', 'in_progress'];
+      if (!BILLABLE_STATUSES.includes(ord.order_status)) {
+        toast.error(`Billing not allowed for orders with status: "${ord.order_status}". Must be Completed, Delivered, Pending or In-Progress.`);
+        return;
+      }
+
+      // ── 1. Customer Details ──────────────────────────────────────────────
+      if (ord.customer) setCustomerId(ord.customer);
+      if (ord.customer_detail?.name)    setCustName(ord.customer_detail.name);
+      if (ord.customer_detail?.phone)   setCustMobile(ord.customer_detail.phone);
+      if (ord.customer_detail?.address) setCustAddress(ord.customer_detail.address);
+
+      // ── 2. Order Meta ────────────────────────────────────────────────────
       setOrderDate(ord.created_at?.split('T')[0] || '');
       setLinkedOrderId(ord.id);
       setLoadedOrderTotal(parseFloat(ord.grand_total || 0));
 
-      // Order-time advance — stored on Order.advance, NOT an AdvancePayment record
+      // ── 3. Metal Type & Bill Type ────────────────────────────────────────
+      // metal_type: 'Gold' | 'Silver' — if it matches the current metalType, skip; else warn user
+      const orderMetal = ord.metal_type
+        ? ord.metal_type.charAt(0).toUpperCase() + ord.metal_type.slice(1).toLowerCase()
+        : '';
+      if (orderMetal && ['Gold', 'Silver'].includes(orderMetal)) {
+        setMetalType(orderMetal);
+      }
+
+      // order_type: 'invoice' | 'estimate' → maps to billType 'Invoice' | 'Estimate'
+      const orderBillType = ord.order_type === 'estimate' ? 'Estimate' : 'Invoice';
+      setBillType(orderBillType);
+
+      // ── 4. Metal Rate & Making Rate ──────────────────────────────────────
+      const orderMetalRate = parseFloat(ord.metal_rate || 0);
+      const orderMakingRate = parseFloat(ord.making_rate || 0);
+      if (orderMetalRate > 0) setMetalRate(orderMetalRate);
+      if (orderMakingRate > 0) setMakingRate(orderMakingRate);
+
+      // ── 5. Charges & Deductions ──────────────────────────────────────────
+      // Other charges
+      const orderOtherCharges = parseFloat(ord.others || 0);
+      if (orderOtherCharges > 0) setOtherCharges(String(orderOtherCharges));
+
+      // Discount
+      const orderDiscount = parseFloat(ord.discount || 0);
+      if (orderDiscount > 0) setDiscount(String(orderDiscount));
+
+      // Hallmark — derive count from hallmark amount ÷ hallmark unit value
+      const orderHallmarkAmt = parseFloat(ord.hallmark || 0);
+      if (orderHallmarkAmt > 0) {
+        const derivedCount = Math.round(orderHallmarkAmt / (hallmarkValue || 53));
+        if (derivedCount > 0) setHallmarkCount(String(derivedCount));
+      }
+
+      // ── 6. Old Metal Exchange ────────────────────────────────────────────
+      const ordOldMode = ord.old_settlement_mode || 'none';
+      const ordOldWt   = parseFloat(ord.old_weight || 0);
+      const ordOldDirect = parseFloat(ord.old_value_direct || 0);
+      const ordOldDeductPct = parseFloat(ord.old_deduct_percent || 0);
+
+      if (ordOldMode && ordOldMode !== 'none') {
+        setOldSettlementMode(ordOldMode);
+        if (ordOldWt > 0)      setOldWeight(String(ordOldWt));
+        if (ordOldDirect > 0)  setOldValueDirect(String(ordOldDirect));
+        if (ordOldDeductPct > 0) setOldDeductPct(String(ordOldDeductPct));
+      }
+
+      // ── 7. Advance & Payment History ────────────────────────────────────
       const orderAdv = parseFloat(ord.advance || 0);
       setOrderTimeAdvance(orderAdv);
 
@@ -465,28 +521,57 @@ export default function Billing({ tabId, isActive }) {
       }
       setOrderAdvances(receiptsList.filter(p => p.status === 'active'));
 
-      // advance input = blank; user can optionally enter additional payment today at billing
+      // Additional payment today — blank; user fills if needed
       setAdvance('');
 
+      // ── 8. Items — full field mapping with validation ────────────────────
+      const currentRate  = parseFloat(ord.metal_rate || 0) || metalRate;
+      const currentMRate = parseFloat(ord.making_rate || 0) || makingRate;
+
       if (ord.items && ord.items.length > 0) {
-        const mappedItems = ord.items.map(i => ({
-          id: Date.now() + Math.random(),
-          name: i.product_name,
-          huid: i.huid || '',
-          weight: i.expected_weight || i.weight || '',
-          makingCharges: i.making_charge || '',
-          metalValue: 0, total: 0,
-        }));
-        setItems(mappedItems);
-        setTimeout(() => setMetalRate(prev => prev), 50);
+        const mappedItems = ord.items
+          .filter(i => i.product_name && i.product_name.trim() !== '') // skip invalid items
+          .map(i => {
+            const weight = String(parseFloat(i.expected_weight || i.weight || 0) || '');
+            const makingCharges = String(parseFloat(i.making_charge || 0) || '');
+
+            // Build base item then run recalcItem so metalValue and total are live
+            const baseItem = {
+              id: Date.now() + Math.random(),
+              inventory_id: i.inventory_item || null,
+              name: i.product_name || '',
+              huid: '',               // OrderItem has no HUID field
+              weight,
+              makingCharges,
+              metalValue: parseFloat(i.metal_value || 0) || 0,
+              total:      parseFloat(i.total || 0) || 0,
+              _fromOrder: true,
+            };
+
+            // Recalc at current rate so values are always consistent
+            return recalcItem(baseItem, currentRate, currentMRate);
+          });
+
+        if (mappedItems.length > 0) {
+          setItems(mappedItems);
+        } else {
+          setItems([createEmptyItem()]);
+        }
+      } else {
+        // No items on order — start with one empty row
+        setItems([createEmptyItem()]);
       }
+
+      toast.success(`Order ${ord.order_no} loaded successfully! All details auto-filled.`);
+
     } catch (err) {
-      console.error(err);
-      alert('Error fetching order.');
+      console.error('[OrderLoad] Error:', err);
+      toast.error('Error fetching order. Please check the order number and try again.');
     } finally {
       setOrderLoading(false);
     }
   };
+
 
   /* ─── Actions ─── */
   const handleSave = async (redirectList = true, bypassWarning = false) => {
@@ -542,6 +627,7 @@ export default function Billing({ tabId, isActive }) {
           others: calc.otherChargesVal,
           cgst: calc.cgst,
           sgst: calc.sgst,
+          igst: calc.igst,
           round_off: calc.roundOffVal,
           grand_total: calc.finalAmt,
           transaction_type: calc.transactionType
@@ -623,6 +709,10 @@ export default function Billing({ tabId, isActive }) {
           subtotal: calc.subtotal,
           cgst: calc.cgst,
           sgst: calc.sgst,
+          igst: calc.igst,
+          isIgst: calc.isIgst,
+          gstRate: shop?.default_gst_rate || 3,
+          igstRate: shop?.default_igst_rate || 3,
           otherCharges: calc.otherChargesVal,
           hallmark: calc.hallmarkAmt,
           advance: calc.advanceVal,
@@ -1074,6 +1164,36 @@ export default function Billing({ tabId, isActive }) {
                   <input className="form-input" type="number" step="1" placeholder="0" value={hallmarkCount} onChange={e => setHallmarkCount(e.target.value)} id="bill-hallmark-count" />
                 </div>
               </div>
+              {/* IGST Toggle — only for Invoice */}
+              {billType === 'Invoice' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 4px', marginBottom: 6 }}>
+                  <div
+                    onClick={() => setIsIgst(v => !v)}
+                    role="switch"
+                    aria-checked={isIgst}
+                    id="bill-igst-toggle"
+                    style={{
+                      width: 40, height: 22, borderRadius: 11, cursor: 'pointer', transition: 'background 0.2s',
+                      background: isIgst ? 'var(--color-primary, #8b5cf6)' : 'var(--border-primary)',
+                      position: 'relative', flexShrink: 0,
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 2, left: isIgst ? 20 : 2,
+                      width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                    }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: isIgst ? 'var(--color-primary, #8b5cf6)' : 'var(--text-secondary)' }}>
+                      {isIgst ? `Inter-State Sale IGST @ ${shop?.default_igst_rate || 3}% Applied` : 'Same-State Sale CGST + SGST Applied'}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
+                      ON for inter-state / out-of-state customers
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
                   {/* Advance breakdown — auto-populated when order is loaded */}
@@ -1153,7 +1273,7 @@ export default function Billing({ tabId, isActive }) {
               }}
             >
               <i className={`fa-solid ${billType === 'Invoice' ? 'fa-file-invoice' : 'fa-file-lines'}`} style={{ marginRight: 4 }}></i>
-              {billType === 'Invoice' ? 'Invoice — GST 3% Applied' : 'Estimate — No GST'}
+              {billType === 'Invoice' ? (isIgst ? `Invoice — IGST ${shop?.default_igst_rate || 3}% Applied` : `Invoice — CGST+SGST ${shop?.default_gst_rate || 3}% Applied`) : 'Estimate — No GST'}
             </span>
           </div>
           <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
@@ -1242,8 +1362,14 @@ export default function Billing({ tabId, isActive }) {
                   )}
                   {billType === 'Invoice' && (
                     <>
-                      <div className="bill-sline"><span>(+) CGST @ 1.5%</span><span>{fmt(calc.cgst)}</span></div>
-                      <div className="bill-sline"><span>(+) SGST @ 1.5%</span><span>{fmt(calc.sgst)}</span></div>
+                      {calc.isIgst ? (
+                        <div className="bill-sline"><span>(+) IGST @ {shop?.default_igst_rate || 3}%</span><span>{fmt(calc.igst)}</span></div>
+                      ) : (
+                        <>
+                          <div className="bill-sline"><span>(+) CGST @ {(shop?.default_gst_rate || 3) / 2}%</span><span>{fmt(calc.cgst)}</span></div>
+                          <div className="bill-sline"><span>(+) SGST @ {(shop?.default_gst_rate || 3) / 2}%</span><span>{fmt(calc.sgst)}</span></div>
+                        </>
+                      )}
                       <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                         <span>GST Base: {fmt(calc.gstBase)}</span><span></span>
                       </div>

@@ -15,11 +15,17 @@ class ProductInventoryViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'name', 'net_weight']
 
     def get_queryset(self):
-        return ProductInventory.objects.all().order_by('-created_at')
+        shop = self.request.shop
+        if not shop:
+            return ProductInventory.objects.none()
+        return ProductInventory.objects.filter(shop=shop).order_by('-created_at')
 
     def perform_create(self, serializer):
         logger.info("Creating inventory item: %s", serializer.validated_data.get('name'))
-        serializer.save()
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)
 
     def perform_destroy(self, instance):
         logger.info("Deleting inventory item: %s (id=%s)", instance.name, instance.id)

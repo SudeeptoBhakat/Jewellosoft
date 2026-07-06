@@ -41,6 +41,7 @@ class BaseBilling(BaseModel):
 
     cgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    igst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     hallmark = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     others = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)

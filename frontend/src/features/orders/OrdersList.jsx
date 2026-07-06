@@ -355,6 +355,7 @@ export default function OrdersList() {
     try {
       const res = await api.get('/orders/');
       setOrders(extractList(res.data));
+      // console.log(res.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -406,6 +407,7 @@ export default function OrdersList() {
             watermark_logo_url: shop?.watermark_logo || null,
         },
         docType: 'ORDER RECEIPT',
+        orderType: order.order_type,
         theme: (order.metal_type || 'gold').toLowerCase(),
         customer: { name: order.customer_detail?.name || 'Walk-in', phone: order.customer_detail?.phone, address: order.customer_detail?.address },
         meta: { number: order.order_no, date: new Date(order.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) },
@@ -422,6 +424,10 @@ export default function OrdersList() {
             subtotal: parseFloat(order.subtotal || 0),
             cgst: parseFloat(order.cgst || 0),
             sgst: parseFloat(order.sgst || 0),
+            igst: parseFloat(order.igst || 0),
+            isIgst: parseFloat(order.igst || 0) > 0,
+            gstRate: shop?.default_gst_rate || 3,
+            igstRate: shop?.default_igst_rate || 3,
             otherCharges: parseFloat(order.others || 0),
             hallmark: parseFloat(order.hallmark || 0),
             advance: parseFloat(order.advance || 0),
@@ -429,9 +435,20 @@ export default function OrdersList() {
             roundOff: parseFloat(order.round_off || 0),
             finalAmount: parseFloat(order.grand_total || 0),
             amountInWords: amountWords(parseFloat(order.grand_total || 0)),
-            transactionType: order.transaction_type || 'payable'
+            transactionType: order.transaction_type || 'payable',
+            weightTotal: parseFloat(order.weight_total || 0),
+            makingTotal: parseFloat(order.making_total || 0),
         },
         payment: { amounts: [{mode: 'ADVANCE', amount: parseFloat(order.advance || 0)}].filter(x => x.amount > 0) },
+        advanceHistory: (order.advance_payments || []).map(adv => ({
+            receiptNo: adv.receipt_no || '',
+            amount: parseFloat(adv.amount) || 0,
+            paymentMode: adv.payment_mode || 'cash',
+            date: adv.payment_date ? new Date(adv.payment_date).toLocaleDateString('en-IN') : '',
+            notes: adv.notes || '',
+            status: adv.status || 'active',
+            isRefund: adv.is_refund || false,
+        })),
         designNotes: order.design_notes || '',
         designImages: designImages,
     };

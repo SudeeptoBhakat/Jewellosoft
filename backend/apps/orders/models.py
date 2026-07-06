@@ -61,6 +61,7 @@ class Order(BaseModel):
 
     cgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    igst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     hallmark = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     others = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -86,10 +87,11 @@ class Order(BaseModel):
 
     PAYMENT_CHOICES = [
         ("cash", "Cash"),
-        ("upi", "UPI"),
+        ("upi", "Online / UPI"),
         ("card", "Card"),
+        ("bank_transfer", "Bank Transfer"),
     ]
-    payment_method = models.CharField(max_length=10, choices=PAYMENT_CHOICES, blank=True, null=True)
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True)
 
     delivery_date = models.DateTimeField(null=True, blank=True)
 

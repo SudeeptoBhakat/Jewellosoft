@@ -12,7 +12,14 @@ const statusBadge = (status) => {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ today_sales: 0, pending_orders: 0, stock_count: 0, active_customers: 0 });
+  const [stats, setStats] = useState({
+    today_sales: 0,
+    pending_orders: 0,
+    stock_count: 0,
+    active_customers: 0,
+    total_dues: 0,
+    total_credits: 0,
+  });
   const [recentBills, setRecentBills] = useState([]);
   const [rates, setRates] = useState({});
 
@@ -30,6 +37,8 @@ export default function Dashboard() {
         pending_orders: d.pending_orders || 0,
         stock_count: d.stock_count || 0,
         active_customers: d.active_customers || 0,
+        total_dues: d.total_dues || 0,
+        total_credits: d.total_credits || 0,
       });
       setRecentBills(d.recent_bills || []);
       setRates(d.rates || {});
@@ -46,26 +55,47 @@ export default function Dashboard() {
       value: fmt(stats.today_sales),
       icon: 'fa-solid fa-indian-rupee-sign',
       variant: 'primary',
+      onClick: null,
     },
     {
       label: 'Pending Orders',
       value: stats.pending_orders,
       icon: 'fa-solid fa-clock',
       variant: 'warning',
+      onClick: () => navigate('/orders/list'),
     },
     {
       label: 'Items in Stock',
       value: Number(stats.stock_count).toLocaleString('en-IN'),
       icon: 'fa-solid fa-boxes-stacked',
       variant: 'info',
+      onClick: () => navigate('/inventory'),
     },
     {
       label: 'Active Customers',
       value: stats.active_customers,
       icon: 'fa-solid fa-user-group',
       variant: 'success',
+      onClick: () => navigate('/customers'),
+    },
+    {
+      label: 'Outstanding Dues',
+      value: fmt(stats.total_dues),
+      icon: 'fa-solid fa-arrow-trend-up',
+      variant: 'danger',
+      onClick: () => navigate('/dues-credits?tab=due'),
+      badge: stats.total_dues > 0 ? '!' : null,
+      badgeCls: 'danger',
+    },
+    {
+      label: 'Customer Credits',
+      value: fmt(stats.total_credits),
+      icon: 'fa-solid fa-arrow-trend-down',
+      variant: 'success',
+      onClick: () => navigate('/dues-credits?tab=credit'),
     },
   ];
+
 
   const timeSince = (dateStr) => {
     if (!dateStr) return '';
@@ -94,11 +124,40 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="stats-grid stagger">
         {statCards.map((stat, i) => (
-          <div className="card card--clickable animate-fade-in-up" key={i}>
+          <div
+            className="card card--clickable animate-fade-in-up"
+            key={i}
+            onClick={stat.onClick || undefined}
+            style={{ cursor: stat.onClick ? 'pointer' : 'default', position: 'relative' }}
+          >
+            {stat.badge && (
+              <span
+                style={{
+                  position: 'absolute', top: 10, right: 10,
+                  background: 'var(--color-danger)', color: '#fff',
+                  fontSize: '0.6rem', fontWeight: 800,
+                  width: 16, height: 16, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  animation: 'pulse 1.5s infinite',
+                }}
+              >
+                {stat.badge}
+              </span>
+            )}
             <div className="card__header">
               <div>
-                <div className="card__value">{loading ? '...' : stat.value}</div>
+                <div
+                  className="card__value"
+                  style={stat.variant === 'danger' ? { color: 'var(--color-danger)' } : {}}
+                >
+                  {loading ? '...' : stat.value}
+                </div>
                 <div className="card__label">{stat.label}</div>
+                {stat.onClick && (
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Click to view details
+                  </div>
+                )}
               </div>
               <div className={`card__icon card__icon--${stat.variant}`}>
                 <i className={stat.icon}></i>
@@ -107,6 +166,66 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Dues & Credits Alert Strip */}
+      {!loading && (stats.total_dues > 0 || stats.total_credits > 0) && (
+        <div
+          className="animate-fade-in-up"
+          style={{
+            display: 'flex',
+            gap: 'var(--space-3)',
+            marginBottom: 'var(--space-4)',
+            flexWrap: 'wrap',
+          }}
+        >
+          {stats.total_dues > 0 && (
+            <div
+              onClick={() => navigate('/dues-credits?tab=due')}
+              style={{
+                flex: 1, minWidth: 200, cursor: 'pointer',
+                background: 'rgba(239,68,68,0.06)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3) var(--space-4)',
+                display: 'flex', alignItems: 'center', gap: 12,
+                transition: 'background 0.2s',
+              }}
+            >
+              <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--color-danger)', fontSize: '1.1rem' }} />
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+                  {fmt(stats.total_dues)} Outstanding Dues
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Customers owe you money → click to collect</div>
+              </div>
+              <i className="fa-solid fa-chevron-right" style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }} />
+            </div>
+          )}
+          {stats.total_credits > 0 && (
+            <div
+              onClick={() => navigate('/dues-credits?tab=credit')}
+              style={{
+                flex: 1, minWidth: 200, cursor: 'pointer',
+                background: 'rgba(34,197,94,0.06)',
+                border: '1px solid rgba(34,197,94,0.25)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3) var(--space-4)',
+                display: 'flex', alignItems: 'center', gap: 12,
+                transition: 'background 0.2s',
+              }}
+            >
+              <i className="fa-solid fa-circle-info" style={{ color: 'var(--color-success)', fontSize: '1.1rem' }} />
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--color-success)', fontSize: 'var(--text-sm)' }}>
+                  {fmt(stats.total_credits)} Customer Credits
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>You owe customers refunds → click to review</div>
+              </div>
+              <i className="fa-solid fa-chevron-right" style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Content Grid */}
       <div className="dashboard-grid">

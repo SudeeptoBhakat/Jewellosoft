@@ -100,6 +100,7 @@ def create_invoice(payload):
         others=totals.get("others", 0),
         cgst=totals.get("cgst", 0),
         sgst=totals.get("sgst", 0),
+        igst=totals.get("igst", 0),
         round_off=totals.get("round_off", 0),
         grand_total=totals.get("grand_total", 0),
         transaction_type=totals.get("transaction_type", "payable"),
@@ -235,6 +236,7 @@ def create_estimate(payload):
         others=totals.get("others", 0),
         cgst=0,  # Estimates typically avoid GST
         sgst=0,
+        igst=0,
         round_off=totals.get("round_off", 0),
         grand_total=totals.get("grand_total", 0),
         transaction_type=totals.get("transaction_type", "payable"),

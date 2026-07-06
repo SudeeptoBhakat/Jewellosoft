@@ -13,14 +13,12 @@ const os = require('os');
 const { autoUpdater } = require('electron-updater');
 const electronLog = require('electron-log');
 
-// Single Instance Lock
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
   process.exit();
 }
 
-// Silence noisy Chromium console warnings automatically in development
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 
 let mainWindow;
@@ -29,9 +27,6 @@ let djangoProcess;
 let djangoPort = 8000;
 let isDev = !app.isPackaged;
 
-// ─────────────────────────────────────────────────────────────────
-// Production-Grade Date-wise Logging System
-// ─────────────────────────────────────────────────────────────────
 
 const userDataPath = path.join(app.getPath('userData'), 'JewelloSoft_Data');
 if (!fs.existsSync(userDataPath)) {
@@ -43,9 +38,7 @@ if (!fs.existsSync(logBasePath)) {
   fs.mkdirSync(logBasePath, { recursive: true });
 }
 
-/**
- * Returns today's date string in YYYY-MM-DD format.
- */
+
 function getDateStamp() {
   const now = new Date();
   const y = now.getFullYear();
@@ -54,10 +47,6 @@ function getDateStamp() {
   return `${y}-${m}-${d}`;
 }
 
-/**
- * Returns the log directory for today, creating it if needed.
- * Structure: logs/2026-04-02/
- */
 function getTodayLogDir() {
   const dir = path.join(logBasePath, getDateStamp());
   if (!fs.existsSync(dir)) {
@@ -86,7 +75,6 @@ function logTo(logName, msg) {
   try {
     fs.appendFileSync(getLogFile(logName), line);
   } catch (e) {
-    // Last resort — if we can't even write a log, try console
     console.error(`Failed to write to ${logName} log:`, e.message);
   }
   console.log(`[${logName}] ${msg}`);
@@ -97,10 +85,7 @@ function log(msg) {
   logTo('electron', msg);
 }
 
-/**
- * Capture a full crash diagnostic snapshot and write to crash log.
- * Returns the snapshot text so crash.html can display it.
- */
+
 function writeCrashDiagnostic(reason, error) {
   const diag = [];
   diag.push('═══════════════════════════════════════════════════════');

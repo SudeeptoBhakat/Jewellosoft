@@ -69,13 +69,21 @@ class OrderSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, data):
-        for field in ["cgst", "sgst", "round_off", "grand_total"]:
+        for field in ["cgst", "sgst", "igst", "round_off", "grand_total"]:
             if field in data and data[field] is not None:
                 try:
                     data[field] = round(Decimal(str(data[field])), 2)
                 except Exception:
                     pass
+        order_type = data.get('order_type')
+        if not order_type and self.instance:
+            order_type = self.instance.order_type
+        if order_type == 'estimate':
+            data['cgst'] = Decimal('0')
+            data['sgst'] = Decimal('0')
+            data['igst'] = Decimal('0')
         return data
+
 
     @transaction.atomic
     def create(self, validated_data):

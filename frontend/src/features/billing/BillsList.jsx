@@ -119,8 +119,12 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                 <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Subtotal</span><span>{fmt(bill.subtotal)}</span></div>
                 {bill.otherCharges > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) Other</span><span>{fmt(bill.otherCharges)}</span></div>}
                 {bill.hallmark > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) Hallmark</span><span>{fmt(bill.hallmark)}</span></div>}
-                {bill.cgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) CGST 1.5%</span><span>{fmt(bill.cgst)}</span></div>}
-                {bill.sgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) SGST 1.5%</span><span>{fmt(bill.sgst)}</span></div>}
+                {bill.isIgst ? (
+                  bill.igst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) IGST</span><span>{fmt(bill.igst)}</span></div>
+                ) : (<>
+                  {bill.cgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) CGST</span><span>{fmt(bill.cgst)}</span></div>}
+                  {bill.sgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) SGST</span><span>{fmt(bill.sgst)}</span></div>}
+                </>)}
                 {/* Old Metal — show by settlement mode */}
                 {(bill.oldSettlementMode === 'weight' && bill.oldWt > 0) && (
                   <div className="flex justify-between">
@@ -265,6 +269,8 @@ export default function BillsList() {
     hallmark: parseFloat(b.hallmark || 0),
     cgst: parseFloat(b.cgst || 0),
     sgst: parseFloat(b.sgst || 0),
+    igst: parseFloat(b.igst || 0),
+    isIgst: parseFloat(b.igst || 0) > 0,
     oldValue: parseFloat(b.old_amount || 0),
     oldWt: parseFloat(b.old_weight || 0),
     oldValueDirect: parseFloat(b.old_value_direct || 0),
@@ -282,6 +288,15 @@ export default function BillsList() {
     payment: b.payment_method?.toUpperCase() || 'CASH',
     paidCash: b.payment_method === 'cash' ? parseFloat(b.grand_total) || 0 : 0,
     paidOnline: b.payment_method !== 'cash' ? parseFloat(b.grand_total) || 0 : 0,
+    advanceHistory: (b.advance_payments || []).map(adv => ({
+      receiptNo: adv.receipt_no || '',
+      amount: parseFloat(adv.amount) || 0,
+      paymentMode: adv.payment_mode || 'cash',
+      date: adv.payment_date ? new Date(adv.payment_date).toLocaleDateString('en-IN') : '',
+      notes: adv.notes || '',
+      status: adv.status || 'active',
+      isRefund: adv.is_refund || false,
+    })),
     status: 'Paid',
     date: b.created_at || new Date().toISOString()
   }), []);
@@ -430,6 +445,10 @@ export default function BillsList() {
             subtotal: bill.subtotal,
             cgst: bill.cgst,
             sgst: bill.sgst,
+            igst: bill.igst,
+            isIgst: bill.isIgst,
+            gstRate: shop?.default_gst_rate || 3,
+            igstRate: shop?.default_igst_rate || 3,
             otherCharges: bill.otherCharges,
             hallmark: bill.hallmark,
             advance: bill.advance,
@@ -442,7 +461,8 @@ export default function BillsList() {
         payment: { amounts: [
             { mode: 'CASH', amount: bill.paidCash },
             { mode: 'ONLINE', amount: bill.paidOnline }
-        ].filter(x => x.amount > 0) }
+        ].filter(x => x.amount > 0) },
+        advanceHistory: bill.advanceHistory || []
     };
 
     setPrintData(docData);

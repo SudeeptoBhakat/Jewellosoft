@@ -39,8 +39,10 @@ export function TabProvider({ children }) {
       '/rates': { title: 'Rates Chart', closable: true },
       '/customers': { title: 'Customers', closable: true },
       '/settings': { title: 'Settings', closable: true },
-      '/advances': { title: 'Advance Payments', closable: true }
+      '/advances': { title: 'Advance Payments', closable: true },
+      '/dues-credits': { title: 'Dues & Credits', closable: true }
     };
+
 
     setTabs(prevTabs => {
       // 1. Is there an exact match in open tabs?
@@ -103,17 +105,18 @@ export function TabProvider({ children }) {
           if (activeTabIdRef.current !== existingTab.id) {
             setActiveTabId(existingTab.id);
           }
-          return prevTabs;
+          return prevTabs.map(t => t.id === location.pathname ? { ...t, path: currentPath } : t);
         }
         const newTab = {
           id: location.pathname,
           title: details.title,
-          path: location.pathname,
+          path: currentPath,
           closable: details.closable
         };
         setActiveTabId(newTab.id);
         return [...prevTabs, newTab];
       }
+
 
       return prevTabs;
     });

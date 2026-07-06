@@ -19,8 +19,17 @@ class CustomerViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'phone', 'customer_code']
 
     def get_queryset(self):
-        return Customer.objects.annotate(
+        shop = self.request.shop
+        if not shop:
+            return Customer.objects.none()
+        return Customer.objects.filter(shop=shop).annotate(
             total_bills=Count('invoice'),
             total_spent=Sum('invoice__grand_total'),
             last_visit=Max('invoice__created_at')
         ).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)

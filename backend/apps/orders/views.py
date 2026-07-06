@@ -9,15 +9,25 @@ class OrderViewSet(viewsets.ModelViewSet):
     """
     Standard CRUD for Orders.
     """
-    queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    
     filterset_fields = ['shop', 'order_status', 'priority']
     search_fields = ['order_no', 'customer__name', 'customer__phone']
+
+    def get_queryset(self):
+        shop = self.request.shop
+        if not shop:
+            return Order.objects.none()
+        return Order.objects.filter(shop=shop)
 
     def create(self, request, *args, **kwargs):
         print("Incoming Order Payload:", request.data)
         return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)
 
     @action(detail=True, methods=['patch'], url_path='update-item-status')
     def update_item_status(self, request, pk=None):

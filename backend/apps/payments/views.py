@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from decimal import Decimal
 import datetime
 
@@ -14,11 +14,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
     permission_classes = []
 
     def get_queryset(self):
-        queryset = Payment.objects.all()
-        shop_id = self.request.query_params.get('shop', None)
-        if shop_id:
-            queryset = queryset.filter(shop_id=shop_id)
-        return queryset
+        shop = self.request.shop
+        if not shop:
+            return Payment.objects.none()
+        return Payment.objects.filter(shop=shop)
+
+    def perform_create(self, serializer):
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)
 
 
 class AdvancePaymentViewSet(viewsets.ModelViewSet):
@@ -26,16 +31,20 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
     permission_classes = []
 
     def get_queryset(self):
-        queryset = AdvancePayment.objects.all()
-        shop_id = self.request.query_params.get('shop', None)
+        shop = self.request.shop
+        if not shop:
+            return AdvancePayment.objects.none()
+        queryset = AdvancePayment.objects.filter(shop=shop)
         order_id = self.request.query_params.get('order', None)
-        
-        if shop_id:
-            queryset = queryset.filter(shop_id=shop_id)
         if order_id:
             queryset = queryset.filter(order_id=order_id)
-            
         return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)
 
     @action(detail=True, methods=['post'], url_path='cancel')
     def cancel(self, request, pk=None):
@@ -114,22 +123,24 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
         else:
             date_val = timezone.now().date()
             
-        shop_id = request.query_params.get('shop', 1)
+        shop = request.shop
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
         
         # Opening balance calculation (all entries before date_val)
         opening_in = CashBookEntry.objects.filter(
-            shop_id=shop_id, created_at__date__lt=date_val, entry_type='in'
+            shop=shop, created_at__date__lt=date_val, entry_type='in'
         ).aggregate(sum_val=Sum('amount'))['sum_val'] or Decimal('0.00')
         
         opening_out = CashBookEntry.objects.filter(
-            shop_id=shop_id, created_at__date__lt=date_val, entry_type='out'
+            shop=shop, created_at__date__lt=date_val, entry_type='out'
         ).aggregate(sum_val=Sum('amount'))['sum_val'] or Decimal('0.00')
         
         opening_balance = opening_in - opening_out
         
         # Entries for the selected day
         day_entries = CashBookEntry.objects.filter(
-            shop_id=shop_id, created_at__date=date_val
+            shop=shop, created_at__date=date_val
         ).order_by('created_at')
         
         entries_data = []
@@ -191,11 +202,13 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
         if not customer_id:
             return Response({"detail": "Customer ID is required."}, status=status.HTTP_400_BAD_REQUEST)
             
-        shop_id = request.query_params.get('shop', 1)
+        shop = request.shop
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
         
         # Get all entries for the customer
         entries = LedgerEntry.objects.filter(
-            shop_id=shop_id, customer_id=customer_id
+            shop=shop, customer_id=customer_id
         ).order_by('created_at')
         
         statement = []
@@ -227,3 +240,136 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
             "current_balance": float(running_balance),
             "statement": statement
         })
+
+    @action(detail=False, methods=['get'], url_path='dues-summary')
+    def dues_summary(self, request):
+        """
+        GET /api/payments/advances/dues-summary/
+        Returns per-customer outstanding balance (due or credit) with order/bill references.
+        Query params:
+          ?type=due|credit  (filter by type, default all)
+          ?search=<name>    (filter by customer name)
+        """
+        from apps.payments.models import LedgerEntry
+        from apps.customers.models import Customer
+        from apps.orders.models import Order
+        from apps.billing.models import Invoice, Estimate
+
+
+        shop = request.shop
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
+
+        balance_type_filter = request.query_params.get('type', None)   # 'due' | 'credit'
+        search_q = request.query_params.get('search', '').strip()
+
+        # Build per-customer debit / credit totals in one pass
+        ledger_qs = LedgerEntry.objects.filter(shop=shop)
+
+        debit_rows  = ledger_qs.filter(entry_type='debit').values('customer').annotate(total=Sum('amount'))
+        credit_rows = ledger_qs.filter(entry_type='credit').values('customer').annotate(total=Sum('amount'))
+
+        debit_map  = {r['customer']: r['total'] for r in debit_rows}
+        credit_map = {r['customer']: r['total'] for r in credit_rows}
+
+        all_cids = set(debit_map.keys()) | set(credit_map.keys())
+
+        # Fetch all relevant customers in one query
+        customers_qs = Customer.objects.filter(shop=shop, id__in=all_cids)
+        if search_q:
+            customers_qs = customers_qs.filter(
+                Q(name__icontains=search_q) | Q(phone__icontains=search_q)
+            )
+        customers_map = {c.id: c for c in customers_qs}
+
+        results = []
+        for cid in all_cids:
+            if cid not in customers_map:
+                continue  # filtered out by search
+
+            balance = (debit_map.get(cid) or Decimal('0')) - (credit_map.get(cid) or Decimal('0'))
+            if balance == 0:
+                continue  # fully settled — skip
+
+            balance_type = 'due' if balance > 0 else 'credit'
+
+            if balance_type_filter and balance_type != balance_type_filter:
+                continue
+
+            cust = customers_map[cid]
+
+            # Collect linked orders for this customer
+            orders = list(
+                Order.objects.filter(shop=shop, customer_id=cid)
+                .order_by('-created_at')[:5]
+                .values('id', 'order_no', 'grand_total', 'advance', 'payment_status', 'order_status', 'created_at')
+            )
+
+            # Collect linked invoices
+            invoices = list(
+                Invoice.objects.filter(shop=shop, customer_id=cid)
+                .order_by('-created_at')[:5]
+                .values('id', 'invoice_no', 'grand_total', 'is_paid', 'created_at')
+            )
+
+            # Collect linked estimates
+            estimates = list(
+                Estimate.objects.filter(shop=shop, customer_id=cid)
+                .order_by('-created_at')[:5]
+                .values('id', 'estimate_no', 'grand_total', 'is_paid', 'created_at')
+            )
+
+            results.append({
+                "customer_id": cid,
+                "customer_name": cust.name,
+                "customer_phone": cust.phone or '',
+                "customer_address": cust.address or '',
+                "balance": float(abs(balance)),
+                "balance_type": balance_type,   # 'due' | 'credit'
+                "orders": [
+                    {
+                        "id": o['id'],
+                        "order_no": o['order_no'],
+                        "grand_total": float(o['grand_total'] or 0),
+                        "advance": float(o['advance'] or 0),
+                        "payment_status": o['payment_status'],
+                        "order_status": o['order_status'],
+                        "created_at": o['created_at'].isoformat() if o['created_at'] else '',
+                    }
+                    for o in orders
+                ],
+                "invoices": [
+                    {
+                        "id": i['id'],
+                        "invoice_no": i['invoice_no'],
+                        "grand_total": float(i['grand_total'] or 0),
+                        "is_paid": i['is_paid'],
+                        "created_at": i['created_at'].isoformat() if i['created_at'] else '',
+                    }
+                    for i in invoices
+                ],
+                "estimates": [
+                    {
+                        "id": e['id'],
+                        "estimate_no": e['estimate_no'],
+                        "grand_total": float(e['grand_total'] or 0),
+                        "is_paid": e['is_paid'],
+                        "created_at": e['created_at'].isoformat() if e['created_at'] else '',
+                    }
+                    for e in estimates
+                ],
+            })
+
+        # Sort: largest balance first
+        results.sort(key=lambda x: x['balance'], reverse=True)
+
+        total_due    = sum(r['balance'] for r in results if r['balance_type'] == 'due')
+        total_credit = sum(r['balance'] for r in results if r['balance_type'] == 'credit')
+
+        return Response({
+            "total_due": total_due,
+            "total_credit": total_credit,
+            "count": len(results),
+            "results": results,
+        })
+

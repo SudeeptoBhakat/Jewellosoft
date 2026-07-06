@@ -53,7 +53,7 @@ export default function ClassicTemplate({ data }) {
     const totalMaking = hasMaking ? items.reduce((sum, item) => sum + (Number(item.making) || 0), 0) : 0;
     const totalMetalValue = hasMetalVal ? items.reduce((sum, item) => sum + (Number(item.metalValue) || 0), 0) : 0;
 
-    const isInvoice = docType.includes("INVOICE");
+    const isInvoice = docType.includes("INVOICE") || data.orderType?.toLowerCase() === "invoice";
 
     // ── Determine column count for colspan calculations ──
     const dataColCount = 2 + (hasHuid ? 1 : 0) + 1 + (hasMetalVal ? 1 : 0) + (hasMaking ? 1 : 0) + 1;
@@ -353,8 +353,12 @@ export default function ClassicTemplate({ data }) {
                                         )}
                                         {has(totals.hallmark) && <tr><td>Hallmark Charges (+)</td><td>{fmt(totals.hallmark)}</td></tr>}
                                         {has(totals.otherCharges) && <tr><td>Other Charges (+)</td><td>{fmt(totals.otherCharges)}</td></tr>}
-                                        {has(totals.cgst) && <tr><td>CGST (1.5%) (+)</td><td>{fmt(totals.cgst)}</td></tr>}
-                                        {has(totals.sgst) && <tr><td>SGST (1.5%) (+)</td><td>{fmt(totals.sgst)}</td></tr>}
+                                        {isInvoice && totals.isIgst ? (
+                                            has(totals.igst) && <tr><td>IGST ({totals.igstRate || 3}%) (+)</td><td>{fmt(totals.igst)}</td></tr>
+                                        ) : (<>
+                                            {isInvoice && has(totals.cgst) && <tr><td>CGST ({(totals.gstRate || 3) / 2}%) (+)</td><td>{fmt(totals.cgst)}</td></tr>}
+                                            {isInvoice && has(totals.sgst) && <tr><td>SGST ({(totals.gstRate || 3) / 2}%) (+)</td><td>{fmt(totals.sgst)}</td></tr>}
+                                        </>)}
                                         {has(totals.prevAdvance) || has(totals.newAdvance) ? (
                                             <>
                                                 {has(totals.prevAdvance) && <tr><td style={{ color: '#2e7d32' }}>Prev Advance Paid (−)</td><td style={{ color: '#2e7d32' }}>{fmt(totals.prevAdvance)}</td></tr>}
