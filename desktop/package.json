@@ -69,7 +69,7 @@
     ]
   },
   "devDependencies": {
-    "electron": "^42.2.0",
+    "electron": "^43.1.0",
     "electron-builder": "^26.8.1",
     "stat-mode": "^1.0.0"
   },
