@@ -31,11 +31,20 @@ class BaseBilling(BaseModel):
         ('none', 'None'),
         ('weight', 'By Weight'),
         ('value', 'By Direct Value'),
+        ('voucher', 'By Purchase Voucher'),
     ]
     old_settlement_mode = models.CharField(max_length=10, choices=OLD_SETTLEMENT_CHOICES, default='none')
     old_metal_raw_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     old_deduct_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     old_deduct_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    old_purchase_voucher = models.ForeignKey(
+        'old_purchases.OldPurchaseVoucher',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_settlements'
+    )
+    old_voucher_rate_used = models.CharField(max_length=10, default='saved') # 'saved' | 'current'
 
     advance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 

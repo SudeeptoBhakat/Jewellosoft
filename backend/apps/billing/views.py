@@ -36,6 +36,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             logger.error("Error creating invoice: %s", str(e), exc_info=True)
             return Response({"detail": "An error occurred while creating the invoice."}, status=status.HTTP_400_BAD_REQUEST)
 
+    def perform_destroy(self, instance):
+        if instance.old_purchase_voucher:
+            from apps.old_purchases.services import release_voucher
+            release_voucher(instance.old_purchase_voucher)
+        instance.delete()
+
 class EstimateViewSet(viewsets.ModelViewSet):
     serializer_class = EstimateSerializer
     
@@ -62,6 +68,12 @@ class EstimateViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error("Error creating estimate: %s", str(e), exc_info=True)
             return Response({"detail": "An error occurred while creating the estimate."}, status=status.HTTP_400_BAD_REQUEST)
+
+    def perform_destroy(self, instance):
+        if instance.old_purchase_voucher:
+            from apps.old_purchases.services import release_voucher
+            release_voucher(instance.old_purchase_voucher)
+        instance.delete()
 
     @action(detail=True, methods=['post'])
     def convert(self, request, pk=None):

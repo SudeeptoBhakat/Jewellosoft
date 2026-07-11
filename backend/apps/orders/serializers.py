@@ -1,5 +1,6 @@
 import base64
 import uuid
+from datetime import date
 from django.core.files.base import ContentFile
 from rest_framework import serializers
 from .models import Order, OrderItem, OrderImage
@@ -31,9 +32,14 @@ class OrderSerializer(serializers.ModelSerializer):
     advance_payments = serializers.SerializerMethodField()
     due_amount = serializers.SerializerMethodField()
 
+    old_purchase_voucher_no = serializers.SerializerMethodField()
+
     class Meta:
         model = Order
         fields = '__all__'
+
+    def get_old_purchase_voucher_no(self, obj):
+        return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None
 
     def get_advance_payments(self, obj):
         return [
@@ -98,10 +104,18 @@ class OrderSerializer(serializers.ModelSerializer):
             order_type = validated_data.get('order_type', 'invoice')
             prefix = "ORD-INV" if order_type == "invoice" else "ORD-EST"
             shop = validated_data.get('shop')
-            next_num = NumberingSequence.get_next_number(shop, f"order_{order_type}")
-            validated_data['order_no'] = f"{prefix}-2026-{next_num:03d}"
+            year = date.today().year
+            next_num = NumberingSequence.get_next_number(shop, f"order_{order_type}_{year}")
+            validated_data['order_no'] = f"{prefix}-{year}-{next_num:03d}"
 
         order = Order.objects.create(**validated_data)
+
+        if order.old_settlement_mode == 'voucher' and order.old_purchase_voucher:
+            from apps.old_purchases.services import apply_voucher
+            if order.order_type == 'estimate':
+                apply_voucher(order.old_purchase_voucher, estimate_no=order.order_no)
+            else:
+                apply_voucher(order.old_purchase_voucher, invoice_no=order.order_no)
 
         shop = order.shop
         customer = order.customer

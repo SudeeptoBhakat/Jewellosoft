@@ -187,7 +187,7 @@ export default function StandardTemplate({ data }) {
 
                 {/* ── OLD GOLD CALCULATION BREAKDOWN ROW ── */}
 
-                {hasOldMetal && Number(oldMetal.weight || 0) > 0 && (() => {
+                {hasOldMetal && (oldMetal.mode === 'weight' || (oldMetal.mode === 'voucher' && oldMetal.rateUsed === 'current')) && Number(oldMetal.weight || 0) > 0 && (() => {
                     const oldW = Number(oldMetal.weight || 0);
                     const newW = Number(totals.weightTotal || 0);
                     const ratePerGram = Number(rates.rate10gm || 0) / 10;
@@ -228,6 +228,18 @@ export default function StandardTemplate({ data }) {
                         </div>
                     );
                 })()}
+
+                {hasOldMetal && (oldMetal.mode === 'value' || (oldMetal.mode === 'voucher' && oldMetal.rateUsed === 'saved')) && (
+                    <div className="old-calc-breakdown-row">
+                        <span style={{ fontWeight: 700 }}>
+                            {oldMetal.mode === 'voucher' ? `Old Metal (Voucher #${oldMetal.voucherNo})` : 'Old Metal (Direct Value)'}
+                        </span>
+                        <span style={{ color: '#64748b', margin: '0 8px' }}>|</span>
+                        <span>
+                            Credit Value: −{fmt(oldMetal.value)}
+                        </span>
+                    </div>
+                )}
 
                 {/* Old Breakdown End */}
 

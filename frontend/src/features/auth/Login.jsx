@@ -40,12 +40,6 @@ export default function Login() {
       return;
     }
 
-    // Offline guard
-    if (!isOnline) {
-      setError('You are offline. Please check your internet connection.');
-      return;
-    }
-
     // Cooldown guard
     if (cooldown > 0) {
       setError(`Please wait ${cooldown} seconds before trying again.`);
@@ -61,7 +55,11 @@ export default function Login() {
       setError(msg);
 
       // Start cooldown if rate-limited
-      if (msg.toLowerCase().includes('too many') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('wait')) {
+      if (
+        msg.toLowerCase().includes('too many') ||
+        msg.toLowerCase().includes('rate limit') ||
+        msg.toLowerCase().includes('wait')
+      ) {
         startCooldown(60);
       }
     } finally {
@@ -82,7 +80,10 @@ export default function Login() {
       {!isOnline && (
         <div style={{ backgroundColor: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 10 }}>
           <i className="fa-solid fa-wifi" style={{ opacity: 0.7 }}></i>
-          You are currently offline. Login requires an internet connection.
+          <span>
+            You are <strong>offline</strong>. Online login is unavailable.
+            If you have logged in before on this device, you can still sign in using your saved credentials.
+          </span>
         </div>
       )}
 
@@ -136,8 +137,8 @@ export default function Login() {
           {cooldown > 0
             ? `Please wait (${cooldown}s)`
             : loading
-              ? 'Signing in...'
-              : 'Sign In'}
+              ? (isOnline ? 'Signing in...' : 'Verifying offline...')
+              : (isOnline ? 'Sign In' : 'Sign In (Offline Mode)')}
         </button>
       </form>
 

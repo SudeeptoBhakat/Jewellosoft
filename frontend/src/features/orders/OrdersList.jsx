@@ -388,6 +388,17 @@ export default function OrdersList() {
         deductPct: 0,
         deductAmt: 0,
       };
+    } else if (oldMode === 'voucher') {
+      oldMetal = {
+        weight: oldWt,
+        value: order.old_voucher_rate_used === 'current' ? oldAmt : oldValueDirect || oldAmt,
+        mode: 'voucher',
+        rawValue: parseFloat(order.old_metal_raw_value || 0) || (order.old_voucher_rate_used === 'current' ? oldAmt : oldValueDirect || oldAmt),
+        deductPct: parseFloat(order.old_deduct_percent || 0),
+        deductAmt: parseFloat(order.old_deduct_amount || 0),
+        voucherNo: order.old_purchase_voucher_no,
+        rateUsed: order.old_voucher_rate_used,
+      };
     } else if (oldAmt > 0) {
       oldMetal = { weight: oldWt, value: oldAmt, mode: 'weight', rawValue: oldAmt, deductPct: 0, deductAmt: 0 };
     }

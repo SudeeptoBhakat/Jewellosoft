@@ -59,6 +59,7 @@ class BillingEngine:
         self.old_weight = _safe(extra.get('old_weight', 0))
         self.old_less_percent = _safe(extra.get('old_less_percent', 0))
         self.old_value_direct = _safe(extra.get('old_value_direct', 0))
+        self.old_voucher_rate_used = extra.get('old_voucher_rate_used', 'saved')
 
         # Charges
         self.hallmark = _safe(extra.get('hallmark_charges', 0))
@@ -132,7 +133,28 @@ class BillingEngine:
                 old_deduct_amt = _r2(excess_value * self.old_less_percent / Decimal(100))
                 effective_old_value = _r2(excess_value - old_deduct_amt)
 
+        elif self.old_settlement_mode == 'voucher':
+            if self.old_voucher_rate_used == 'current' and self.old_weight > 0:
+                old_mv = _r2(self.old_weight * self.rate_per_g)
+                has_old = True
+
+                if self.old_weight <= total_weight:
+                    effective_old_value = old_mv
+                else:
+                    excess_wt = _r2(self.old_weight - total_weight)
+                    excess_value = _r2(excess_wt * self.rate_per_g)
+                    old_deduct_amt = _r2(excess_value * self.old_less_percent / Decimal(100))
+                    effective_old_value = _r2(excess_value - old_deduct_amt)
+            else:
+                val = self.old_value_direct or _safe(extra.get('old_amount', 0))
+                effective_old_value = val
+                old_mv = val
+                has_old = True
+
         # ── Scenario branching ──
+        is_value_like = self.old_settlement_mode == 'value' or (self.old_settlement_mode == 'voucher' and self.old_voucher_rate_used == 'saved')
+        is_weight_like = self.old_settlement_mode == 'weight' or (self.old_settlement_mode == 'voucher' and self.old_voucher_rate_used == 'current')
+
         if not has_old:
             # SCENARIO 1: Normal
             subtotal = new_product_value
@@ -140,14 +162,14 @@ class BillingEngine:
             pre_round = _r2(net_total + self.other - self.advance - self.discount)
             transaction_type = 'payable'
 
-        elif self.old_settlement_mode == 'value':
-            # DIRECT VALUE MODE
+        elif is_value_like:
+            # DIRECT VALUE MODE or VOUCHER SAVED RATE
             subtotal = _r2(new_product_value - effective_old_value)
             net_total = _r2(subtotal + self.hallmark + total_gst)
             pre_round = _r2(net_total + self.other - self.advance - self.discount)
             transaction_type = 'payable' if pre_round >= 0 else 'return'
 
-        elif self.old_weight <= total_weight:
+        elif is_weight_like and self.old_weight <= total_weight:
             # SCENARIO 2: Old ≤ New (customer pays)
             subtotal = _r2(new_product_value - effective_old_value)
             net_total = _r2(subtotal + self.hallmark + total_gst)

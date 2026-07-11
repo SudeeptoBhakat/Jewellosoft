@@ -14,6 +14,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
 import api from '../lib/axios';
+import { toast } from '../utils/toast';
 
 const AuthContext = createContext({
   user: null,
@@ -88,64 +89,90 @@ export function AuthProvider({ children }) {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       try {
         const res = await api.post('/accounts/auth/offline-login/', { email, password });
-        setUser(res.data.user);
-        setShop(res.data.shop);
+        const userData = res.data.user || { email, is_offline: true };
+        setUser(userData);
+        setShop(res.data.shop || null);
         if (res.data.shop?.hallmark_value) {
           localStorage.setItem('jewellosoft_hallmark_value', res.data.shop.hallmark_value);
         }
         if (res.data.access_token) {
           localStorage.setItem('access_token', res.data.access_token);
         }
+        // Surface sync warning to user
+        if (res.data.warning) {
+          toast.warning(res.data.warning);
+        }
       } catch (err) {
-        throw new Error(err.response?.data?.detail || "Invalid password or profile not found for offline mode.");
+        throw new Error(err.response?.data?.detail || 'Invalid password or profile not found for offline mode.');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
       return;
     }
 
     // 1. Supabase Native Login
-    await authService.signIn(email, password);
-    
+    const { session } = await authService.signIn(email, password);
+    if (!session?.access_token) {
+      throw new Error('Login failed: No session returned from Supabase.');
+    }
+
     // 2. Activate Local Offline License & sync Shop Profile
     try {
       const res = await api.post('/accounts/auth/activate/', { password });
-      setUser(res.data.license); // Set User from license structure
-      setShop(res.data.shop);
+
+      // Backend now returns { status, license, user: {id, email}, shop }
+      // Use the explicit 'user' object — never the raw 'license' payload.
+      const userData = res.data.user || { email, id: res.data.license?.user_id };
+      setUser(userData);
+      setShop(res.data.shop || null);
+
       if (res.data.shop?.hallmark_value) {
         localStorage.setItem('jewellosoft_hallmark_value', res.data.shop.hallmark_value);
       }
     } catch (err) {
-       if (err.response?.status === 403) {
-         alert("Subscription inactive or expired. Please manage your subscription online.");
-       }
-       throw err;
+      if (err.response?.status === 403) {
+        alert('Subscription inactive or expired. Please manage your subscription online.');
+      }
+      throw err;
     } finally {
-       setLoading(false);
+      setLoading(false);
     }
   }, []);
 
   const register = useCallback(async (email, password, metadata) => {
-    // 1. Supabase Native Register (Postgres Trigger instantly creates profile)
+    // 1. Create Supabase account. If email confirmation is required, session may be null.
     const { session, user } = await authService.signUp(email, password, metadata);
     const needsEmailConfirmation = !session;
-    
-    // 2. Login implicitly happens, so let's activate the DB
+
+    // 2. Wait briefly for the Supabase Postgres trigger (handle_new_user) to propagate.
+    //    This avoids a race condition where the profile row doesn't exist yet when
+    //    activate is called immediately after signup.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // 3. Activate local license. Pass email explicitly — JWT may be absent when
+    //    email confirmation is pending (session = null).
     try {
-      // NOTE: We pass email explicitly so backend can resolve user if JWT is missing due to confirmation pending
-      const res = await api.post('/accounts/auth/activate/', { 
-        email, 
-        password, 
-        ...metadata 
+      const res = await api.post('/accounts/auth/activate/', {
+        email,
+        password,
+        ...metadata,
       });
-      setUser(res.data.license || res.data.user); 
-      setShop(res.data.shop);
+
+      // Backend returns { status, license, user: {id, email}, shop }
+      const userData = res.data.user || { email, id: res.data.license?.user_id };
+      setUser(userData);
+      setShop(res.data.shop || null);
+
+      if (res.data.shop?.hallmark_value) {
+        localStorage.setItem('jewellosoft_hallmark_value', res.data.shop.hallmark_value);
+      }
     } catch (err) {
-       console.warn("[AuthContext:Register] Activation failed: ", err);
-       throw err;
+      console.warn('[AuthContext:Register] Activation failed:', err);
+      throw err;
     } finally {
-       setLoading(false);
+      setLoading(false);
     }
-    
+
     return { needsEmailConfirmation };
   }, []);
 

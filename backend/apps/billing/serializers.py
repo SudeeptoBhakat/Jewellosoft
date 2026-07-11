@@ -17,9 +17,14 @@ class InvoiceSerializer(serializers.ModelSerializer):
     customer_detail = BasicCustomerSerializer(source='customer', read_only=True)
     advance_payments = serializers.SerializerMethodField()
     
+    old_purchase_voucher_no = serializers.SerializerMethodField()
+    
     class Meta:
         model = Invoice
         fields = '__all__'
+
+    def get_old_purchase_voucher_no(self, obj):
+        return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None
 
     def get_advance_payments(self, obj):
         try:
@@ -54,9 +59,14 @@ class EstimateSerializer(serializers.ModelSerializer):
     customer_detail = BasicCustomerSerializer(source='customer', read_only=True)
     advance_payments = serializers.SerializerMethodField()
 
+    old_purchase_voucher_no = serializers.SerializerMethodField()
+
     class Meta:
         model = Estimate
         fields = '__all__'
+
+    def get_old_purchase_voucher_no(self, obj):
+        return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None
 
     def get_advance_payments(self, obj):
         try:

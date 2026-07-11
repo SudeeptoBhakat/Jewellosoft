@@ -29,6 +29,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(shop=self.request.shop)
 
+    def perform_destroy(self, instance):
+        if instance.old_purchase_voucher:
+            from apps.old_purchases.services import release_voucher
+            release_voucher(instance.old_purchase_voucher)
+        instance.delete()
+
     @action(detail=True, methods=['patch'], url_path='update-item-status')
     def update_item_status(self, request, pk=None):
         order = self.get_object()

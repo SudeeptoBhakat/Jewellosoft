@@ -21,6 +21,8 @@ import Customers from '../../features/customers/Customers';
 import Settings from '../../features/settings/Settings';
 import Advances from '../../features/advances/Advances';
 import DuesCreditsList from '../../features/dashboard/DuesCreditsList';
+import OldPurchaseVoucher from '../../features/old-purchases/OldPurchaseVoucher';
+import OldPurchaseVoucherList from '../../features/old-purchases/OldPurchaseVoucherList';
 
 
 export default function MainLayout() {
@@ -41,6 +43,8 @@ export default function MainLayout() {
       case '/settings': return 'fa-solid fa-gear';
       case '/advances': return 'fa-solid fa-hand-holding-dollar';
       case '/dues-credits': return 'fa-solid fa-scale-balanced';
+      case '/old-purchases': return 'fa-solid fa-ticket';
+      case '/old-purchases/list': return 'fa-solid fa-file-invoice';
       default: return 'fa-solid fa-file';
     }
   };
@@ -62,6 +66,8 @@ export default function MainLayout() {
       case '/settings': return <Settings {...props} />;
       case '/advances': return <Advances {...props} />;
       case '/dues-credits': return <DuesCreditsList {...props} />;
+      case '/old-purchases': return <OldPurchaseVoucher {...props} />;
+      case '/old-purchases/list': return <OldPurchaseVoucherList {...props} />;
       default: return <div>Page not found: {path}</div>;
     }
   };

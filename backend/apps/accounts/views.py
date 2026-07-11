@@ -77,83 +77,135 @@ class LicenseStatusView(APIView):
         return Response(info)
 
 
+import time as _time
 from datetime import datetime, timezone
+
 
 class LicenseActivateView(APIView):
     """
-    Called on first login when online.
+    Called on first login/registration when online.
     Receives JWT, cleanly queries public.profiles using Service Role to provision local license.
+
+    Flow:
+      1. If a valid Bearer JWT was decoded by middleware → use request.supabase_user.
+      2. Otherwise fall back to email lookup (registration with email-confirm pending).
+      3. On registration path: upsert profile immediately (don't rely on slow Postgres trigger).
+      4. On login path: retry profile fetch up to 3× to tolerate trigger propagation delay.
+      5. Generate local license using a safe resolved user dict (never passes None).
     """
     authentication_classes = []
     permission_classes = []
-    
+
     def post(self, request):
         user_id = None
         email = None
-        
+
+        # ── Step 1: Resolve identity ─────────────────────────────────
         if request.supabase_user:
-            user_id = request.supabase_user['id']
+            user_id = request.supabase_user.get('id')
             email = request.supabase_user.get('email')
-        else:
-            email = request.data.get('email')
+
+        # No JWT decoded (email-confirm pending or missing token) → resolve by email
+        if not user_id:
+            email = email or request.data.get('email')
             if not email:
-                return Response({"detail": "Invalid or missing Supabase Auth Token."}, status=401)
-                
-            try:
-                from apps.core.services.supabase import get_supabase_client
-                client = get_supabase_client()
-                # Attempt to find user by email from profiles table
-                res = client.table("profiles").select("id").eq("email", email).execute()
-                if res.data and len(res.data) > 0:
-                    user_id = res.data[0]['id']
-                else:
-                    return Response({"detail": "User registration incomplete on cloud."}, status=404)
-            except Exception as e:
-                logger.error(f"[ActivateView] Failed to find user by email: {e}")
-                return Response({"detail": "Error resolving user from cloud."}, status=500)
-            
+                return Response(
+                    {"detail": "Authentication required. Please provide a valid email."},
+                    status=401
+                )
+
+            # Only attempt cloud lookup if NOT a registration (registration upserts below)
+            is_registering_early = bool(
+                request.data.get('shop_name') or request.data.get('shopName')
+            )
+            if not is_registering_early:
+                try:
+                    from apps.core.services.supabase import get_supabase_client
+                    client = get_supabase_client()
+                    # Retry up to 3× with 1 s delay — tolerate Postgres trigger lag
+                    for attempt in range(3):
+                        res = client.table("profiles").select("id").eq("email", email).execute()
+                        if res.data and len(res.data) > 0:
+                            user_id = res.data[0]['id']
+                            break
+                        if attempt < 2:
+                            _time.sleep(1)
+
+                    if not user_id:
+                        return Response(
+                            {"detail": "User registration incomplete on cloud. Please verify your email."},
+                            status=404
+                        )
+                except Exception as e:
+                    logger.error(f"[ActivateView] Failed to resolve user by email: {e}")
+                    return Response({"detail": "Error resolving user from cloud."}, status=500)
+
+        # ── Build a safe resolved-user dict (never None) ─────────────
+        # This is what gets written into the local license file.
+        resolved_user = {
+            'id': user_id,
+            'email': email,
+        }
+
         try:
             from apps.core.services.supabase import get_supabase_client
             client = get_supabase_client()
-            
-            # Check if this request includes registration metadata.
+
+            # ── Step 2: Build / fetch the remote profile ─────────────
             is_registering = bool(request.data.get('shop_name') or request.data.get('shopName'))
-            
+
             if is_registering:
-                # Force UPSERT profile (ignore trigger) and create subscription (free trial)
-                shop_name = request.data.get('shop_name') or request.data.get('shopName') or "My Jewellery Shop"
-                owner_name = request.data.get('owner_name') or request.data.get('ownerName') or ""
-                phone = request.data.get('mobile_number') or request.data.get('mobileNumber') or ""
-                
+                # Upsert profile directly — don't rely solely on the async Postgres trigger.
                 from datetime import timedelta
+                shop_name  = request.data.get('shop_name')  or request.data.get('shopName')  or "My Jewellery Shop"
+                owner_name = request.data.get('owner_name') or request.data.get('ownerName') or ""
+                phone      = request.data.get('mobile_number') or request.data.get('mobileNumber') or ""
                 expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                
+
                 new_profile = {
-                    "id": user_id,
-                    "email": email,
-                    "shop_name": shop_name,
-                    "owner_name": owner_name,
+                    "id":            user_id,
+                    "email":         email,
+                    "shop_name":     shop_name,
+                    "owner_name":    owner_name,
                     "mobile_number": phone,
-                    "plan": "free",
-                    "is_active": True,
-                    "expires_at": expires_at
+                    "plan":          "free",
+                    "is_active":     True,
+                    "expires_at":    expires_at,
                 }
-                upsert_res = client.table("profiles").upsert(new_profile).execute()
-                profile = upsert_res.data[0] if upsert_res.data else new_profile
+
+                # If user_id is not yet resolved (email-confirm path), upsert by email
+                if user_id:
+                    upsert_res = client.table("profiles").upsert(new_profile).execute()
+                    profile = upsert_res.data[0] if upsert_res.data else new_profile
+                else:
+                    # user_id unknown — build an in-memory profile for local provisioning
+                    profile = new_profile
             else:
-                # Fetch remote subscription/profile safely bypassing RLS
-                res = client.table("profiles").select("*").eq("id", user_id).execute()
-                if not res.data or len(res.data) == 0:
-                    return Response({"detail": "Profile not found. Please contact support."}, status=403)
-                profile = res.data[0]
-            
+                # Login path — fetch existing profile with retry for trigger lag
+                profile = None
+                for attempt in range(3):
+                    res = client.table("profiles").select("*").eq("id", user_id).execute()
+                    if res.data and len(res.data) > 0:
+                        profile = res.data[0]
+                        break
+                    if attempt < 2:
+                        _time.sleep(1)
+
+                if not profile:
+                    return Response(
+                        {"detail": "Profile not found. Please contact support."},
+                        status=403
+                    )
+
+            # ── Step 3: Subscription validation ─────────────────────
             if not profile.get('is_active'):
-                return Response({"detail": "Subscription inactive. Please renew to access the offline app."}, status=403)
-                
+                return Response(
+                    {"detail": "Subscription inactive. Please renew to access the offline app."},
+                    status=403
+                )
+
             expires_at_str = profile.get('expires_at')
-            
             if expires_at_str:
-                # Naive to UTC conversion from ISO
                 expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
                 if expires_at.tzinfo is None:
                     expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -161,98 +213,153 @@ class LicenseActivateView(APIView):
                     return Response({"detail": "Subscription expired!"}, status=403)
                 days_valid = (expires_at - datetime.now(timezone.utc)).days
             else:
-                days_valid = 30 # Default safety fallback
-                
+                days_valid = 30
+
             sub_data = {
-                "plan": profile.get("plan", "free"),
-                "days_valid": max(1, days_valid) # Ensure it has at least 1 remaining day
+                "plan":       profile.get("plan", "free"),
+                "days_valid": max(1, days_valid),
             }
-            
-            # Provision Local Encrypted License
-            payload = LicenseManager.generate_license(request.supabase_user, sub_data)
-            
-            # Persist Shop Info seamlessly and OVERWRITE with the latest cloud truth
-            # Query shop belonging specifically to this user / email
-            shop = Shop.objects.filter(supabase_user_id=user_id).first()
+
+            # ── Step 4: Generate local encrypted license ─────────────
+            # Always pass the RESOLVED user dict — never request.supabase_user directly
+            # (which can be None during email-confirm flow).
+            license_payload = LicenseManager.generate_license(resolved_user, sub_data)
+
+            # ── Step 5: Persist / update Shop in local SQLite ────────
+            shop = Shop.objects.filter(supabase_user_id=user_id).first() if user_id else None
             if not shop and email:
                 shop = Shop.objects.filter(supabase_email=email).first()
 
+            shop_name_val  = profile.get('shop_name')  or profile.get('shopName')  or "My Jewellery Shop"
+            owner_name_val = profile.get('owner_name') or profile.get('ownerName') or ""
+            phone_val      = profile.get('mobile_number') or profile.get('mobileNumber') or ""
+
             if shop:
-                shop.supabase_user_id = user_id
-                shop.name = profile.get('shop_name') or profile.get('shopName') or shop.name or "My Jewellery Shop"
-                shop.owner_name = profile.get('owner_name') or profile.get('ownerName') or shop.owner_name or ""
-                shop.phone = profile.get('mobile_number') or profile.get('mobileNumber') or shop.phone or ""
+                if user_id:
+                    shop.supabase_user_id = user_id
+                shop.name        = shop_name_val  or shop.name or "My Jewellery Shop"
+                shop.owner_name  = owner_name_val or shop.owner_name or ""
+                shop.phone       = phone_val      or shop.phone or ""
                 shop.supabase_email = email
                 shop.save()
             else:
                 shop = Shop.objects.create(
                     supabase_user_id=user_id,
-                    name=profile.get('shop_name') or profile.get('shopName') or "My Jewellery Shop",
-                    owner_name=profile.get('owner_name') or profile.get('ownerName') or "",
-                    phone=profile.get('mobile_number') or profile.get('mobileNumber') or "",
-                    supabase_email=email
+                    name=shop_name_val,
+                    owner_name=owner_name_val,
+                    phone=phone_val,
+                    supabase_email=email,
                 )
-            
-            # Persist Offline Authentication credentials
+
+            # ── Step 6: Persist offline credentials ─────────────────
             raw_password = request.data.get('password')
             if raw_password and email:
-                from django.contrib.auth.models import User
-                user_obj, _ = User.objects.update_or_create(
+                from django.contrib.auth.models import User as DjangoUser
+                user_obj, _ = DjangoUser.objects.update_or_create(
                     username=email,
                     defaults={'email': email}
                 )
                 user_obj.set_password(raw_password)
                 user_obj.save()
-            
+
+            logger.info(
+                f"[LicenseActivate] Provisioned license for {email} "
+                f"(user_id={user_id}, plan={sub_data['plan']}, "
+                f"days_valid={sub_data['days_valid']}, registering={is_registering})"
+            )
+
             return Response({
                 "status": "activated",
-                "license": payload,
-                "shop": ShopSerializer(shop).data
+                "license": license_payload,
+                "user": {
+                    "id":    user_id,
+                    "email": email,
+                },
+                "shop": ShopSerializer(shop).data,
             })
-            
+
         except Exception as e:
-            logger.error(f"[LicenseActivate] Failed provisioning: {e}")
-            return Response({"detail": "Internal verification error.", "error": str(e)}, status=500)
+            logger.error(f"[LicenseActivate] Failed provisioning: {e}", exc_info=True)
+            return Response(
+                {"detail": "Internal verification error.", "error": str(e)},
+                status=500
+            )
 
 
 class OfflineLoginView(APIView):
     """
     Called when frontend logs in without internet.
-    Verifies user against local DB password hash.
+    Verifies user against local DB password hash and local license.
+
+    License gate logic:
+      - 'missing'             → no license installed yet; block with clear message
+      - 'active' / 'grace'   → allow
+      - 'force_sync_required' → allow with a warning (will re-validate on next online session)
+      - 'expired' / 'corrupt' / 'tampered' / 'device_mismatch' / 'date_tampering' → block
     """
     authentication_classes = []
     permission_classes = []
-    
+
+    # Statuses that are still acceptable for offline use
+    _OFFLINE_ALLOWED_STATUSES = {'active', 'grace_period', 'force_sync_required'}
+
     def post(self, request):
-        email = request.data.get('email')
+        email    = request.data.get('email')
         password = request.data.get('password')
-        
+
+        if not email or not password:
+            return Response({"detail": "Email and password are required."}, status=400)
+
         from django.contrib.auth import authenticate
         user = authenticate(username=email, password=password)
-        
+
         if not user:
             return Response({"detail": "Invalid local credentials."}, status=401)
-            
+
         shop = Shop.objects.filter(supabase_email=email).first()
         if not shop:
-            return Response({"detail": "No local shop configuration found for this account."}, status=404)
-            
-        # Optional: check if license matches device
+            return Response(
+                {"detail": "No local shop found. Please connect to the internet and log in once to set up offline access."},
+                status=404
+            )
+
+        # ── License gate ─────────────────────────────────────────────
         l_info = LicenseManager.validate_license()
-        if not l_info.get('valid') and l_info.get('status') != 'missing':
-            # Missing allows fresh offline use technically if we are lenient, or we can enforce
-            return Response({"detail": "Device license verification failed offline.", "status": l_info.get('status')}, status=403)
-            
-        return Response({
+        l_status = l_info.get('status', 'missing')
+
+        if l_status == 'missing':
+            return Response(
+                {"detail": "No local license found. Please connect to the internet and log in to activate your license."},
+                status=403
+            )
+
+        if l_status not in self._OFFLINE_ALLOWED_STATUSES:
+            return Response(
+                {
+                    "detail": "Device license verification failed. Please connect to the internet to renew.",
+                    "license_status": l_status,
+                },
+                status=403
+            )
+
+        warning = None
+        if l_status == 'force_sync_required':
+            warning = "Your license hasn't been verified in over 7 days. Please connect to the internet soon."
+
+        response_data = {
             "status": "offline_logged_in",
             "access_token": "offline-session-token",
             "user": {
-                "email": email,
+                "email":      email,
                 "is_offline": True,
-                "id": shop.supabase_user_id
+                "id":         shop.supabase_user_id,
             },
-            "shop": ShopSerializer(shop).data
-        })
+            "shop": ShopSerializer(shop).data,
+        }
+        if warning:
+            response_data["warning"] = warning
+
+        return Response(response_data)
 
 
 class WatermarkUploadView(APIView):

@@ -73,6 +73,8 @@ export default function ClassicTemplate({ data }) {
     const oldMetalLabel = hasOldMetal
         ? (oldMetal.mode === "value"
             ? "Old Metal (Direct Entry)"
+            : oldMetal.mode === "voucher"
+            ? `Old Metal (Voucher #${oldMetal.voucherNo})`
             : `Old Metal (${Number(oldMetal.weight || 0).toFixed(3)}g)`)
         : "";
 

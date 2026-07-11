@@ -1,5 +1,6 @@
 from django.db import transaction
 import time
+from datetime import date
 from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 
@@ -7,15 +8,39 @@ from .inventory_service import deduct_inventory
 from .payment_service import process_payments
 from apps.billing.models import Invoice, BillingItem, Estimate
 
-def generate_invoice_no(shop):
+def generate_invoice_no(shop, max_retries=20):
+    """
+    Generates a unique Invoice number.
+    Uses a per-year sequence key so rolling over to a new year auto-resets.
+    Retries up to max_retries times if the generated number already exists
+    (handles edge-cases where a previous transaction rolled back but the
+    document was already manually created with that number).
+    """
     from apps.accounts.models import NumberingSequence
-    next_num = NumberingSequence.get_next_number(shop, 'invoice')
-    return f"INV-2026-{next_num:03d}"
+    from apps.billing.models import Invoice
+    year = date.today().year
+    seq_key = f'invoice_{year}'
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"INV-{year}-{next_num:03d}"
+        if not Invoice.objects.filter(shop=shop, invoice_no=candidate).exists():
+            return candidate
+    raise RuntimeError(f"Could not generate a unique invoice number after {max_retries} attempts.")
 
-def generate_estimate_no(shop):
+def generate_estimate_no(shop, max_retries=20):
+    """
+    Generates a unique Estimate number with the same collision-safe logic.
+    """
     from apps.accounts.models import NumberingSequence
-    next_num = NumberingSequence.get_next_number(shop, 'estimate')
-    return f"EST-2026-{next_num:03d}"
+    from apps.billing.models import Estimate
+    year = date.today().year
+    seq_key = f'estimate_{year}'
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"EST-{year}-{next_num:03d}"
+        if not Estimate.objects.filter(shop=shop, estimate_no=candidate).exists():
+            return candidate
+    raise RuntimeError(f"Could not generate a unique estimate number after {max_retries} attempts.")
 
 
 @transaction.atomic
@@ -75,6 +100,25 @@ def create_invoice(payload):
         except Exception:
             linked_order = None
 
+    # Check and apply Old Purchase Voucher if mode is voucher
+    old_purchase_voucher_val = None
+    old_voucher_rate_used_val = totals.get("old_voucher_rate_used", "saved")
+    if totals.get("old_settlement_mode") == "voucher":
+        from apps.old_purchases.models import OldPurchaseVoucher
+        voucher_id = (
+            payload.get("old_purchase_voucher_id")
+            or totals.get("old_purchase_voucher_id")
+            or payload.get("old_purchase_voucher")
+            or totals.get("old_purchase_voucher")
+        )
+        voucher_no_lookup = payload.get("old_purchase_voucher_no") or totals.get("old_purchase_voucher_no")
+        if voucher_id:
+            old_purchase_voucher_val = OldPurchaseVoucher.objects.get(id=voucher_id, shop_id=shop_id)
+        elif voucher_no_lookup:
+            old_purchase_voucher_val = OldPurchaseVoucher.objects.get(
+                voucher_no__iexact=voucher_no_lookup.strip(), shop_id=shop_id
+            )
+
     # Create Invoice Header from exact frontend totals
     invoice = Invoice.objects.create(
         shop_id=shop_id,
@@ -94,6 +138,8 @@ def create_invoice(payload):
         old_metal_raw_value=totals.get("old_metal_raw_value", 0),
         old_deduct_percent=totals.get("old_deduct_percent", 0),
         old_deduct_amount=totals.get("old_deduct_amount", 0),
+        old_purchase_voucher=old_purchase_voucher_val,
+        old_voucher_rate_used=old_voucher_rate_used_val,
         advance=totals.get("advance", 0),
         discount=totals.get("discount", 0),
         hallmark=totals.get("hallmark", 0),
@@ -106,6 +152,12 @@ def create_invoice(payload):
         transaction_type=totals.get("transaction_type", "payable"),
         payment_method=payment_splits[0].get("mode") if payment_splits else "cash"
     )
+
+    # Apply Old Purchase Voucher AFTER invoice row is committed — prevents
+    # the voucher being marked adjusted if invoice creation itself fails.
+    if old_purchase_voucher_val:
+        from apps.old_purchases.services import apply_voucher
+        apply_voucher(old_purchase_voucher_val, invoice_no=invoice_no)
 
     # 3. Write BillingItems
     invoice_ctype = ContentType.objects.get_for_model(Invoice)
@@ -213,6 +265,25 @@ def create_estimate(payload):
     shop = Shop.objects.get(id=shop_id)
     estimate_no = payload.get("invoice_no") or payload.get("estimate_no") or generate_estimate_no(shop)
 
+    # Check and apply Old Purchase Voucher if mode is voucher
+    old_purchase_voucher_val = None
+    old_voucher_rate_used_val = totals.get("old_voucher_rate_used", "saved")
+    if totals.get("old_settlement_mode") == "voucher":
+        from apps.old_purchases.models import OldPurchaseVoucher
+        voucher_id = (
+            payload.get("old_purchase_voucher_id")
+            or totals.get("old_purchase_voucher_id")
+            or payload.get("old_purchase_voucher")
+            or totals.get("old_purchase_voucher")
+        )
+        voucher_no_lookup = payload.get("old_purchase_voucher_no") or totals.get("old_purchase_voucher_no")
+        if voucher_id:
+            old_purchase_voucher_val = OldPurchaseVoucher.objects.get(id=voucher_id, shop_id=shop_id)
+        elif voucher_no_lookup:
+            old_purchase_voucher_val = OldPurchaseVoucher.objects.get(
+                voucher_no__iexact=voucher_no_lookup.strip(), shop_id=shop_id
+            )
+
     estimate = Estimate.objects.create(
         shop_id=shop_id,
         customer_id=customer_id,
@@ -230,6 +301,8 @@ def create_estimate(payload):
         old_metal_raw_value=totals.get("old_metal_raw_value", 0),
         old_deduct_percent=totals.get("old_deduct_percent", 0),
         old_deduct_amount=totals.get("old_deduct_amount", 0),
+        old_purchase_voucher=old_purchase_voucher_val,
+        old_voucher_rate_used=old_voucher_rate_used_val,
         advance=totals.get("advance", 0),
         discount=totals.get("discount", 0),
         hallmark=totals.get("hallmark", 0),
@@ -242,6 +315,11 @@ def create_estimate(payload):
         transaction_type=totals.get("transaction_type", "payable"),
         payment_method="cash"
     )
+
+    # Apply voucher AFTER estimate row is safely committed
+    if old_purchase_voucher_val:
+        from apps.old_purchases.services import apply_voucher
+        apply_voucher(old_purchase_voucher_val, estimate_no=estimate_no)
 
     estimate_ctype = ContentType.objects.get_for_model(Estimate)
 

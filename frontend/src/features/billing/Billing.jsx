@@ -264,6 +264,11 @@ export default function Billing({ tabId, isActive }) {
   const [oldWeight, setOldWeight] = useState('');
   const [oldDeductPct, setOldDeductPct] = useState('10');
   const [oldValueDirect, setOldValueDirect] = useState('');
+  const [oldVoucherNo, setOldVoucherNo] = useState('');
+  const [oldVoucherData, setOldVoucherData] = useState(null);
+  const [oldVoucherRateMode, setOldVoucherRateMode] = useState('saved');
+  const [oldVoucherError, setOldVoucherError] = useState(null);
+  const [oldVoucherLoading, setOldVoucherLoading] = useState(false);
 
   /* ─── Tax & Charges ─── */
   const [otherCharges, setOtherCharges] = useState('');
@@ -404,6 +409,7 @@ export default function Billing({ tabId, isActive }) {
       oldWeight,
       oldDeductPct,
       oldValueDirect,
+      oldVoucherRateMode,
       hallmarkCount,
       hallmarkValue,
       isInvoice: billType === 'Invoice',
@@ -416,7 +422,7 @@ export default function Billing({ tabId, isActive }) {
       gstRate: parseFloat(shop?.default_gst_rate) || 3.0,
       igstRate: parseFloat(shop?.default_igst_rate) || 3.0,
     });
-  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, cashAmt, onlineAmt, isIgst, shop]);
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, oldVoucherRateMode, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, cashAmt, onlineAmt, isIgst, shop]);
 
   /* ─── Order Integration ─── */
   const [orderLoading, setOrderLoading] = useState(false);
@@ -572,6 +578,53 @@ export default function Billing({ tabId, isActive }) {
     }
   };
 
+  const handleFetchVoucher = async () => {
+    if (!oldVoucherNo.trim()) return;
+    setOldVoucherLoading(true);
+    setOldVoucherError(null);
+    setOldVoucherData(null);
+    try {
+      const res = await api.get(`/old-purchases/vouchers/lookup/?no=${encodeURIComponent(oldVoucherNo.trim())}`);
+      const data = res.data;
+      if (!data.found) {
+        setOldVoucherError(data.error_message || 'Voucher not found.');
+        toast.error(data.error_message || 'Voucher not found.');
+        return;
+      }
+      if (!data.can_use) {
+        setOldVoucherError(data.error_message || 'This voucher is already adjusted.');
+        toast.error('This voucher is already adjusted!');
+        setOldVoucherData(data.voucher);
+        return;
+      }
+      const v = data.voucher;
+      setOldVoucherData(v);
+      setOldWeight(String(v.net_weight));
+      setOldValueDirect(String(v.amount));
+      setOldDeductPct('0');
+      
+      // Auto-populate customer details if empty or Walk-in
+      if (v.customer_detail) {
+        if (!custName.trim() || custName === 'Walk-in Customer' || custName === 'Walk-in') {
+          setCustName(v.customer_detail.name || '');
+          setCustMobile(v.customer_detail.phone || '');
+          setCustAddress(v.customer_detail.address || '');
+          setCustomerId(v.customer_detail.id || null);
+          toast.info(`Auto-populated customer details from voucher: ${v.customer_detail.name}`);
+        }
+      }
+      
+      toast.success(`Voucher ${v.voucher_no} loaded successfully!`);
+    } catch (err) {
+      console.error(err);
+      const msg = err.response?.data?.detail || 'Voucher not found or error occurred.';
+      setOldVoucherError(msg);
+      toast.error(msg);
+    } finally {
+      setOldVoucherLoading(false);
+    }
+  };
+
 
   /* ─── Actions ─── */
   const handleSave = async (redirectList = true, bypassWarning = false) => {
@@ -601,6 +654,9 @@ export default function Billing({ tabId, isActive }) {
         rate_10gm: (metalRate * 10) || 0,
         making_rate: makingRate || 0,
         invoice_no: billType === 'Invoice' ? null : undefined, // Trigger auto-gen
+        old_purchase_voucher_id: oldVoucherData?.id || null,
+        old_purchase_voucher_no: oldVoucherNo || null,
+        old_voucher_rate_used: oldVoucherRateMode || 'saved',
         items: items.map(it => ({
           inventory_id: it.inventory_id,
           weight: it.weight || 0,
@@ -621,6 +677,9 @@ export default function Billing({ tabId, isActive }) {
           old_metal_raw_value: calc.oldMV || 0,
           old_deduct_percent: calc.oldDeductPct || 0,
           old_deduct_amount: calc.oldDeductAmt || 0,
+          old_purchase_voucher_id: oldVoucherData?.id || null,
+          old_purchase_voucher_no: oldVoucherNo || null,
+          old_voucher_rate_used: oldVoucherRateMode || 'saved',
           advance: calc.advanceVal,
           discount: calc.discountVal,
           hallmark: calc.hallmarkAmt,
@@ -702,7 +761,16 @@ export default function Billing({ tabId, isActive }) {
           making: it.makingCharges || 0,
           total: it.total || 0
         })),
-        oldMetal: calc.hasOld ? { weight: calc.oldWt, value: calc.effectiveOldValue, mode: calc.oldMode, rawValue: calc.oldMV, deductPct: calc.oldDeductPct, deductAmt: calc.oldDeductAmt } : null,
+        oldMetal: calc.hasOld ? {
+          weight: calc.oldWt,
+          value: calc.effectiveOldValue,
+          mode: calc.oldMode,
+          rawValue: calc.oldMV,
+          deductPct: calc.oldDeductPct,
+          deductAmt: calc.oldDeductAmt,
+          voucherNo: oldVoucherNo || null,
+          rateUsed: oldVoucherRateMode
+        } : null,
         returnBreakdown: calc.returnBreakdown || null,
         totals: {
           makingTotal: calc.totalMaking,
@@ -1060,12 +1128,23 @@ export default function Billing({ tabId, isActive }) {
             <div className="billing-form__body" style={{ padding: 'var(--space-3) var(--space-5) var(--space-4)' }}>
               {/* Settlement Mode Toggle */}
               <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                {[['none', 'No Old Metal', 'fa-xmark'], ['weight', 'By Weight', 'fa-weight-scale'], ['value', 'By Direct Value', 'fa-indian-rupee-sign']].map(([mode, label, icon]) => (
+                {[['none', 'No Old Metal', 'fa-xmark'], ['weight', 'By Weight', 'fa-weight-scale'], ['value', 'By Direct Value', 'fa-indian-rupee-sign'], ['voucher', 'By Purchase Voucher', 'fa-ticket']].map(([mode, label, icon]) => (
                   <button
                     key={mode}
                     type="button"
                     className={`btn btn--sm ${oldSettlementMode === mode ? 'btn--primary' : 'btn--ghost'}`}
-                    onClick={() => { setOldSettlementMode(mode); if (mode === 'none') { setOldWeight(''); setOldValueDirect(''); } }}
+                    onClick={() => {
+                      setOldSettlementMode(mode);
+                      if (mode === 'none') {
+                        setOldWeight('');
+                        setOldValueDirect('');
+                      }
+                      if (mode !== 'voucher') {
+                        setOldVoucherNo('');
+                        setOldVoucherData(null);
+                        setOldVoucherError(null);
+                      }
+                    }}
                     style={{ flex: 1, fontSize: 'var(--text-xs)', gap: 4 }}
                   >
                     <i className={`fa-solid ${icon}`}></i> {label}
@@ -1073,7 +1152,85 @@ export default function Billing({ tabId, isActive }) {
                 ))}
               </div>
 
-              {oldSettlementMode !== 'none' && (
+              {oldSettlementMode === 'voucher' && (
+                <>
+                  <div className="flex gap-2 items-end" style={{ marginBottom: 'var(--space-3)' }}>
+                    <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                      <label className="form-label">Purchase Voucher Number</label>
+                      <input
+                        className="form-input"
+                        type="text"
+                        placeholder="e.g. PV-2026-001"
+                        value={oldVoucherNo}
+                        onChange={e => setOldVoucherNo(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleFetchVoucher()}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleFetchVoucher}
+                      disabled={oldVoucherLoading || !oldVoucherNo.trim()}
+                      style={{ height: 38 }}
+                    >
+                      {oldVoucherLoading ? (
+                        <i className="fa-solid fa-spinner fa-spin"></i>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-magnifying-glass"></i> Fetch
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {oldVoucherError && (
+                    <div className="alert alert--danger" style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5' }}>
+                      <i className="fa-solid fa-circle-xmark" style={{ marginRight: 6 }}></i>
+                      {oldVoucherError}
+                    </div>
+                  )}
+
+                  {oldVoucherData && (
+                    <div className="card" style={{ padding: 'var(--space-3)', background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                        <div><strong>Voucher Date:</strong> {oldVoucherData.date}</div>
+                        <div><strong>Metal:</strong> {oldVoucherData.purity} {oldVoucherData.metal_type?.toUpperCase()}</div>
+                        <div><strong>Weight:</strong> {Number(oldVoucherData.net_weight || 0).toFixed(3)}g</div>
+                        <div><strong>Voucher Amount:</strong> {fmt(oldVoucherData.amount)}</div>
+                      </div>
+
+                      <div style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-2)' }}>
+                        <button
+                          type="button"
+                          className={`btn btn--xs ${oldVoucherRateMode === 'saved' ? 'btn--primary' : 'btn--ghost'}`}
+                          onClick={() => {
+                            setOldVoucherRateMode('saved');
+                            setOldValueDirect(String(oldVoucherData.amount));
+                            setOldWeight('0');
+                          }}
+                          style={{ flex: 1 }}
+                        >
+                          Use Saved Rate ({fmt(oldVoucherData.rate_per_10gm)}/10g)
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn--xs ${oldVoucherRateMode === 'current' ? 'btn--primary' : 'btn--ghost'}`}
+                          onClick={() => {
+                            setOldVoucherRateMode('current');
+                            setOldWeight(String(oldVoucherData.net_weight));
+                            setOldValueDirect('0');
+                          }}
+                          style={{ flex: 1 }}
+                        >
+                          Use Current Rate ({fmt(metalRate * 10)}/10g)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {(oldSettlementMode === 'weight' || oldSettlementMode === 'value') && (
                 <>
                   <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                     <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>

@@ -35,6 +35,7 @@ const r2 = (v) => Math.round(safe(v) * 100) / 100;
  * @param {number}  p.oldWeight        - Old metal weight (g), used when mode='weight'
  * @param {number}  p.oldDeductPct     - Deduction %, used when mode='weight' AND old>new
  * @param {number}  p.oldValueDirect   - Direct old value (₹), used when mode='value'
+ * @param {string}  p.oldVoucherRateMode - 'saved' | 'current', used when mode='voucher'
  * @param {number}  p.hallmarkCount    - Number of hallmark items
  * @param {number}  p.hallmarkValue    - Cost per hallmark (₹)
  * @param {boolean} p.isInvoice        - Whether GST applies (3% = 1.5 CGST + 1.5 SGST)
@@ -64,6 +65,7 @@ export function calculateBill(p) {
   const oldWt          = safe(p.oldWeight);
   const oldDeductPct   = safe(p.oldDeductPct);
   const oldValueDirect = safe(p.oldValueDirect);
+  const oldVoucherRateMode = p.oldVoucherRateMode || 'saved';
 
   // ── 2. Aggregate item-level values ──
   const items = Array.isArray(p.items) ? p.items : [];
@@ -106,7 +108,12 @@ export function calculateBill(p) {
     oldMV = oldValueDirect;    // For display: treat direct value as the "metal value"
     oldDeductAmt = 0;          // No deduction breakdown available
     hasOld = true;
-  } else if (oldMode === 'weight' && oldWt > 0) {
+  } else if (oldMode === 'voucher' && oldVoucherRateMode === 'saved') {
+    effectiveOldValue = oldValueDirect;
+    oldMV = oldValueDirect;
+    oldDeductAmt = 0;
+    hasOld = true;
+  } else if ((oldMode === 'weight' || (oldMode === 'voucher' && oldVoucherRateMode === 'current')) && oldWt > 0) {
     oldMV = r2(oldWt * metalRate);
     hasOld = true;
 
@@ -135,6 +142,9 @@ export function calculateBill(p) {
   let subtotal, netTotal, grandTotal, preRound;
   let transactionType = 'payable'; // 'payable' | 'return'
 
+  const isValueLike = oldMode === 'value' || (oldMode === 'voucher' && oldVoucherRateMode === 'saved');
+  const isWeightLike = oldMode === 'weight' || (oldMode === 'voucher' && oldVoucherRateMode === 'current');
+
   if (!hasOld) {
     // ═══ SCENARIO 1: Normal (no old metal) ═══
     // Subtotal = newProductValue
@@ -143,8 +153,8 @@ export function calculateBill(p) {
     preRound = r2(netTotal + otherCharges - advance - discount);
     transactionType = 'payable';
 
-  } else if (oldMode === 'value') {
-    // ═══ DIRECT VALUE MODE ═══
+  } else if (isValueLike) {
+    // ═══ DIRECT VALUE MODE / VOUCHER SAVED RATE ═══
     // Treat identically to old < new logic: subtract old value from product
     subtotal = r2(newProductValue - effectiveOldValue);
     netTotal = r2(subtotal + hallmarkAmt + totalGst);
@@ -175,7 +185,7 @@ export function calculateBill(p) {
 
   // ── 6b. Build return waterfall breakdown (Scenario 3 display) ──
   let returnBreakdown = null;
-  if (hasOld && oldMode === 'weight' && oldWt > totalWeight) {
+  if (hasOld && isWeightLike && oldWt > totalWeight) {
     const excessWt = r2(oldWt - totalWeight);
     const excessValue = r2(excessWt * metalRate);
 

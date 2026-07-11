@@ -138,6 +138,12 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                     <span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldValueDirect)}</span>
                   </div>
                 )}
+                {(bill.oldSettlementMode === 'voucher') && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-tertiary)' }}>(−) Old Metal (Voucher #{bill.oldPurchaseVoucherNo})</span>
+                    <span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldVoucherRateUsed === 'current' ? bill.oldValue : bill.oldValueDirect || bill.oldValue)}</span>
+                  </div>
+                )}
                 {/* Fallback for legacy bills without mode */}
                 {(!bill.oldSettlementMode || bill.oldSettlementMode === 'none') && bill.oldValue > 0 && (
                   <div className="flex justify-between">
@@ -275,6 +281,8 @@ export default function BillsList() {
     oldWt: parseFloat(b.old_weight || 0),
     oldValueDirect: parseFloat(b.old_value_direct || 0),
     oldSettlementMode: b.old_settlement_mode || 'none',
+    oldPurchaseVoucherNo: b.old_purchase_voucher_no || '',
+    oldVoucherRateUsed: b.old_voucher_rate_used || 'saved',
     oldMetalRawValue: parseFloat(b.old_metal_raw_value || 0),
     oldDeductPercent: parseFloat(b.old_deduct_percent || 0),
     oldDeductAmount: parseFloat(b.old_deduct_amount || 0),
@@ -415,6 +423,17 @@ export default function BillsList() {
         rawValue: bill.oldValueDirect,
         deductPct: 0,
         deductAmt: 0,
+      };
+    } else if (bill.oldSettlementMode === 'voucher') {
+      oldMetal = {
+        weight: bill.oldWt,
+        value: bill.oldVoucherRateUsed === 'current' ? bill.oldValue : bill.oldValueDirect || bill.oldValue,
+        mode: 'voucher',
+        rawValue: bill.oldMetalRawValue || (bill.oldVoucherRateUsed === 'current' ? bill.oldValue : bill.oldValueDirect || bill.oldValue),
+        deductPct: bill.oldDeductPercent || 0,
+        deductAmt: bill.oldDeductAmount || 0,
+        voucherNo: bill.oldPurchaseVoucherNo,
+        rateUsed: bill.oldVoucherRateUsed,
       };
     } else if (bill.oldValue > 0) {
       // Legacy fallback

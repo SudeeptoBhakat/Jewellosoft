@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/payments/', include('apps.payments.urls')),
     path('api/rates/', include('apps.rates.urls')),
     path('api/billing/', include('apps.billing.urls')),
+    path('api/old-purchases/', include('apps.old_purchases.urls')),
     path('api/', include('apps.core.urls')),
 ]
 

@@ -19,6 +19,8 @@ import Customers from './features/customers/Customers';
 import Settings from './features/settings/Settings';
 import Advances from './features/advances/Advances';
 import DuesCreditsList from './features/dashboard/DuesCreditsList';
+import OldPurchaseVoucher from './features/old-purchases/OldPurchaseVoucher';
+import OldPurchaseVoucherList from './features/old-purchases/OldPurchaseVoucherList';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -57,6 +59,8 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/advances" element={<Advances />} />
               <Route path="/dues-credits" element={<DuesCreditsList />} />
+              <Route path="/old-purchases" element={<OldPurchaseVoucher />} />
+              <Route path="/old-purchases/list" element={<OldPurchaseVoucherList />} />
             </Route>
           </Routes>
         </TabProvider>

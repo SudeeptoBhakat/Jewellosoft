@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import InvoicePDF from './pdf';
 import { toast } from '../../utils/toast';
 
-export default function PrintPreviewModal({ isOpen, onClose, data }) {
+export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemplate }) {
+    const PDFComponent = CustomPDFTemplate || InvoicePDF;
     // console.log(data);
     const printRef = useRef(null);
     const [printing, setPrinting] = useState(false);
@@ -73,7 +74,8 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
                     </div>
                 </div>
 
-                {/* ─── PDF Options Bar ─── */}
+                {/* ─── PDF Options Bar (invoices only) ─── */}
+                {!data.isVoucher && (
                 <div style={{
                     flexShrink: 0,
                     display: 'flex',
@@ -116,11 +118,12 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
                         <span>Hide Customer Details</span>
                     </label>
                 </div>
+                )}
 
                 {/* Scrollable Preview Area */}
                 <div style={{ flex: 1, overflowY: 'auto', background: '#e2e8f0', padding: '20px 0', display: 'flex', justifyContent: 'center' }}>
                     <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
-                        <InvoicePDF data={pdfData} />
+                        <PDFComponent data={pdfData} />
                     </div>
                 </div>
             </div>
@@ -142,7 +145,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data }) {
                         `}
                     </style>
                     <div ref={printRef} style={{ width: '100%', height: '100%', backgroundColor: 'white' }}>
-                        <InvoicePDF data={pdfData} />
+                        <PDFComponent data={pdfData} />
                     </div>
                 </div>,
                 document.body

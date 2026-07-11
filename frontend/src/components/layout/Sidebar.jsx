@@ -15,6 +15,7 @@ const navSections = [
       { path: '/dashboard', icon: 'fa-solid fa-grid-2', label: 'Dashboard' },
       { path: '/billing', icon: 'fa-solid fa-file-invoice-dollar', label: 'New Bill' },
       { path: '/orders', icon: 'fa-solid fa-box', label: 'New Order' },
+      { path: '/old-purchases', icon: 'fa-solid fa-ticket', label: 'New Voucher' },
     ],
   },
   {
@@ -22,6 +23,7 @@ const navSections = [
     items: [
       { path: '/billing/list', icon: 'fa-solid fa-receipt', label: 'Bills List' },
       { path: '/orders/list', icon: 'fa-solid fa-clipboard-list', label: 'Orders List' },
+      { path: '/old-purchases/list', icon: 'fa-solid fa-file-invoice', label: 'Vouchers List' },
       { path: '/advances', icon: 'fa-solid fa-hand-holding-dollar', label: 'Advance' },
     ],
   },

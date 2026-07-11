@@ -40,7 +40,8 @@ export function TabProvider({ children }) {
       '/customers': { title: 'Customers', closable: true },
       '/settings': { title: 'Settings', closable: true },
       '/advances': { title: 'Advance Payments', closable: true },
-      '/dues-credits': { title: 'Dues & Credits', closable: true }
+      '/dues-credits': { title: 'Dues & Credits', closable: true },
+      '/old-purchases/list': { title: 'Vouchers List', closable: true },
     };
 
 
@@ -54,10 +55,13 @@ export function TabProvider({ children }) {
         return prevTabs;
       }
 
-      // 2. Is it a multi-instance form (Billing or Orders) without a tab ID in URL?
-      if (location.pathname === '/billing' || location.pathname === '/orders') {
+      // 2. Is it a multi-instance form (Billing, Orders, or Old Purchases) without a tab ID in URL?
+      if (location.pathname === '/billing' || location.pathname === '/orders' || location.pathname === '/old-purchases') {
         const type = location.pathname.substring(1);
-        const title = type === 'billing' ? 'New Bill' : 'New Order';
+        let title = 'New Form';
+        if (type === 'billing') title = 'New Bill';
+        else if (type === 'orders') title = 'New Order';
+        else if (type === 'old-purchases') title = 'New Voucher';
 
         const params = new URLSearchParams(location.search);
         const searchId = params.get('id');
@@ -70,9 +74,13 @@ export function TabProvider({ children }) {
             }
             return prevTabs;
           }
+          const isEdit = !searchId.startsWith(type);
+          const displayTitle = isEdit 
+            ? (type === 'billing' ? 'Edit Bill' : (type === 'orders' ? 'Edit Order' : 'Edit Voucher'))
+            : title;
           const newTab = {
             id: searchId,
-            title: title,
+            title: displayTitle,
             path: currentPath,
             closable: true
           };
@@ -124,24 +132,52 @@ export function TabProvider({ children }) {
   }, [location.pathname, location.search, navigate]);
 
   const openTab = (path, title) => {
-    const isMultiInstance = path === '/billing' || path === '/orders';
+    const isMultiInstance = path.startsWith('/billing') || path.startsWith('/orders') || path.startsWith('/old-purchases');
     if (isMultiInstance) {
-      const type = path.substring(1);
-      const tabId = `${type}-${Date.now()}`;
+      // Check if path already has an id parameter
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const existingId = params.get('id');
       
-      setTabs(prev => {
-        const existingTypeCount = prev.filter(t => t.id.startsWith(type)).length;
-        const displayTitle = existingTypeCount > 0 ? `${title} (${existingTypeCount + 1})` : title;
-        const newTab = {
-          id: tabId,
-          title: displayTitle,
-          path: `${path}?id=${tabId}`,
-          closable: true
-        };
-        return [...prev, newTab];
-      });
-      setActiveTabId(tabId);
-      navigate(`${path}?id=${tabId}`);
+      if (existingId) {
+        // Use existing ID as tabId
+        const tabId = existingId;
+        setTabs(prev => {
+          const existingTab = prev.find(t => t.id === tabId);
+          if (existingTab) {
+            setActiveTabId(existingTab.id);
+            setTimeout(() => navigate(path), 0);
+            return prev;
+          }
+          const newTab = {
+            id: tabId,
+            title: title || 'Edit',
+            path,
+            closable: true
+          };
+          setActiveTabId(tabId);
+          setTimeout(() => navigate(path), 0);
+          return [...prev, newTab];
+        });
+      } else {
+        // Create new tab with generated ID
+        const cleanPath = path.split('?')[0];
+        const type = cleanPath.substring(1);
+        const tabId = `${type}-${Date.now()}`;
+        
+        setTabs(prev => {
+          const existingTypeCount = prev.filter(t => t.id.startsWith(type)).length;
+          const displayTitle = existingTypeCount > 0 ? `${title} (${existingTypeCount + 1})` : title;
+          const newTab = {
+            id: tabId,
+            title: displayTitle,
+            path: `${cleanPath}?id=${tabId}`,
+            closable: true
+          };
+          return [...prev, newTab];
+        });
+        setActiveTabId(tabId);
+        navigate(`${cleanPath}?id=${tabId}`);
+      }
     } else {
       // Singleton tab
       setTabs(prev => {

@@ -1092,13 +1092,20 @@ function PrintLayout({ receipt, shopInfo }) {
       <style>{`
         @page { size: A4 portrait; margin: 0; }
         @media print {
-          html, body { margin:0!important; padding:0!important; width:100%; height:100%; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+          html, body { margin:0!important; padding:0!important; width:210mm!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
           body > *:not(.print-only-container) { display:none!important; }
-          .print-only-container { position:absolute; top:0; left:0; width:100%; margin:0; padding:10mm; height:297mm; background:#fff; overflow:hidden; box-sizing:border-box; }
+          .print-only-container {
+            display: block !important;
+            width: 210mm !important;
+            margin: 0 auto !important;
+            padding: 10mm !important;
+            background: #fff !important;
+            box-sizing: border-box !important;
+          }
         }
         @media screen { .print-only-container { display:none; } }
       `}</style>
-      <div style={{ color:'#000', fontFamily:'Arial, sans-serif', border: isCancelled ? '2px solid #dc2626' : '1.5px solid #000', padding:'20px 24px', borderRadius:8, position:'relative', minHeight:400, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+      <div style={{ color:'#000', fontFamily:'Arial, sans-serif', border: isCancelled ? '2px solid #dc2626' : '1.5px solid #000', padding:'20px 24px', borderRadius:8, position:'relative', minHeight:400, display:'flex', flexDirection:'column', justifyContent:'space-between', width: '100%', boxSizing: 'border-box' }}>
         {isCancelled && (
           <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%) rotate(-35deg)', fontSize:'72px', fontWeight:900, color:'rgba(220,38,38,0.12)', letterSpacing:'0.1em', whiteSpace:'nowrap', pointerEvents:'none', zIndex:1, userSelect:'none' }}>CANCELLED</div>
         )}
