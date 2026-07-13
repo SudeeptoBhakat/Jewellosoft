@@ -3,7 +3,6 @@
 [![License: JewelloSoft CE](https://img.shields.io/badge/License-JewelloSoft%20CE-blue.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-informational.svg)](https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest)
 [![Release](https://img.shields.io/github/v/release/SudeeptoBhakat/Jewellosoft?label=Latest%20Release)](https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest)
-[![Downloads/Month](https://img.shields.io/github/downloads-pre/SudeeptoBhakat/Jewellosoft/latest/total?label=Monthly%20Installs)](https://github.com/SudeeptoBhakat/Jewellosoft/releases)
 [![Total Downloads](https://img.shields.io/github/downloads/SudeeptoBhakat/Jewellosoft/total?label=Total%20Installs)](https://github.com/SudeeptoBhakat/Jewellosoft/releases)
 
 JewelloSoft is a modern, offline-first desktop application engineered for jewellery shop owners. It provides a complete, professional environment to manage billing, inventory, customer relationships, custom orders, payment tracking, and cloud-backed data synchronization — all running natively on Windows without an internet connection.
