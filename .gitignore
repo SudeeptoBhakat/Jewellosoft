@@ -86,6 +86,8 @@ electron/build/
 *.key
 *.pfx
 *.p12
+backend/.config_key
+backend/license.key
 
 # Any config backups
 *.bak

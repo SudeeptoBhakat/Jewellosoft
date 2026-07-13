@@ -40,8 +40,7 @@ class ShopCurrentView(APIView):
             )
             return Response(serializer.data)
             
-        # Log validation errors for debugging
-        print("Serializer Validation Errors:", serializer.errors)
+        logger.warning("Shop update validation failed: %s", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -456,7 +455,7 @@ class ResetDataView(APIView):
         if email:
             user = authenticate(username=email, password=password)
 
-        if not user and password != 'admin123':
+        if not user:
             return Response(
                 {"detail": "Incorrect password. Data reset denied."},
                 status=status.HTTP_403_FORBIDDEN

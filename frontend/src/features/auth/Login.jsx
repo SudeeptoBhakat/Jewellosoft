@@ -6,6 +6,7 @@ import useOnlineStatus from '../../hooks/useOnlineStatus';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -15,7 +16,6 @@ export default function Login() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
 
-  // ── Cooldown timer (used after rate-limit errors) ──────────────
   const startCooldown = (seconds = 60) => {
     setCooldown(seconds);
     if (cooldownRef.current) clearInterval(cooldownRef.current);
@@ -34,13 +34,11 @@ export default function Login() {
     e.preventDefault();
     setError('');
 
-    // Client-side validation
     if (!email.trim() || !password.trim()) {
       setError('Please fill in all fields.');
       return;
     }
 
-    // Cooldown guard
     if (cooldown > 0) {
       setError(`Please wait ${cooldown} seconds before trying again.`);
       return;
@@ -54,7 +52,6 @@ export default function Login() {
       const msg = err.message || 'Login failed. Please try again.';
       setError(msg);
 
-      // Start cooldown if rate-limited
       if (
         msg.toLowerCase().includes('too many') ||
         msg.toLowerCase().includes('rate limit') ||
@@ -69,40 +66,44 @@ export default function Login() {
 
   const isDisabled = loading || cooldown > 0;
 
+  const submitLabel = cooldown > 0
+    ? `Please wait (${cooldown}s)`
+    : loading
+      ? (isOnline ? 'Signing in...' : 'Verifying offline...')
+      : (isOnline ? 'Sign In' : 'Sign In (Offline Mode)');
+
   return (
-    <div className="animate-fade-in-up" style={{ width: '100%' }}>
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Welcome Back</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>Enter your credentials to access your store.</p>
+    <div className="animate-fade-in-up">
+      <div className="auth-card-head">
+        <h1>Welcome back</h1>
+        <p>Sign in to continue to your store.</p>
       </div>
 
-      {/* Offline Banner */}
       {!isOnline && (
-        <div style={{ backgroundColor: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <i className="fa-solid fa-wifi" style={{ opacity: 0.7 }}></i>
+        <div className="auth-alert auth-alert--warning">
+          <i className="fa-solid fa-cloud-slash"></i>
           <span>
-            You are <strong>offline</strong>. Online login is unavailable.
-            If you have logged in before on this device, you can still sign in using your saved credentials.
+            You are <strong>offline</strong>. If you have signed in on this device before,
+            you can still continue with your saved credentials.
           </span>
         </div>
       )}
 
-      {/* Error Banner */}
       {error && (
-        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '12px 14px', borderRadius: 6, marginBottom: 20, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="auth-alert auth-alert--error">
           <i className="fa-solid fa-circle-exclamation"></i>
-          {error}
+          <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-          <label className="form-label" htmlFor="login-email">Email Address</label>
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="form-group">
+          <label className="form-label" htmlFor="login-email">Email address</label>
           <input
             id="login-email"
             type="email"
             className="form-input"
-            placeholder="admin@sharmajewellers.com"
+            placeholder="you@yourshop.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isDisabled}
@@ -110,40 +111,39 @@ export default function Login() {
           />
         </div>
 
-        <div className="form-group" style={{ marginBottom: 'var(--space-6)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label className="form-label" htmlFor="login-password" style={{ marginBottom: 0 }}>Password</label>
+        <div className="form-group">
+          <label className="form-label" htmlFor="login-password">Password</label>
+          <div className="auth-input-wrap">
+            <input
+              id="login-password"
+              type={showPassword ? 'text' : 'password'}
+              className="form-input"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isDisabled}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              className="auth-reveal"
+              onClick={() => setShowPassword((v) => !v)}
+              tabIndex={-1}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              <i className={showPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'}></i>
+            </button>
           </div>
-          <input
-            id="login-password"
-            type="password"
-            className="form-input"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isDisabled}
-            autoComplete="current-password"
-            style={{ marginTop: 6 }}
-          />
         </div>
 
-        <button
-          type="submit"
-          className="btn btn--primary"
-          style={{ width: '100%', padding: '12px', fontSize: '1rem', fontWeight: 500, opacity: isDisabled ? 0.6 : 1 }}
-          disabled={isDisabled}
-        >
-          {loading && <i className="fa-solid fa-circle-notch fa-spin" style={{ marginRight: 8 }}></i>}
-          {cooldown > 0
-            ? `Please wait (${cooldown}s)`
-            : loading
-              ? (isOnline ? 'Signing in...' : 'Verifying offline...')
-              : (isOnline ? 'Sign In' : 'Sign In (Offline Mode)')}
+        <button type="submit" className="btn btn--primary auth-submit" disabled={isDisabled}>
+          {loading && <i className="fa-solid fa-circle-notch fa-spin"></i>}
+          {submitLabel}
         </button>
       </form>
 
-      <div style={{ marginTop: 'var(--space-6)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-        Don't have an account? <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}>Register your shop</Link>
+      <div className="auth-switch">
+        Don&apos;t have an account? <Link to="/register">Register your shop</Link>
       </div>
     </div>
   );
