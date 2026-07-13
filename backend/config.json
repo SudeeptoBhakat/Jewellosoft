@@ -1,6 +1,0 @@
-{
-  "SUPABASE_URL": "xxxx",
-  "SUPABASE_ANON_KEY": "xxxx",
-  "SUPABASE_SERVICE_ROLE_KEY": "xxxx",
-  "SUPABASE_JWT_SECRET": "xxxx"
-}
