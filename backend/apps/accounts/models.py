@@ -4,7 +4,7 @@ from django.conf import settings
 
 class Shop(BaseModel):
     """
-    Central tenant model — one Shop per authenticated local User.
+    Central tenant model - one Shop per authenticated local User.
     """
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -39,6 +39,10 @@ class Shop(BaseModel):
     decimal_precision = models.IntegerField(default=2)
     hallmark_value = models.DecimalField(max_digits=10, decimal_places=2, default=53.0)
     require_full_payment_for_delivery = models.BooleanField(default=False, help_text="Require full payment before order delivery")
+    credit_note_validity_days = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of days a credit note is valid. 0 means no expiry."
+    )
 
     # Supabase Tracking
     supabase_email = models.EmailField(max_length=254, unique=True, db_index=True, null=True, blank=True, help_text='Supabase login email')

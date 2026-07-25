@@ -351,31 +351,39 @@ function startDjango() {
     djangoPort = port;
     log(`Selected Django Port: ${djangoPort}`);
 
-    const backendPath = isDev
+    let spawnCmd;
+    let spawnArgs;
+    let spawnCwd;
+
+    const devVenvPython = path.join(__dirname, '../backend/.venv/Scripts/python.exe');
+    const devRunScript = path.join(__dirname, '../backend/run_waitress.py');
+    const exeBackendPath = isDev
       ? path.join(__dirname, '../backend/dist/backend/backend.exe')
-      : path.join(process.resourcesPath, 'backend', 'backend.exe')
+      : path.join(process.resourcesPath, 'backend', 'backend.exe');
 
-    log(`Resolved backend path: ${backendPath}`);
+    if (isDev && fs.existsSync(devVenvPython) && fs.existsSync(devRunScript)) {
+      spawnCmd = devVenvPython;
+      spawnArgs = [devRunScript, djangoPort.toString()];
+      spawnCwd = path.join(__dirname, '../backend');
+      log(`Using DEV Python interpreter: "${spawnCmd}" "${devRunScript}" ${djangoPort}`);
+    } else {
+      // FAIL-SAFE: Startup validation for binary
+      if (!fs.existsSync(exeBackendPath)) {
+        const msg = `Backend executable NOT FOUND at: ${exeBackendPath}`;
+        log(msg);
+        writeCrashDiagnostic('Backend executable missing', new Error(msg));
+        dialog.showErrorBox(
+          "Startup Error",
+          `Backend service missing at:\n${exeBackendPath}\n\nPlease reinstall the application.\n\nCheck logs at:\n${getTodayLogDir()}`
+        );
+        app.quit();
+        return Promise.reject(new Error(msg));
+      }
 
-    // FAIL-SAFE: Startup validation
-    if (!fs.existsSync(backendPath)) {
-      const msg = `Backend executable NOT FOUND at: ${backendPath}`;
-      log(msg);
-      writeCrashDiagnostic('Backend executable missing', new Error(msg));
-      dialog.showErrorBox(
-        "Startup Error",
-        `Backend service missing at:\n${backendPath}\n\nPlease reinstall the application.\n\nCheck logs at:\n${getTodayLogDir()}`
-      );
-      app.quit();
-      return Promise.reject(new Error(msg));
-    }
-
-    // Log file size to verify it's a real binary
-    try {
-      const stat = fs.statSync(backendPath);
-      log(`Backend file size: ${(stat.size / 1024 / 1024).toFixed(2)} MB`);
-    } catch (e) {
-      log(`Could not stat backend: ${e.message}`);
+      spawnCmd = exeBackendPath;
+      spawnArgs = [djangoPort.toString()];
+      spawnCwd = path.dirname(exeBackendPath);
+      log(`Using backend executable: "${spawnCmd}" ${djangoPort}`);
     }
 
     // Environment variables for Django
@@ -386,8 +394,8 @@ function startDjango() {
       'PYTHONIOENCODING': 'utf-8'
     };
 
-    log(`Starting backend process: "${backendPath}" ${djangoPort}`);
-    log(`Backend CWD: ${path.dirname(backendPath)}`);
+    log(`Starting backend process: "${spawnCmd}" ${spawnArgs.join(' ')}`);
+    log(`Backend CWD: ${spawnCwd}`);
     log(`JEWELLOSOFT_DATA_PATH: ${userDataPath}`);
 
     // Create separate write streams for backend stdout and stderr
@@ -398,8 +406,8 @@ function startDjango() {
     stdoutStream.write(header);
     stderrStream.write(header);
 
-    djangoProcess = spawn(backendPath, [djangoPort.toString()], {
-      cwd: path.dirname(backendPath),
+    djangoProcess = spawn(spawnCmd, spawnArgs, {
+      cwd: spawnCwd,
       windowsHide: true,
       env: env
     });
@@ -776,13 +784,19 @@ ipcMain.handle('open-log-folder', () => {
 
 // PDF Generation using native electron webContents
 ipcMain.handle('print-to-pdf', async (event, filename) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
   try {
-    const win = BrowserWindow.fromWebContents(event.sender);
     const pdfData = await win.webContents.printToPDF({
       printBackground: true,
       pageSize: 'A4',
       margins: { top: 0, bottom: 0, left: 0, right: 0 }
     });
+
+    // Repaint immediately so the window doesn't stay on a black frame
+    // while the save dialog is open. (See note in finally block.)
+    if (win && !win.isDestroyed()) {
+      win.webContents.invalidate();
+    }
 
     const defaultPath = path.join(app.getPath('documents'), filename || 'Invoice.pdf');
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -800,8 +814,103 @@ ipcMain.handle('print-to-pdf', async (event, filename) => {
   } catch (error) {
     log(`PDF Print Error: ${error.message}`);
     return { success: false, error: error.message };
+  } finally {
+
+    if (win && !win.isDestroyed()) {
+      win.webContents.invalidate();
+    }
   }
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Barcode Label Printing
+// ─────────────────────────────────────────────────────────────────
+
+ipcMain.handle('list-printers', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const printers = await win.webContents.getPrintersAsync();
+    return printers.map(p => ({
+      name: p.name,
+      displayName: p.displayName || p.name,
+      isDefault: !!p.isDefault,
+      status: p.status,
+    }));
+  } catch (error) {
+    log(`List Printers Error: ${error.message}`);
+    return [];
+  }
+});
+
+
+ipcMain.handle('print-barcode-label', async (event, { html, printerName, widthMicrons, heightMicrons, copies }) => {
+  let labelWindow = null;
+
+  try {
+    log(`Barcode print request: ${printerName || 'default'} (${widthMicrons}x${heightMicrons} µm)`);
+
+    labelWindow = new BrowserWindow({
+      show: false,
+      width: 800,
+      height: 400,
+      frame: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    const tempHtmlPath = path.join(userDataPath, 'barcode_label_print_temp.html');
+    fs.writeFileSync(tempHtmlPath, html, 'utf-8');
+    await labelWindow.loadFile(tempHtmlPath);
+
+    try {
+      await labelWindow.webContents.capturePage();
+    } catch (_) {}
+
+    const printOptions = {
+      silent: true,
+      printBackground: true,
+      deviceName: printerName || '',
+      copies: Math.max(1, parseInt(copies) || 1),
+      margins: { marginType: 'none' },
+    };
+
+    if (widthMicrons && heightMicrons) {
+      printOptions.pageSize = { width: widthMicrons, height: heightMicrons };
+    }
+
+    const result = await new Promise((resolve) => {
+      labelWindow.webContents.print(printOptions, (success, failureReason) => {
+        resolve({ success, failureReason });
+      });
+    });
+
+    if (!result.success) {
+      const reason = result.failureReason || 'unknown';
+      log(`Barcode print failed: ${reason}`);
+      return { success: false, error: `Print failed: ${reason}. Check printer connection and paper.` };
+    }
+
+    log(`Barcode label spooled successfully to ${printerName || 'default'}`);
+    return { success: true };
+
+  } catch (error) {
+    log(`Barcode Label Print Error: ${error.message}`);
+    return { success: false, error: error.message };
+
+  } finally {
+    if (labelWindow) {
+      const winRef = labelWindow;
+      setTimeout(() => {
+        try {
+          if (!winRef.isDestroyed()) winRef.destroy();
+        } catch (_) {}
+      }, 2000);
+    }
+  }
+});
+
 
 // Backup System Setup (Offline-Friendly Feature)
 ipcMain.handle('backup-db', async (event) => {

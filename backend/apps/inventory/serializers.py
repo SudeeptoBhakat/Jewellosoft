@@ -16,6 +16,7 @@ class ProductInventorySerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_kwargs = {
             'image': {'required': False},
+            'barcode': {'required': False, 'allow_blank': True},
             'huid': {'required': False, 'allow_blank': True},
             'location': {'required': False, 'allow_blank': True},
         }
@@ -27,7 +28,9 @@ class ProductInventorySerializer(serializers.ModelSerializer):
         return value
 
     def validate_barcode(self, value):
-        """Ensure barcode uniqueness on create, skip self on update."""
+        if not value:
+            return self.instance.barcode if self.instance else value
+        value = value.strip().upper()
         qs = ProductInventory.objects.filter(barcode=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)

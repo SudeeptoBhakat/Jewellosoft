@@ -1,11 +1,32 @@
 import { useState, useMemo, useEffect } from 'react';
 import api, { extractList } from '../../lib/axios';
 import ProductNameInput from '../../components/elements/ProductNameInput';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from '../../utils/toast';
+import { printBarcodeLabel, getPrinterSettings } from '../../utils/labelPrinter';
+import { code128Svg, isCode128Encodable } from '../../utils/code128';
+import useTabRefresh from '../../hooks/useTabRefresh';
+
+
+function BarcodePreview({ value }) {
+  const svg = useMemo(() => {
+    if (!value || !isCode128Encodable(value)) return null;
+    try { return code128Svg(value, { moduleWidth: 2, height: 40, fontSize: 10, quietZone: 6 }); }
+    catch { return null; }
+  }, [value]);
+  if (!svg) return null;
+  return (
+    <div style={{ background: '#fff', borderRadius: 'var(--radius-sm)', padding: '6px 10px', display: 'inline-flex', maxWidth: '100%', overflow: 'hidden' }}
+      dangerouslySetInnerHTML={{ __html: svg }} />
+  );
+}
 
 
 function ProductModal({ product, onClose, onSave }) {
   const isEdit = !!product;
   const [barcode, setBarcode] = useState(product?.barcode || '');
+  const [autoBarcode, setAutoBarcode] = useState(!product);
+  const [printLabel, setPrintLabel] = useState(() => getPrinterSettings().autoPrintOnCreate);
   const [name, setName] = useState(product?.name || '');
   const [metalType, setMetalType] = useState(product?.metal_type ? product.metal_type.charAt(0).toUpperCase() + product.metal_type.slice(1) : 'Gold');
   const [purity, setPurity] = useState(product?.purity || '22K');
@@ -26,10 +47,11 @@ function ProductModal({ product, onClose, onSave }) {
   };
 
   const handleSave = () => {
-    if (!barcode.trim() || !name.trim()) return;
+    const useAuto = !isEdit && autoBarcode;
+    if ((!useAuto && !barcode.trim()) || !name.trim()) return;
     onSave({
       id: product?.id || null,
-      barcode: barcode.trim(),
+      barcode: useAuto ? '' : barcode.trim().toUpperCase(),
       name: name.trim(),
       metal_type: metalType.toLowerCase(),
       purity,
@@ -38,6 +60,7 @@ function ProductModal({ product, onClose, onSave }) {
       location: location.trim(),
       imageFile: imageFile, // the actual file for FormData
       status: product?.status || 'available', // keep existing status or default
+      printLabel: !isEdit && printLabel,
     });
     // Form disables save button during loading, onClose shouldn't happen immediately if loading, but for simplicity:
     onClose();
@@ -85,8 +108,24 @@ function ProductModal({ product, onClose, onSave }) {
               <input id="product-img-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
               <div style={{ flex: 1 }}>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
-                  <label className="form-label">Barcode / SKU *</label>
-                  <input className="form-input" type="text" placeholder="JW-GN-001" value={barcode} onChange={e => setBarcode(e.target.value)} id="product-barcode" style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }} />
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Barcode / SKU {!autoBarcode && '*'}</span>
+                    {!isEdit && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400, fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={autoBarcode} onChange={e => { setAutoBarcode(e.target.checked); if (e.target.checked) setBarcode(''); }} />
+                        Auto-generate
+                      </label>
+                    )}
+                  </label>
+                  <input
+                    className="form-input" type="text"
+                    placeholder={autoBarcode ? 'Generated automatically on save' : 'JW-GN-001'}
+                    value={barcode}
+                    onChange={e => setBarcode(e.target.value)}
+                    disabled={!isEdit && autoBarcode}
+                    id="product-barcode"
+                    style={{ fontFamily: 'monospace', letterSpacing: '0.05em', textTransform: 'uppercase' }}
+                  />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Product Name *</label>
@@ -127,15 +166,29 @@ function ProductModal({ product, onClose, onSave }) {
           </div>
 
           {/* Location */}
-          <div className="form-group" style={{ marginBottom: 0 }}>
+          <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
             <label className="form-label">Storage Location</label>
             <input className="form-input" type="text" placeholder="Vault A — Shelf 1" value={location} onChange={e => setLocation(e.target.value)} id="product-location" />
           </div>
+
+          {/* Barcode preview + label print option */}
+          {(isEdit || !autoBarcode) && barcode.trim() && (
+            <div style={{ marginBottom: 'var(--space-3)', textAlign: 'center' }}>
+              <BarcodePreview value={barcode.trim().toUpperCase()} />
+            </div>
+          )}
+          {!isEdit && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={printLabel} onChange={e => setPrintLabel(e.target.checked)} />
+              <i className="fa-solid fa-print" style={{ opacity: 0.6 }}></i>
+              Print barcode label after saving
+            </label>
+          )}
         </div>
 
         <div style={{ padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
           <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn--primary" onClick={handleSave} disabled={!barcode.trim() || !name.trim()}>
+          <button className="btn btn--primary" onClick={handleSave} disabled={(!(!isEdit && autoBarcode) && !barcode.trim()) || !name.trim()}>
             <i className={`fa-solid ${isEdit ? 'fa-check' : 'fa-plus'}`}></i>
             {isEdit ? 'Save Changes' : 'Add Product'}
           </button>
@@ -186,7 +239,8 @@ function DeleteModal({ product, onClose, onConfirm }) {
 /* ═══════════════════════════════════════════
    INVENTORY PAGE
    ═══════════════════════════════════════════ */
-export default function Inventory() {
+export default function Inventory({ isActive = true }) {
+  const { shop } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -220,6 +274,8 @@ export default function Inventory() {
     fetchProducts();
   }, []);
 
+  useTabRefresh(() => fetchProducts(), isActive);
+
   /* ─── Unique locations for filter ─── */
   const locations = useMemo(() => ['All', ...new Set(products.map(p => p.location).filter(Boolean))], [products]);
 
@@ -246,11 +302,18 @@ export default function Inventory() {
   }, [products, search, metalFilter, stockFilter, locationFilter]);
 
   /* ─── Handlers ─── */
+  const handlePrintLabel = async (product) => {
+    const res = await printBarcodeLabel(product, shop?.name || '');
+    if (res.success) toast.success(`Barcode label sent to printer (${product.barcode}).`);
+    else toast.error(res.error || 'Failed to print barcode label.');
+  };
+
   const handleSaveProduct = async (productData) => {
     try {
+      const { printLabel: shouldPrint, ...fields } = productData;
       // Build form data
       const formData = new FormData();
-      Object.entries(productData).forEach(([key, value]) => {
+      Object.entries(fields).forEach(([key, value]) => {
         if (key === 'imageFile') {
           if (value) formData.append('image', value);
         } else if (value !== null && value !== undefined) {
@@ -258,18 +321,23 @@ export default function Inventory() {
         }
       });
 
-      if (productData.id) {
+      if (fields.id) {
         // Edit
-        await api.put(`/inventory/${productData.id}/`, formData, {
+        await api.put(`/inventory/${fields.id}/`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } else {
         // Create
         // Assume default shop 1 for demo if your API requires it (otherwise handled by auth)
         formData.append('shop', 1);
-        await api.post(`/inventory/`, formData, {
+        const res = await api.post(`/inventory/`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
+        const created = res.data;
+        if (created?.barcode) {
+          toast.success(`Product added. Barcode: ${created.barcode}`);
+          if (shouldPrint) await handlePrintLabel(created);
+        }
       }
       fetchProducts();
     } catch (err) {
@@ -491,9 +559,10 @@ export default function Inventory() {
                           <button className="btn btn--ghost btn--sm btn--icon" title="Delete" style={{ opacity: 0.3, pointerEvents: 'none', color: 'var(--color-danger)' }}><i className="fa-solid fa-trash-can"></i></button>
                         </>
                       ) : (
-                        /* In stock — Edit, Mark Out, Delete */
+                        /* In stock — Edit, Print Label, Mark Out, Delete */
                         <>
                           <button className="btn btn--ghost btn--sm btn--icon" title="Edit" onClick={() => setEditProduct(product)}><i className="fa-solid fa-pen-to-square"></i></button>
+                          <button className="btn btn--ghost btn--sm btn--icon" title="Print Barcode Label" onClick={() => handlePrintLabel(product)} style={{ color: 'var(--color-info)' }}><i className="fa-solid fa-barcode"></i></button>
                           <button className="btn btn--ghost btn--sm btn--icon" title="Mark Out of Stock" onClick={() => handleMarkOutOfStock(product.id)} style={{ color: 'var(--color-warning)' }}><i className="fa-solid fa-ban"></i></button>
                           <button className="btn btn--ghost btn--sm btn--icon" title="Delete" style={{ color: 'var(--color-danger)' }} onClick={() => setDeleteProduct(product)}><i className="fa-solid fa-trash-can"></i></button>
                         </>

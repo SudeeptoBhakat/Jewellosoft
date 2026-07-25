@@ -7,6 +7,7 @@
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import ErrorBoundary from '../elements/ErrorBoundary';
 import { useTabs } from '../../contexts/TabContext';
 
 // Import all page components
@@ -23,6 +24,7 @@ import Advances from '../../features/advances/Advances';
 import DuesCreditsList from '../../features/dashboard/DuesCreditsList';
 import OldPurchaseVoucher from '../../features/old-purchases/OldPurchaseVoucher';
 import OldPurchaseVoucherList from '../../features/old-purchases/OldPurchaseVoucherList';
+import CreditNotesList from '../../features/credit-notes/CreditNotesList';
 
 
 export default function MainLayout() {
@@ -45,6 +47,7 @@ export default function MainLayout() {
       case '/dues-credits': return 'fa-solid fa-scale-balanced';
       case '/old-purchases': return 'fa-solid fa-ticket';
       case '/old-purchases/list': return 'fa-solid fa-file-invoice';
+      case '/credit-notes': return 'fa-solid fa-wallet';
       default: return 'fa-solid fa-file';
     }
   };
@@ -68,6 +71,7 @@ export default function MainLayout() {
       case '/dues-credits': return <DuesCreditsList {...props} />;
       case '/old-purchases': return <OldPurchaseVoucher {...props} />;
       case '/old-purchases/list': return <OldPurchaseVoucherList {...props} />;
+      case '/credit-notes': return <CreditNotesList {...props} />;
       default: return <div>Page not found: {path}</div>;
     }
   };
@@ -123,7 +127,9 @@ export default function MainLayout() {
               className="tab-content-container"
               style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
             >
-              {renderTabContent(tab, tab.id === activeTabId)}
+              <ErrorBoundary resetKey={tab.id}>
+                {renderTabContent(tab, tab.id === activeTabId)}
+              </ErrorBoundary>
             </div>
           ))}
         </main>

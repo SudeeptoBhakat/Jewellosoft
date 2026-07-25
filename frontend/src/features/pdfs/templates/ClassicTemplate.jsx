@@ -370,12 +370,22 @@ export default function ClassicTemplate({ data }) {
                                             has(totals.advance) && <tr><td style={{ color: '#e53935' }}>Advance Deducted (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.advance)}</td></tr>
                                         )}
                                         {has(totals.discount) && <tr><td style={{ color: '#e53935' }}>Discount (−)</td><td style={{ color: '#e53935' }}>{fmt(totals.discount)}</td></tr>}
+                                        {has(totals.creditApplied) && (
+                                            <tr>
+                                                <td style={{ color: '#e53935', fontWeight: 600 }}>Credit Note Applied (−)</td>
+                                                <td style={{ color: '#e53935', fontWeight: 600 }}>{fmt(totals.creditApplied)}</td>
+                                            </tr>
+                                        )}
                                         {has(totals.roundOff) && <tr><td>Round Off</td><td>{Number(totals.roundOff).toFixed(2)}</td></tr>}
                                     </>
                                 )}
                                 <tr className="pdf-grand-total" style={isReturn ? { background: '#e8f5e9' } : undefined}>
-                                    <td style={isReturn ? { color: '#1b5e20' } : undefined}>{finalLabel}</td>
-                                    <td style={isReturn ? { color: '#1b5e20' } : undefined}>{fmt(totals.finalAmount)}</td>
+                                    <td style={isReturn ? { color: '#1b5e20' } : undefined}>
+                                        {totals.creditApplied > 0 ? 'NET PAYABLE' : finalLabel}
+                                    </td>
+                                    <td style={isReturn ? { color: '#1b5e20' } : undefined}>
+                                        {fmt(totals.finalAmount - (totals.creditApplied || 0))}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>

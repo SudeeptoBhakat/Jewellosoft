@@ -132,5 +132,90 @@ class Invoice(BaseBilling):
 
     is_paid = models.BooleanField(default=False)
 
+    credit_applied = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Total credit note amount applied against this invoice"
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class CreditNote(BaseModel):
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('partial', 'Partially Used'),
+        ('closed', 'Closed'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE,
+        related_name='credit_notes'
+    )
+    credit_note_no = models.CharField(max_length=50, unique=True)
+
+    source_invoice = models.ForeignKey(
+        Invoice, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='generated_credit_notes'
+    )
+
+    reason = models.TextField(help_text="Reason for issuing this credit note")
+    credit_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    used_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='open')
+    notes = models.TextField(blank=True)
+
+    expires_at = models.DateField(
+        null=True, blank=True,
+        help_text="Optional expiry date. Null means never expires."
+    )
+
+    @property
+    def remaining_amount(self):
+        from decimal import Decimal
+        return max(Decimal('0'), self.credit_amount - self.used_amount)
+
+    @property
+    def is_expired(self):
+        if not self.expires_at:
+            return False
+        from django.utils import timezone
+        return timezone.now().date() > self.expires_at
+
+    def __str__(self):
+        return f"{self.credit_note_no} — {self.customer} — ₹{self.credit_amount}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class CreditNoteUsage(BaseModel):
+    credit_note = models.ForeignKey(
+        CreditNote, on_delete=models.CASCADE,
+        related_name='usages'
+    )
+    applied_to_invoice = models.ForeignKey(
+        Invoice, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='credit_note_usages'
+    )
+    applied_to_estimate = models.ForeignKey(
+        'billing.Estimate', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='credit_note_usages'
+    )
+    applied_to_order = models.ForeignKey(
+        'orders.Order', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='credit_note_usages',
+        help_text="Set when credit note is applied at order booking time"
+    )
+    amount_used = models.DecimalField(max_digits=12, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True)
+
     class Meta:
         ordering = ['-created_at']

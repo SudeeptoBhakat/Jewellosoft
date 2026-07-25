@@ -19,9 +19,32 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Order.objects.none()
         return Order.objects.filter(shop=shop)
 
+    from django.db import transaction
+
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        print("Incoming Order Payload:", request.data)
-        return super().create(request, *args, **kwargs)
+        credit_apps = request.data.get('credit_note_applications', [])
+        response = super().create(request, *args, **kwargs)
+        if response.status_code == status.HTTP_201_CREATED:
+            order_id = response.data.get('id')
+            if order_id and credit_apps:
+                from apps.billing.services.credit_note_service import apply_credit_note_to_order
+                from decimal import Decimal
+                for app in credit_apps:
+                    cn_id = app.get("credit_note_id") or app.get("id")
+                    cn_amt = Decimal(str(app.get("amount", 0)))
+                    if cn_id and cn_amt > 0:
+                        apply_credit_note_to_order(
+                            credit_note_id=cn_id,
+                            order_id=order_id,
+                            amount_to_apply=cn_amt,
+                            note=f"Applied to Order {response.data.get('order_no')}"
+                        )
+                # Fetch fresh updated order instance and serialize it
+                order_instance = Order.objects.get(id=order_id)
+                serializer = self.get_serializer(order_instance)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return response
 
     def perform_create(self, serializer):
         serializer.save(shop=self.request.shop)

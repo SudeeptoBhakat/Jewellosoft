@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import api, { extractList } from '../../lib/axios';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
-export default function RateChart() {
+export default function RateChart({ isActive = true }) {
   const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rateHistory, setRateHistory] = useState([]);
@@ -17,6 +18,8 @@ export default function RateChart() {
   useEffect(() => {
     fetchRates();
   }, []);
+
+  useTabRefresh(() => { if (!editMode) fetchRates(); }, isActive);
 
   const fetchRates = async () => {
     try {

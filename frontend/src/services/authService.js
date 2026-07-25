@@ -29,24 +29,54 @@ export async function signUp(email, password, metadata = {}) {
   if (!acquireLock('signup')) throw new Error('Registration already in progress.');
 
   try {
+    const shopName = metadata.shop_name || metadata.shopName || 'My Jewellery Shop';
+    const ownerName = metadata.owner_name || metadata.ownerName || '';
+    const mobileNumber = metadata.mobile_number || metadata.mobileNumber || metadata.phone || '';
+
+    const metaPayload = {
+      ...metadata,
+      shop_name: shopName,
+      shopName: shopName,
+      owner_name: ownerName,
+      ownerName: ownerName,
+      mobile_number: mobileNumber,
+      mobileNumber: mobileNumber,
+    };
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: metadata,
+        data: metaPayload,
       }
     });
-    
+
     if (error) throw error;
-    
-    // We intentionally DO NOT insert into public.profiles.
-    // The Postgres trigger 'handle_new_user()' handles that securely.
-    
+
     if (data.session?.access_token) {
       localStorage.setItem('access_token', data.session.access_token);
       localStorage.setItem('refresh_token', data.session.refresh_token);
     }
-    
+
+    if (data.user && data.session) {
+      try {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          email: data.user.email,
+          shop_name: shopName,
+          owner_name: ownerName,
+          mobile_number: mobileNumber,
+          plan: 'free',
+          is_active: true,
+          expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      } catch (profileErr) {
+        console.warn('[authService] Profile sync notice:', profileErr?.message);
+      }
+    }
+
     return { user: data.user, session: data.session };
   } finally {
     releaseLock('signup');

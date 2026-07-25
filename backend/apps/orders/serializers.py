@@ -31,6 +31,7 @@ class OrderSerializer(serializers.ModelSerializer):
     order_no = serializers.CharField(required=False, allow_blank=True)
     advance_payments = serializers.SerializerMethodField()
     due_amount = serializers.SerializerMethodField()
+    credit_note_usages = serializers.SerializerMethodField()
 
     old_purchase_voucher_no = serializers.SerializerMethodField()
 
@@ -62,8 +63,25 @@ class OrderSerializer(serializers.ModelSerializer):
         refunds  = AdvancePayment.objects.filter(order=obj, status='active', is_refund=True)
         receipt_total = sum(r.amount for r in receipts) - sum(r.amount for r in refunds)
         order_advance = obj.advance or Decimal('0')
-        due = obj.grand_total - order_advance - receipt_total
+        credit_val = getattr(obj, 'credit_applied', Decimal('0')) or Decimal('0')
+        due = obj.grand_total - order_advance - receipt_total - credit_val
         return str(max(due, Decimal('0')))
+
+    def get_credit_note_usages(self, obj):
+        try:
+            return [
+                {
+                    "id": u.id,
+                    "credit_note_id": u.credit_note.id,
+                    "credit_note_no": u.credit_note.credit_note_no,
+                    "amount_used": str(u.amount_used),
+                    "reason": u.credit_note.reason,
+                    "created_at": u.created_at.isoformat() if u.created_at else None,
+                }
+                for u in obj.credit_note_usages.all()
+            ]
+        except Exception:
+            return []
 
     def get_customer_detail(self, obj):
         if obj.customer:

@@ -25,11 +25,21 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'unsafe-fallback-key-replace-in-prod
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
-# ── Supabase Config ──────────────────────────────────────────────────
+# ── Supabase Config (client-safe values only) ────────────────────────
 SUPABASE_URL = APP_CONFIG.get("SUPABASE_URL")
 SUPABASE_ANON_KEY = APP_CONFIG.get("SUPABASE_ANON_KEY")
-SUPABASE_SERVICE_ROLE_KEY = APP_CONFIG.get("SUPABASE_SERVICE_ROLE_KEY")
-SUPABASE_JWT_SECRET = APP_CONFIG.get("SUPABASE_JWT_SECRET")
+
+# Edge function base URL. Defaults to <SUPABASE_URL>/functions/v1 when blank.
+EDGE_FUNCTIONS_URL = APP_CONFIG.get("EDGE_FUNCTIONS_URL", "")
+
+# Public key (PEM) used to verify server-signed offline licenses.
+LICENSE_PUBLIC_KEY = APP_CONFIG.get("LICENSE_PUBLIC_KEY", "")
+
+# The following are DEVELOPER-ONLY and must never be present in a shipped
+# build. Cloud privilege now lives exclusively in the activate edge function.
+SUPABASE_SERVICE_ROLE_KEY = APP_CONFIG.get("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_JWT_SECRET = APP_CONFIG.get("SUPABASE_JWT_SECRET", "")
+ALLOW_SERVICE_ROLE = bool(APP_CONFIG.get("ALLOW_SERVICE_ROLE", False))
 
 INSTALLED_APPS = [
     'django.contrib.admin',

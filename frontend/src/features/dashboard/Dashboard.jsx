@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/axios';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
 const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
 
@@ -9,7 +10,7 @@ const statusBadge = (status) => {
   return <span className={`badge badge--${map[status] || 'primary'}`}>{status}</span>;
 };
 
-export default function Dashboard() {
+export default function Dashboard({ isActive = true }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -26,6 +27,8 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboard();
   }, []);
+
+  useTabRefresh(() => fetchDashboard(), isActive);
 
   const fetchDashboard = async () => {
     try {

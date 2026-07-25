@@ -1,7 +1,12 @@
 {
   "SUPABASE_URL": "https://your-project.supabase.co",
   "SUPABASE_ANON_KEY": "your-supabase-anon-key",
-  "SUPABASE_SERVICE_ROLE_KEY": "your-supabase-service-role-key",
-  "SUPABASE_JWT_SECRET": "your-supabase-jwt-secret",
-  "CONFIG_ENCRYPTION_KEY": "generate-with-Fernet.generate_key"
+  "EDGE_FUNCTIONS_URL": "",
+  "LICENSE_PUBLIC_KEY": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...ship-this-public-key...\n-----END PUBLIC KEY-----",
+  "CONFIG_ENCRYPTION_KEY": "optional-fernet-key-for-config-at-rest",
+
+  "_developer_only_note": "The keys below are for LOCAL DEVELOPMENT ONLY and must never be shipped in a release build. In production, cloud privilege lives only in the activate edge function.",
+  "SUPABASE_SERVICE_ROLE_KEY": "",
+  "SUPABASE_JWT_SECRET": "",
+  "ALLOW_SERVICE_ROLE": false
 }

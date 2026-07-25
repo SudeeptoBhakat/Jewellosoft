@@ -107,12 +107,14 @@ def load_config():
         logger.error(msg)
         raise FileNotFoundError(msg)
 
-    # Validate required keys
+    # Validate required keys. A shipped client only needs the public,
+    # RLS-safe values: the Supabase URL, the anon key, and the license
+    # verification public key. The service-role key and JWT secret are
+    # intentionally NOT required on the client and must never be bundled.
     required_keys = [
         "SUPABASE_URL",
         "SUPABASE_ANON_KEY",
-        "SUPABASE_SERVICE_ROLE_KEY",
-        "SUPABASE_JWT_SECRET"
+        "LICENSE_PUBLIC_KEY",
     ]
 
     missing_keys = [key for key in required_keys if not config.get(key)]

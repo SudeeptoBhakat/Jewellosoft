@@ -8,12 +8,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRefresh } from '../../contexts/RefreshContext';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { logout, shop } = useAuth();
+  const { tick, refresh } = useRefresh();
 
-  // Derive shop name / owner from global auth state
   const shopName = shop?.name || 'JewelloSoft';
   const ownerName = shop?.owner_name || 'Admin';
 
@@ -34,6 +35,9 @@ export default function Navbar() {
 
   /* ─── Live Rates from API ─── */
   const [rates, setRates] = useState({ gold24k: 0, gold22k: 0, gold18k: 0, silver999: 0, silver925: 0 });
+  const [showRates, setShowRates] = useState(false);
+  const ratesRef = useRef(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const fetchRates = async () => {
@@ -54,7 +58,15 @@ export default function Navbar() {
     fetchRates();
     const interval = setInterval(fetchRates, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [tick]);
+
+  /* ─── Global Refresh ─── */
+  const handleGlobalRefresh = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    refresh();
+    setTimeout(() => setRefreshing(false), 700);
+  };
 
   /* ─── Global Search ─── */
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,6 +123,7 @@ export default function Navbar() {
     const handler = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
       if (searchRef.current && !searchRef.current.contains(e.target)) setShowSearch(false);
+      if (ratesRef.current && !ratesRef.current.contains(e.target)) setShowRates(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -209,13 +222,93 @@ export default function Navbar() {
 
       <div className="navbar__divider"></div>
 
-      {/* Live Rates */}
-      <div className="navbar__rates">
-        {rates.gold24k > 0 && <div className="navbar__rate-item"><span className="navbar__rate-metal navbar__rate-metal--gold"><i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>24K</span><span className="navbar__rate-value">₹{rates.gold24k.toLocaleString('en-IN')}</span></div>}
-        {rates.gold22k > 0 && <div className="navbar__rate-item"><span className="navbar__rate-metal navbar__rate-metal--gold"><i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>22K</span><span className="navbar__rate-value">₹{rates.gold22k.toLocaleString('en-IN')}</span></div>}
-        {rates.gold18k > 0 && <div className="navbar__rate-item"><span className="navbar__rate-metal navbar__rate-metal--gold"><i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>18K</span><span className="navbar__rate-value">₹{rates.gold18k.toLocaleString('en-IN')}</span></div>}
-        {rates.silver999 > 0 && <div className="navbar__rate-item"><span className="navbar__rate-metal navbar__rate-metal--silver"><i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>999</span><span className="navbar__rate-value">₹{rates.silver999.toLocaleString('en-IN')}</span></div>}
-        {rates.silver925 > 0 && <div className="navbar__rate-item"><span className="navbar__rate-metal navbar__rate-metal--silver"><i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>925</span><span className="navbar__rate-value">₹{rates.silver925.toLocaleString('en-IN')}</span></div>}
+      {/* Global Refresh */}
+      <button
+        className="navbar__quick-btn navbar__quick-btn--secondary"
+        id="btn-global-refresh"
+        title="Refresh data (current tab)"
+        onClick={handleGlobalRefresh}
+        disabled={refreshing}
+        style={{ padding: '0 10px' }}
+      >
+        <i className={`fa-solid fa-arrows-rotate${refreshing ? ' fa-spin' : ''}`}></i>
+      </button>
+
+      <div className="navbar__divider"></div>
+
+      {/* Live Rates Dropdown */}
+      <div className="navbar__profile-wrap" ref={ratesRef} style={{ position: 'relative' }}>
+        {(() => {
+          const rateEntries = [
+            { key: 'gold24k', label: 'Gold 24K (999)', value: rates.gold24k, kind: 'gold' },
+            { key: 'gold22k', label: 'Gold 22K (916)', value: rates.gold22k, kind: 'gold' },
+            { key: 'gold18k', label: 'Gold 18K (750)', value: rates.gold18k, kind: 'gold' },
+            { key: 'silver999', label: 'Silver 999 (Pure)', value: rates.silver999, kind: 'silver' },
+            { key: 'silver925', label: 'Silver 925 (Sterling)', value: rates.silver925, kind: 'silver' },
+          ].filter(r => r.value > 0);
+          const headline = rateEntries.find(r => r.key === 'gold22k') || rateEntries[0];
+
+          return (
+            <>
+              <div
+                className="navbar__rates"
+                id="rates-dropdown"
+                onClick={() => setShowRates(p => !p)}
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                title="Live metal rates"
+              >
+                {headline ? (
+                  <div className="navbar__rate-item">
+                    <span className={`navbar__rate-metal navbar__rate-metal--${headline.kind}`}>
+                      <i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>
+                      {headline.key === 'gold22k' ? '22K' : headline.label.split(' ')[1]}
+                    </span>
+                    <span className="navbar__rate-value">₹{headline.value.toLocaleString('en-IN')}</span>
+                  </div>
+                ) : (
+                  <div className="navbar__rate-item">
+                    <span className="navbar__rate-metal"><i className="fa-solid fa-coins" style={{ marginRight: 4, fontSize: '0.55rem' }}></i>Rates</span>
+                    <span className="navbar__rate-value" style={{ color: 'var(--text-muted)' }}>—</span>
+                  </div>
+                )}
+                <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginLeft: 4, transition: 'transform 150ms', transform: showRates ? 'rotate(180deg)' : 'rotate(0deg)' }}></i>
+              </div>
+
+              {showRates && (
+                <div className="navbar__dropdown animate-fade-in" style={{ minWidth: 240 }}>
+                  <div className="navbar__dropdown-header" style={{ paddingBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--text-primary)' }}>
+                        <i className="fa-solid fa-coins" style={{ marginRight: 8, color: 'var(--color-warning)' }}></i>
+                        Live Rates (₹/g)
+                      </div>
+                    </div>
+                  </div>
+                  <div className="navbar__dropdown-divider"></div>
+                  {rateEntries.length === 0 && (
+                    <div style={{ padding: '12px 16px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      No rates configured yet
+                    </div>
+                  )}
+                  {rateEntries.map(r => (
+                    <div key={r.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', fontSize: 'var(--text-sm)' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+                        <i className="fa-solid fa-coins" style={{ fontSize: '0.6rem', color: r.kind === 'gold' ? 'var(--color-warning)' : 'var(--color-info)' }}></i>
+                        {r.label}
+                      </span>
+                      <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>₹{r.value.toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                  <div className="navbar__dropdown-divider"></div>
+                  <button className="navbar__dropdown-item" onClick={() => { navigate('/rates'); setShowRates(false); }}>
+                    <i className="fa-solid fa-chart-line"></i>
+                    <span>View Rates Chart</span>
+                  </button>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       <div className="navbar__divider"></div>

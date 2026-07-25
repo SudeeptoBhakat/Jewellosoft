@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../lib/axios';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
 const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (d) => {
@@ -15,7 +16,7 @@ const PAYMENT_STATUS_LABELS = {
   overpaid: { label: 'Overpaid', cls: 'primary' },
 };
 
-export default function DuesCreditsList() {
+export default function DuesCreditsList({ isActive = true }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'all';
@@ -56,6 +57,8 @@ export default function DuesCreditsList() {
     const handler = setTimeout(fetchData, 350);
     return () => clearTimeout(handler);
   }, [fetchData]);
+
+  useTabRefresh(() => fetchData(), isActive);
 
   const toggleRow = (id) => setExpandedRow(prev => (prev === id ? null : id));
 

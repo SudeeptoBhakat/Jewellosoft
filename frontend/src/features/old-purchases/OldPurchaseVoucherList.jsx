@@ -12,6 +12,7 @@ import { useTabs } from '../../contexts/TabContext';
 import { fetchVouchers, deleteVoucher } from './services';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import OldPurchaseVoucherPDF from './OldPurchaseVoucherPDF';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -25,7 +26,7 @@ const statusBadge = (status) => {
   return <span className="badge badge--success">Not Adjusted</span>;
 };
 
-export default function OldPurchaseVoucherList() {
+export default function OldPurchaseVoucherList({ isActive = true }) {
   const { shop } = useAuth();
   const { openTab } = useTabs();
   const [search, setSearch] = useState('');
@@ -68,6 +69,8 @@ export default function OldPurchaseVoucherList() {
     window.addEventListener('jewellosoft:voucherSaved', handler);
     return () => window.removeEventListener('jewellosoft:voucherSaved', handler);
   }, [loadVouchers]);
+
+  useTabRefresh(() => loadVouchers(), isActive);
 
 
   // Vouchers stats

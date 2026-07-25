@@ -20,6 +20,7 @@ Thumbs.db
 # IDE / Editor
 .vscode/
 .idea/
+.claude/
 *.suo
 *.ntvs*
 *.njsproj
@@ -53,6 +54,10 @@ backend/test.txt
 backend/config.json
 backend/config.json.enc
 backend/conftest.py
+backend/apps/accounts/migrations
+backend/apps/billing/migrations
+backend/apps/orders/migrations
+backend/config.json
 
 # PyInstaller temporary
 /build/
@@ -92,3 +97,7 @@ backend/license.key
 # Any config backups
 *.bak
 *.orig
+*.tmp
+
+JewelloSoft_Testing_Guide.md
+supabase

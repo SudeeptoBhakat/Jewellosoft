@@ -159,6 +159,22 @@ def create_invoice(payload):
         from apps.old_purchases.services import apply_voucher
         apply_voucher(old_purchase_voucher_val, invoice_no=invoice_no)
 
+    # Apply credit notes if provided in the payload
+    credit_applications = payload.get("credit_note_applications", []) or totals.get("credit_note_applications", [])
+    if credit_applications:
+        from apps.billing.services.credit_note_service import apply_credit_note
+        for app in credit_applications:
+            cn_id = app.get("credit_note_id") or app.get("id")
+            cn_amt = Decimal(str(app.get("amount", 0)))
+            if cn_id and cn_amt > 0:
+                apply_credit_note(
+                    credit_note_id=cn_id,
+                    invoice_id=invoice.id,
+                    amount_to_apply=cn_amt,
+                    note=f"Applied to Invoice {invoice.invoice_no}"
+                )
+        invoice.refresh_from_db()
+
     # 3. Write BillingItems
     invoice_ctype = ContentType.objects.get_for_model(Invoice)
     inventory_ids_to_deduct = []

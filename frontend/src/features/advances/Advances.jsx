@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/axios';
 import { toast } from '../../utils/toast';
+import useTabRefresh from '../../hooks/useTabRefresh';
 import FallbackWatermarkSVG from "../../assets/media/svg.svg";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ function amountWords(amt) {
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function Advances() {
+export default function Advances({ isActive = true }) {
   const [tab, setTab] = useState('receipts');
   const [shopInfo, setShopInfo] = useState(null);
   const [customers, setCustomers] = useState([]);
@@ -111,7 +112,7 @@ export default function Advances() {
         ))}
       </div>
 
-      {tab === 'receipts' && <ReceiptsTab shopInfo={shopInfo} />}
+      {tab === 'receipts' && <ReceiptsTab shopInfo={shopInfo} isActive={isActive} />}
       {tab === 'cashbook' && <CashBookTab shopInfo={shopInfo} />}
       {tab === 'ledger'   && <LedgerTab shopInfo={shopInfo} customers={customers} />}
     </div>
@@ -121,7 +122,7 @@ export default function Advances() {
 // ═══════════════════════════════════════════════════════════
 // TAB 1: RECEIPTS & REFUNDS
 // ═══════════════════════════════════════════════════════════
-function ReceiptsTab({ shopInfo }) {
+function ReceiptsTab({ shopInfo, isActive = true }) {
   const [advances, setAdvances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,6 +154,8 @@ function ReceiptsTab({ shopInfo }) {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   useEffect(() => { fetchAdvances(); }, []);
+
+  useTabRefresh(() => fetchAdvances(), isActive);
 
   const fetchAdvances = async () => {
     setLoading(true);

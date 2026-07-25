@@ -1,16 +1,3 @@
-/**
- * ─── Auth Context ───────────────────────────────────────────────
- * Global authentication state provider.
- *
- * Responsibilities:
- *   • Listens to Supabase auth state changes
- *   • Fetches the user profile from Supabase `profiles` table
- *   • Syncs/resolves the Django Shop record on login
- *   • Exposes login / register / logout via the service layer
- *   • Never calls Supabase directly (delegates to authService)
- * ────────────────────────────────────────────────────────────────
- */
-
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
 import api from '../lib/axios';
@@ -33,10 +20,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
 
-  // ── Django Shop sync ───────────────────────────────────────────
-  // After Supabase auth succeeds, eagerly resolve the shop record
-  // from the Django backend. This ensures the Shop exists and is
-  // linked to this Supabase user. If 404 → shop is null (onboarding needed).
   const syncShop = useCallback(async () => {
     try {
       const res = await api.get('/accounts/shop/current/');
@@ -111,17 +94,41 @@ export function AuthProvider({ children }) {
     }
 
     // 1. Supabase Native Login
-    const { session } = await authService.signIn(email, password);
+    const { session, user: authUser } = await authService.signIn(email, password);
     if (!session?.access_token) {
       throw new Error('Login failed: No session returned from Supabase.');
     }
 
-    // 2. Activate Local Offline License & sync Shop Profile
-    try {
-      const res = await api.post('/accounts/auth/activate/', { password });
+    const meta = authUser?.user_metadata || {};
 
-      // Backend now returns { status, license, user: {id, email}, shop }
-      // Use the explicit 'user' object — never the raw 'license' payload.
+    // 2. Direct client-side profile sync to Supabase table
+    try {
+      const client = authService.getSupabaseClient();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await client.from('profiles').upsert({
+        id: authUser.id,
+        email: authUser.email,
+        shop_name: meta.shop_name || meta.shopName || 'My Jewellery Shop',
+        owner_name: meta.owner_name || meta.ownerName || '',
+        mobile_number: meta.mobile_number || meta.mobileNumber || meta.phone || '',
+        plan: 'free',
+        is_active: true,
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    } catch (syncErr) {
+      console.warn('[AuthContext] Direct Supabase profile sync notice:', syncErr?.message);
+    }
+
+    // 3. Activate Local Offline License & sync Shop Profile
+    try {
+      const res = await api.post('/accounts/auth/activate/', {
+        password,
+        shop_name: meta.shop_name || meta.shopName || '',
+        owner_name: meta.owner_name || meta.ownerName || '',
+        mobile_number: meta.mobile_number || meta.mobileNumber || meta.phone || '',
+      });
+
       const userData = res.data.user || { email, id: res.data.license?.user_id };
       setUser(userData);
       setShop(res.data.shop || null);
@@ -144,13 +151,15 @@ export function AuthProvider({ children }) {
     const { session, user } = await authService.signUp(email, password, metadata);
     const needsEmailConfirmation = !session;
 
-    // 2. Wait briefly for the Supabase Postgres trigger (handle_new_user) to propagate.
-    //    This avoids a race condition where the profile row doesn't exist yet when
-    //    activate is called immediately after signup.
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (needsEmailConfirmation) {
+      setLoading(false);
+      return { needsEmailConfirmation: true };
+    }
 
-    // 3. Activate local license. Pass email explicitly — JWT may be absent when
-    //    email confirmation is pending (session = null).
+    // 2. Wait briefly for Supabase Postgres trigger (handle_new_user) to propagate
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 3. Activate local license & provision shop
     try {
       const res = await api.post('/accounts/auth/activate/', {
         email,
@@ -158,8 +167,7 @@ export function AuthProvider({ children }) {
         ...metadata,
       });
 
-      // Backend returns { status, license, user: {id, email}, shop }
-      const userData = res.data.user || { email, id: res.data.license?.user_id };
+      const userData = res.data.user || { email, id: res.data.license?.user_id || user?.id };
       setUser(userData);
       setShop(res.data.shop || null);
 
@@ -168,12 +176,13 @@ export function AuthProvider({ children }) {
       }
     } catch (err) {
       console.warn('[AuthContext:Register] Activation failed:', err);
-      throw err;
+      const detail = err.response?.data?.detail || err.message || 'Registration activation failed.';
+      throw new Error(detail);
     } finally {
       setLoading(false);
     }
 
-    return { needsEmailConfirmation };
+    return { needsEmailConfirmation: false };
   }, []);
 
   const logout = useCallback(async () => {

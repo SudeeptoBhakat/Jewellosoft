@@ -150,7 +150,7 @@ const S = {
 
 export default function OldPurchaseVoucherPDF({ data }) {
   if (!data) return null;
-  const { shop = {}, customer = {}, voucher = {} } = data;
+  const { shop = {}, customer = {}, voucher = {}, hideRate = false } = data;
 
   const isAdjusted = voucher.status && voucher.status.startsWith("adjusted");
   const adjustedRef =
@@ -233,7 +233,7 @@ export default function OldPurchaseVoucherPDF({ data }) {
             <th style={S.th}>Description</th>
             <th style={{ ...S.th, ...S.thR }}>Gross Wt (g)</th>
             <th style={{ ...S.th, ...S.thR }}>Net Wt (g)</th>
-            <th style={{ ...S.th, ...S.thR }}>Rate/10g</th>
+            {!hideRate && <th style={{ ...S.th, ...S.thR }}>Rate/10g</th>}
             <th style={{ ...S.th, ...S.thR }}>Amount</th>
           </tr>
         </thead>
@@ -242,13 +242,13 @@ export default function OldPurchaseVoucherPDF({ data }) {
             <td style={S.td}>{voucher.description || `${(voucher.metal_type || "Gold").toUpperCase()} Metal Purchase`}</td>
             <td style={{ ...S.td, ...S.tdR }}>{Number(voucher.gross_weight || 0).toFixed(3)}</td>
             <td style={{ ...S.td, ...S.tdR }}>{Number(voucher.net_weight || 0).toFixed(3)}</td>
-            <td style={{ ...S.td, ...S.tdR }}>{fmtRupee(voucher.rate_per_10gm)}</td>
+            {!hideRate && <td style={{ ...S.td, ...S.tdR }}>{fmtRupee(voucher.rate_per_10gm)}</td>}
             <td style={{ ...S.td, ...S.tdR, fontWeight: 700 }}>{fmtRupee(voucher.amount)}</td>
           </tr>
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={4} style={S.tfootTd}>Total Purchase Amount</td>
+            <td colSpan={hideRate ? 3 : 4} style={S.tfootTd}>Total Purchase Amount</td>
             <td style={{ ...S.tfootTd, textAlign: "right" }}>{fmtRupee(voucher.amount)}</td>
           </tr>
         </tfoot>

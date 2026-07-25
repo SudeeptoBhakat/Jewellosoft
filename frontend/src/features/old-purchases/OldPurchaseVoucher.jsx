@@ -261,27 +261,54 @@ export default function OldPurchaseVoucher({ tabId, isActive }) {
     }
   };
 
+  // Build the preview document from a voucher object (either the current
+  // form state for the pre-save preview, or the saved backend record).
+  const buildVoucherDocData = (voucherObj) => {
+    const finalCustName = custName.trim() || 'Walk-in';
+    return {
+      isVoucher: true,
+      template: shop?.pdf_template || 'classic',
+      shop: {
+        name: shop?.name || 'My Jewellery Shop',
+        address: shop?.address || '',
+        phone: shop?.phone || '',
+        email: shop?.email || '',
+        gst_number: shop?.gst_number || '',
+        pan_number: shop?.pan_number || '',
+        watermark_logo_url: shop?.watermark_logo || null,
+      },
+      customer: { name: finalCustName, phone: custMobile, address: custAddress },
+      voucher: voucherObj,
+    };
+  };
+
+  // Voucher object reflecting the current (unsaved) form state, used for preview.
+  const buildDraftVoucher = () => ({
+    voucher_no: voucherNo || 'PV-TBD',
+    date: voucherDate,
+    metal_type: metalType,
+    description,
+    no_of_articles: parseInt(noOfArticles) || 1,
+    purity,
+    gross_weight: parseFloat(grossWeight) || 0,
+    net_weight: parseFloat(netWeight) || 0,
+    rate_per_10gm: activeRate,
+    amount: finalAmount,
+    notes,
+    status,
+  });
+
+  // Open the preview from form state WITHOUT saving. The voucher is persisted
+  // only when the user clicks "Confirm Print" (see handleConfirmPrint below).
   const handleSaveAndPrint = async () => {
+    setPrintData(buildVoucherDocData(buildDraftVoucher()));
+  };
+
+  // Persist the voucher on confirm and return the freshly-numbered document.
+  const handleConfirmPrint = async () => {
     const savedVoucher = await handleSave(false);
-    if (savedVoucher) {
-      const finalCustName = custName.trim() || 'Walk-in';
-      const docData = {
-        isVoucher: true,
-        template: shop?.pdf_template || 'classic',
-        shop: {
-          name: shop?.name || 'My Jewellery Shop',
-          address: shop?.address || '',
-          phone: shop?.phone || '',
-          email: shop?.email || '',
-          gst_number: shop?.gst_number || '',
-          pan_number: shop?.pan_number || '',
-          watermark_logo_url: shop?.watermark_logo || null,
-        },
-        customer: { name: finalCustName, phone: custMobile, address: custAddress },
-        voucher: savedVoucher,
-      };
-      setPrintData(docData);
-    }
+    if (!savedVoucher) return { success: false };
+    return { success: true, data: buildVoucherDocData(savedVoucher) };
   };
 
   const isEdit = voucherId && !voucherId.startsWith('old-purchases');
@@ -300,7 +327,7 @@ export default function OldPurchaseVoucher({ tabId, isActive }) {
           <div className="page-header__actions">
             <button className="btn btn--ghost" onClick={() => closeTab(tabId)}>Cancel</button>
             <button className="btn btn--secondary" onClick={handleSaveAndPrint} disabled={isAdjusted}>
-              <i className="fa-solid fa-print"></i> Save & Print
+              <i className="fa-solid fa-print"></i> Print
             </button>
             <button className="btn btn--success" onClick={() => handleSave(true)} disabled={isAdjusted}>
               <i className="fa-solid fa-check"></i> {isEdit ? 'Update Voucher' : 'Save Voucher'}
@@ -485,6 +512,7 @@ export default function OldPurchaseVoucher({ tabId, isActive }) {
           isOpen={!!printData}
           data={printData}
           onClose={() => setPrintData(null)}
+          onConfirmPrint={handleConfirmPrint}
           isVoucher={true}
           CustomPDFTemplate={OldPurchaseVoucherPDF}
         />

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme, THEMES } from '../../contexts/ThemeContext';
 import { toast } from '../../utils/toast';
 import { getSuggestions, addSuggestion, updateSuggestion, deleteSuggestion, resetToDefaults } from '../../utils/productSuggestions';
+import { getPrinterSettings, savePrinterSettings, listSystemPrinters, printBarcodeLabel, DEFAULT_PRINTER_SETTINGS } from '../../utils/labelPrinter';
 import ResetDataModal from './ResetDataModal';
 
 const themeCardStyle = (preview, isActive) => ({
@@ -163,6 +164,98 @@ function ThemeCard({ themeDef, isActive, onClick }) {
   );
 }
 
+function BarcodePrinterPanel() {
+  const [settings, setSettings] = useState(getPrinterSettings());
+  const [printers, setPrinters] = useState([]);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    listSystemPrinters().then(setPrinters).catch(() => setPrinters([]));
+  }, []);
+
+  const update = (patch) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    savePrinterSettings(next);
+  };
+
+  const handleTestPrint = async () => {
+    setTesting(true);
+    const res = await printBarcodeLabel(
+      { barcode: 'JS-TEST-1234', name: 'Test Label', purity: '22K', net_weight: 5.25 },
+      'JewelloSoft',
+      settings
+    );
+    setTesting(false);
+    if (res.success) toast.success('Test label sent to printer.');
+    else toast.error(res.error || 'Test print failed.');
+  };
+
+  return (
+    <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+      <div className="billing-form__header">
+        <span className="billing-form__header-title">
+          <i className="fa-solid fa-barcode" style={{ marginRight: 8, opacity: 0.6 }}></i>Barcode Label Printer
+        </span>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
+          RP-3160 GOLD & compatible thermal printers — saved instantly on this device
+        </span>
+      </div>
+      <div className="billing-form__body">
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Label Printer</label>
+            <select className="form-input form-select" id="settings-barcode-printer" value={settings.printerName} onChange={e => update({ printerName: e.target.value })}>
+              <option value="">System Default</option>
+              {printers.map(p => (
+                <option key={p.name} value={p.name}>{p.displayName}{p.isDefault ? ' (default)' : ''}</option>
+              ))}
+            </select>
+            {printers.length === 0 && (
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                Printer list available in the desktop app. System default will be used.
+              </span>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Label Width (mm)</label>
+            <input className="form-input" type="number" step="0.5" min="20" max="120" value={settings.labelWidthMm}
+              onChange={e => update({ labelWidthMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelWidthMm })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Jewellery tag default: <strong>70 mm</strong>
+            </span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Label Height (mm)</label>
+            <input className="form-input" type="number" step="0.5" min="5" max="80" value={settings.labelHeightMm}
+              onChange={e => update({ labelHeightMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelHeightMm })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Jewellery tag height: <strong>11 mm</strong> (1.1 cm)
+            </span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Copies per Label</label>
+            <input className="form-input" type="number" step="1" min="1" max="10" value={settings.copies}
+              onChange={e => update({ copies: Math.max(1, parseInt(e.target.value) || 1) })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Active: {settings.labelWidthMm} mm × {settings.labelHeightMm} mm (Barcode: 1.7 cm)
+            </span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={settings.autoPrintOnCreate} onChange={e => update({ autoPrintOnCreate: e.target.checked })} />
+            Automatically print a barcode label when a new product is added
+          </label>
+          <button className="btn btn--outline btn--sm" onClick={handleTestPrint} disabled={testing}>
+            <i className={`fa-solid ${testing ? 'fa-spinner fa-spin' : 'fa-print'}`}></i> {testing ? 'Printing...' : 'Print Test Label'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { syncShop } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
@@ -187,6 +280,7 @@ export default function Settings() {
     pdf_template: 'classic',
     watermark_logo: null,
     require_full_payment_for_delivery: false,
+    credit_note_validity_days: 0,
   });
 
   const [loading, setLoading] = useState(true);
@@ -255,7 +349,8 @@ export default function Settings() {
       'settings-gst-number': 'gst_number',
       'settings-address': 'address',
       'settings-pan-number': 'pan_number',
-      'settings-pdf-template': 'pdf_template'
+      'settings-pdf-template': 'pdf_template',
+      'settings-cn-validity': 'credit_note_validity_days'
     };
     
     const key = fieldMap[id] || id;
@@ -319,6 +414,7 @@ export default function Settings() {
         email: (formData.email || '').trim(),
         pan_number: (formData.pan_number || '').trim(),
         pdf_template: formData.pdf_template || 'classic',
+        credit_note_validity_days: parseInt(formData.credit_note_validity_days) || 0,
       };
 
       delete sanitizedData.id;
@@ -468,6 +564,13 @@ export default function Settings() {
                   <input className="form-input" type="number" step="0.01" id="settings-hallmark-value" value={formData.hallmark_value} onChange={handleChange} />
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
                     Used in billing: Hallmark Count × ₹{formData.hallmark_value || 0}
+                  </span>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Credit Note Validity (Days)</label>
+                  <input className="form-input" type="number" step="1" id="settings-cn-validity" value={formData.credit_note_validity_days || 0} onChange={handleChange} />
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                    Validity period for credit notes. Set 0 for no expiry.
                   </span>
                 </div>
               </div>

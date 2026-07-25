@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import api from '../../lib/axios';
+import logoImg from '../../assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png';
 
 const navSections = [
   {
@@ -24,6 +25,7 @@ const navSections = [
       { path: '/billing/list', icon: 'fa-solid fa-receipt', label: 'Bills List' },
       { path: '/orders/list', icon: 'fa-solid fa-clipboard-list', label: 'Orders List' },
       { path: '/old-purchases/list', icon: 'fa-solid fa-file-invoice', label: 'Vouchers List' },
+      { path: '/credit-notes', icon: 'fa-solid fa-wallet', label: 'Credit Notes' },
       { path: '/advances', icon: 'fa-solid fa-hand-holding-dollar', label: 'Advance' },
     ],
   },
@@ -98,11 +100,10 @@ export default function Sidebar() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 28, height: 28, borderRadius: 6,
-              background: 'linear-gradient(135deg, var(--color-primary), #a78bfa)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '0.7rem', color: 'white', fontWeight: 700,
             }}>
-              <img src="frontend\src\assets\icons\b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png" alt="" />
+              <img src={logoImg} alt="JewelloSoft Logo" height={30} width={30}/>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>

@@ -7,6 +7,7 @@ import ProductNameInput from '../../components/elements/ProductNameInput';
 import { calculateBill, fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
 import { useTabs } from '../../contexts/TabContext';
 import { toast } from '../../utils/toast';
+import CreditNoteApplicator from '../credit-notes/CreditNoteApplicator';
 
 /* ─── Default Workers (for auto-suggestion) ─── */
 const defaultWorkers = [
@@ -213,6 +214,14 @@ export default function Orders({ tabId, isActive }) {
     setCustAddress(c.address || '');
     setShowCustSuggestions(false);
   };
+
+  // Credit Note states
+  const [appliedCreditNotes, setAppliedCreditNotes] = useState([]);
+  const creditAppliedAmount = appliedCreditNotes.reduce((sum, n) => sum + parseFloat(n.amount || 0), 0);
+
+  useEffect(() => {
+    setAppliedCreditNotes([]);
+  }, [customerId]);
 
   /* ─── Metal Rate ─── */
   const [metalRate, setMetalRate] = useState(0);
@@ -503,7 +512,8 @@ export default function Orders({ tabId, isActive }) {
                   total: Number(it.total || 0).toFixed(2),
                   status: 'created'
               })),
-              design_images: designImages.map(img => img.url)
+              design_images: designImages.map(img => img.url),
+              credit_note_applications: appliedCreditNotes.map(n => ({ credit_note_id: n.credit_note_id, amount: n.amount }))
           };
           
           console.log("Payload:", payload);
@@ -528,16 +538,27 @@ export default function Orders({ tabId, isActive }) {
           setShowCustWarning(true);
           return;
       }
-      await handleSaveAndPrint(true);
+      // Open the print preview from current form state WITHOUT saving.
+      // The order is persisted only when the user clicks "Confirm Print"
+      // inside the preview (see handleConfirmPrint below).
+      setPrintData(buildOrderDocData(orderNumber || 'NEW', null));
   };
 
-  const handleSaveAndPrint = async (bypassWarning = false) => {
-      const result = await handleSave(false, bypassWarning);
+  // Persist the order to the backend. Invoked by the preview modal's
+  // "Confirm Print" action. Returns { success, data } so the modal can
+  // print the freshly-numbered document.
+  const handleConfirmPrint = async () => {
+      const result = await handleSave(false, true);
       const success = result === true || result?.success;
-      if (success) {
-          const assignedOrderNo = result?.order_no || orderNumber || 'NEW';
-          const assignedDate = result?.created_at
-              ? new Date(result.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+      if (!success) return { success: false };
+      const assignedOrderNo = result?.order_no || orderNumber || 'NEW';
+      return { success: true, data: buildOrderDocData(assignedOrderNo, result?.created_at) };
+  };
+
+  const buildOrderDocData = (assignedOrderNo, createdAt) => {
+      {
+          const assignedDate = createdAt
+              ? new Date(createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
               : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
           const finalCustName = custName.trim() || 'Walk-in';
           const docData = {
@@ -593,6 +614,8 @@ export default function Orders({ tabId, isActive }) {
                   transactionType: calc.transactionType,
                   weightTotal: Number(calc.totalWeight || 0).toFixed(2),
                   makingTotal: Number(calc.totalMaking || 0).toFixed(2),
+                  creditApplied: creditAppliedAmount,
+                  appliedCreditNotes: appliedCreditNotes,
               },
               payment: { amounts: [
                   { mode: 'ADVANCE', amount: calc.advanceVal }
@@ -601,8 +624,7 @@ export default function Orders({ tabId, isActive }) {
               designNotes: designNotes || '',
               designImages: designImages.map(img => img.url),
           };
-          console.log(docData);
-          setPrintData(docData);
+          return docData;
       }
   };
 
@@ -617,7 +639,8 @@ export default function Orders({ tabId, isActive }) {
     } else if (pendingAction === 'save_silent') {
       await handleSave(false, true);
     } else if (pendingAction === 'print') {
-      await handleSaveAndPrint(true);
+      // Open preview from form state; save happens on Confirm Print.
+      setPrintData(buildOrderDocData(orderNumber || 'NEW', null));
     }
     setPendingAction(null);
   };
@@ -1108,6 +1131,14 @@ export default function Orders({ tabId, isActive }) {
                   </select>
                 </div>
               </div>
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-secondary)' }}>
+                <CreditNoteApplicator
+                  customerId={customerId}
+                  netTotal={calc.finalAmt}
+                  appliedNotes={appliedCreditNotes}
+                  onChange={setAppliedCreditNotes}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1252,6 +1283,12 @@ export default function Orders({ tabId, isActive }) {
                   </>)}
                   {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
                   {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Discount</span><span>{fmt(calc.discountVal)}</span></div>}
+                  {appliedCreditNotes.map(n => (
+                    <div key={n.credit_note_id} className="bill-sline bill-sline--deduct" style={{ color: 'var(--color-primary, #d97706)', fontWeight: 600 }}>
+                      <span>(−) Credit Note Applied ({n.credit_note_no})</span>
+                      <span>{fmt(n.amount)}</span>
+                    </div>
+                  ))}
                   <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                     <span>Round Off</span>
                     <span>{calc.roundOffVal >= 0 ? '+' : ''}{calc.roundOffVal.toFixed(2)}</span>
@@ -1266,6 +1303,15 @@ export default function Orders({ tabId, isActive }) {
               <div className="bill-final-value" style={{ color: calc.transactionType === 'return' ? 'var(--color-success)' : 'var(--text-primary)' }}>{fmtInt(Math.abs(calc.finalAmt))}</div>
               <div className="bill-final-words">{calc.amountInWords}</div>
             </div>
+
+            {creditAppliedAmount > 0 && (
+              <div className="bill-final-block" style={{ marginTop: 'var(--space-3)', background: 'var(--bg-elevated)', border: '1px solid var(--border-primary)' }}>
+                <div className="bill-final-label">NET PAYABLE (CASH/ONLINE)</div>
+                <div className="bill-final-value" style={{ color: 'var(--color-accent)' }}>
+                  {fmtInt(Math.max(0, calc.finalAmt - creditAppliedAmount))}
+                </div>
+              </div>
+            )}
 
             {/* Indicator */}
             {calc.finalAmt !== 0 && (
@@ -1295,7 +1341,7 @@ export default function Orders({ tabId, isActive }) {
           </div>
         </div>
       </div>
-      <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
+      <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} onConfirmPrint={handleConfirmPrint} />
       {showCustWarning && (
         <>
           <div className="overlay" style={{ zIndex: 11000 }} onClick={handleCancelWarning} />

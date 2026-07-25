@@ -7,6 +7,8 @@ import ProductNameInput from '../../components/elements/ProductNameInput';
 import { calculateBill, fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
 import { useTabs } from '../../contexts/TabContext';
 import { toast } from '../../utils/toast';
+import useBarcodeScanner from '../../hooks/useBarcodeScanner';
+import CreditNoteApplicator from '../credit-notes/CreditNoteApplicator';
 
 
 
@@ -185,6 +187,14 @@ export default function Billing({ tabId, isActive }) {
   const [showCustSuggestions, setShowCustSuggestions] = useState(false);
   const custWrapRef = useRef(null);
 
+  // Credit Note states
+  const [appliedCreditNotes, setAppliedCreditNotes] = useState([]);
+  const creditAppliedAmount = appliedCreditNotes.reduce((sum, n) => sum + parseFloat(n.amount || 0), 0);
+
+  useEffect(() => {
+    setAppliedCreditNotes([]);
+  }, [customerId]);
+
   // Debounced Customer Search
   useEffect(() => {
     const handler = setTimeout(async () => {
@@ -348,6 +358,58 @@ export default function Billing({ tabId, isActive }) {
     setSearchQ('');
     setShowSuggestions(false);
   }, [metalRate, makingRate]);
+
+  /* ─── Barcode Scanner (keyboard-wedge) ─── */
+  const handleBarcodeScan = useCallback(async (code) => {
+    setSearchQ('');
+    setShowSuggestions(false);
+    try {
+      const res = await api.get(`/inventory/scan/?barcode=${encodeURIComponent(code)}`);
+      const product = res.data?.product;
+      if (!product) return;
+
+      if (product.metal_type && metalType && product.metal_type.toLowerCase() !== metalType.toLowerCase()) {
+        toast.warning(`'${product.name}' is ${product.metal_type} — this bill is for ${metalType}.`);
+        return;
+      }
+
+      let duplicate = false;
+      setItems(prev => {
+        if (prev.some(it => it.inventory_id === product.id)) {
+          duplicate = true;
+          return prev;
+        }
+        const newItem = recalcItem({
+          ...createEmptyItem(),
+          inventory_id: product.id,
+          name: product.name,
+          huid: product.huid || '',
+          weight: product.net_weight || ''
+        }, metalRate, makingRate);
+        return [...prev, newItem];
+      });
+
+      if (duplicate) {
+        toast.warning(`'${product.name}' (${product.barcode}) is already on this bill.`);
+      } else {
+        toast.success(`Scanned: ${product.name} (${product.barcode})`);
+      }
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 404) {
+        toast.error(`No product found for barcode '${code}'.`);
+      } else if (status === 409) {
+        toast.error(err.response?.data?.detail || 'Scanned product is already sold.');
+      } else {
+        toast.error('Barcode lookup failed. Check backend connection.');
+      }
+    }
+  }, [metalType, metalRate, makingRate]);
+
+  useBarcodeScanner(handleBarcodeScan, {
+    enabled: isActive && !showModal,
+    allowInputIds: ['bill-product-search'],
+  });
 
   /* ─── Click-outside & Keyboard Shortcuts ─── */
   useEffect(() => {
@@ -695,6 +757,7 @@ export default function Billing({ tabId, isActive }) {
           { mode: 'cash', amount: cashAmt },
           { mode: 'upi', amount: onlineAmt }
         ].filter(p => p.amount > 0),
+        credit_note_applications: appliedCreditNotes.map(n => ({ credit_note_id: n.credit_note_id, amount: n.amount })),
         ...(linkedOrderId ? { order_id: linkedOrderId } : {}),
       };
 
@@ -725,14 +788,25 @@ export default function Billing({ tabId, isActive }) {
       setShowCustWarning(true);
       return;
     }
-    await handleSaveAndPrint(true);
+    // Open the print preview from current form state WITHOUT saving.
+    // The bill is persisted only when the user clicks "Confirm Print"
+    // inside the preview (see handleConfirmPrint below).
+    setPrintData(buildBillDocData(billNumber || 'TBD'));
   };
 
-  const handleSaveAndPrint = async (bypassWarning = false) => {
-    const result = await handleSave(false, bypassWarning);
+  // Persist the bill to the backend. Invoked by the preview modal's
+  // "Confirm Print" action. Returns { success, data } so the modal can
+  // print the freshly-numbered document.
+  const handleConfirmPrint = async () => {
+    const result = await handleSave(false, true);
     const success = result === true || result?.success;
-    if (success) {
-      const assignedBillNo = (result?.billNo) || billNumber || 'TBD';
+    if (!success) return { success: false };
+    const assignedBillNo = (result?.billNo) || billNumber || 'TBD';
+    return { success: true, data: buildBillDocData(assignedBillNo) };
+  };
+
+  const buildBillDocData = (assignedBillNo) => {
+    {
       const finalCustName = custName.trim() || 'Walk-in';
       const docData = {
         template: shop?.pdf_template || 'classic',
@@ -792,6 +866,8 @@ export default function Billing({ tabId, isActive }) {
           finalAmount: calc.finalAmt,
           amountInWords: calc.amountInWords,
           transactionType: calc.transactionType,
+          creditApplied: creditAppliedAmount,
+          appliedCreditNotes: appliedCreditNotes,
         },
         payment: {
           amounts: [
@@ -816,7 +892,7 @@ export default function Billing({ tabId, isActive }) {
 
       };
 
-      setPrintData(docData);
+      return docData;
     }
   };
 
@@ -831,7 +907,8 @@ export default function Billing({ tabId, isActive }) {
     } else if (pendingAction === 'save_silent') {
       await handleSave(false, true);
     } else if (pendingAction === 'print') {
-      await handleSaveAndPrint(true);
+      // Open preview from form state; save happens on Confirm Print.
+      setPrintData(buildBillDocData(billNumber || 'TBD'));
     }
     setPendingAction(null);
   };
@@ -1005,7 +1082,7 @@ export default function Billing({ tabId, isActive }) {
                   ref={searchRef}
                   className="form-input"
                   type="text"
-                  placeholder="Search product to add..."
+                  placeholder="Search product or scan barcode..."
                   value={searchQ}
                   onChange={e => { setSearchQ(e.target.value); setShowSuggestions(true); }}
                   onFocus={() => searchQ && setShowSuggestions(true)}
@@ -1410,6 +1487,14 @@ export default function Billing({ tabId, isActive }) {
                   <input className="form-input" type="number" step="1" placeholder="0" value={onlineAmt} onChange={e => setOnlineAmt(e.target.value)} id="bill-online" style={{ fontSize: 'var(--text-md)', fontWeight: 600 }} />
                 </div>
               </div>
+              <div style={{ marginTop: 12 }}>
+                <CreditNoteApplicator
+                  customerId={customerId}
+                  netTotal={calc.finalAmt}
+                  appliedNotes={appliedCreditNotes}
+                  onChange={setAppliedCreditNotes}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1553,6 +1638,12 @@ export default function Billing({ tabId, isActive }) {
                     </div>
                   )}
                   {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Discount</span><span>{fmt(calc.discountVal)}</span></div>}
+                  {appliedCreditNotes.map(n => (
+                    <div key={n.credit_note_id} className="bill-sline bill-sline--deduct" style={{ color: 'var(--color-primary, #d97706)', fontWeight: 600 }}>
+                      <span>(−) Credit Note Applied ({n.credit_note_no})</span>
+                      <span>{fmt(n.amount)}</span>
+                    </div>
+                  ))}
                   <div className="bill-sline" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                     <span>Round Off</span>
                     <span>{calc.roundOffVal >= 0 ? '+' : ''}{calc.roundOffVal.toFixed(2)}</span>
@@ -1569,6 +1660,15 @@ export default function Billing({ tabId, isActive }) {
               </div>
               <div className="bill-final-words">{calc.amountInWords}</div>
             </div>
+
+            {creditAppliedAmount > 0 && (
+              <div className="bill-final-block" style={{ marginTop: 'var(--space-3)', background: 'var(--bg-elevated)', border: '1px solid var(--border-primary)' }}>
+                <div className="bill-final-label">NET PAYABLE (CASH/ONLINE)</div>
+                <div className="bill-final-value" style={{ color: 'var(--color-accent)' }}>
+                  {fmtInt(Math.max(0, calc.finalAmt - creditAppliedAmount))}
+                </div>
+              </div>
+            )}
 
             {/* Indicator */}
             {calc.finalAmt !== 0 && (
@@ -1617,7 +1717,7 @@ export default function Billing({ tabId, isActive }) {
           </div>
         </div>
       </div>
-      <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
+      <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} onConfirmPrint={handleConfirmPrint} />
       {showCustWarning && (
         <>
           <div className="overlay" style={{ zIndex: 11000 }} onClick={handleCancelWarning} />

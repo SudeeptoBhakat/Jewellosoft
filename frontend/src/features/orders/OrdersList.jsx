@@ -33,6 +33,7 @@ const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFract
 const fmtInt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
 
 import { amountWords } from '../../utils/billingCalcEngine';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
 /* ─── Order Status Colors ─── */
 const orderStatusMap = { pending: 'warning', in_progress: 'info', completed: 'success', delivered: 'primary', cancelled: 'danger' };
@@ -330,7 +331,7 @@ function InventoryModal({ item, onClose, onSuccess }) {
 /* ═══════════════════════════════════════════
    ORDERS LIST MAIN PAGE
    ═══════════════════════════════════════════ */
-export default function OrdersList() {
+export default function OrdersList({ isActive = true }) {
   const { shop } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -349,6 +350,8 @@ export default function OrdersList() {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  useTabRefresh(() => fetchOrders(), isActive);
 
   const fetchOrders = async () => {
     setLoading(true);

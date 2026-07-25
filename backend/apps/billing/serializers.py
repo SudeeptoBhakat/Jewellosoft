@@ -18,6 +18,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     advance_payments = serializers.SerializerMethodField()
     
     old_purchase_voucher_no = serializers.SerializerMethodField()
+    credit_note_usages = serializers.SerializerMethodField()
     
     class Meta:
         model = Invoice
@@ -45,6 +46,22 @@ class InvoiceSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return []
+
+    def get_credit_note_usages(self, obj):
+        try:
+            return [
+                {
+                    "id": u.id,
+                    "credit_note_id": u.credit_note.id,
+                    "credit_note_no": u.credit_note.credit_note_no,
+                    "amount_used": str(u.amount_used),
+                    "reason": u.credit_note.reason,
+                    "created_at": u.created_at.isoformat() if u.created_at else None,
+                }
+                for u in obj.credit_note_usages.all()
+            ]
+        except Exception:
+            return []
 
     def validate(self, data):
         from decimal import Decimal
@@ -98,4 +115,3 @@ class EstimateSerializer(serializers.ModelSerializer):
         data['sgst'] = Decimal('0')
         data['igst'] = Decimal('0')
         return data
-

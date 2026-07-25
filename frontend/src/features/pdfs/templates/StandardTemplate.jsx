@@ -305,6 +305,26 @@ export default function StandardTemplate({ data }) {
                     </div>
                 </div>
 
+                {totals.creditApplied > 0 && (
+                    <div style={{
+                        marginTop: 15,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#fef3c7',
+                        border: '1px solid #f59e0b',
+                        borderRadius: '8px',
+                        padding: '10px 15px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        color: '#78350f',
+                        boxShadow: 'var(--shadow-sm)'
+                    }}>
+                        <span>CREDIT NOTE APPLIED: {fmt(totals.creditApplied)}</span>
+                        <span>NET PAYABLE (CASH/CARD/UPI): {fmt(totals.finalAmount - totals.creditApplied)}</span>
+                    </div>
+                )}
+
                 {/* AMOUNT IN WORDS */}
                 <div className="pdf-amount-strip">
                     {totals.amountInWords && totals.amountInWords.trim()

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import InvoicePDF from './pdf';
 import { toast } from '../../utils/toast';
 
-export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemplate }) {
+export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemplate, onConfirmPrint }) {
     const PDFComponent = CustomPDFTemplate || InvoicePDF;
     // console.log(data);
     const printRef = useRef(null);
@@ -13,39 +13,77 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
     const [hideMetalValue, setHideMetalValue] = useState(false);
     const [hideMaking, setHideMaking] = useState(false);
     const [hideCustomerDetails, setHideCustomerDetails] = useState(false);
+    /* Voucher-only: rate is shown by default; user can hide it on demand. */
+    const [hideRate, setHideRate] = useState(false);
+
+    /*
+     * When onConfirmPrint is provided (creation flows: new bill / order / voucher),
+     * the record is NOT persisted until the user confirms print in this preview.
+     * `confirmedData` holds the backend response (with the real document number)
+     * after a successful save so the printout reflects the saved record. It also
+     * acts as a guard so we never save the same form twice if the native save
+     * dialog is canceled and the user retries.
+     */
+    const [confirmedData, setConfirmedData] = useState(null);
+
+    /* Reset the one-time save guard whenever a fresh preview is opened. */
+    React.useEffect(() => {
+        if (isOpen) setConfirmedData(null);
+    }, [isOpen, data]);
 
     /* ─── Inject hide flags into data for templates ─── */
     const pdfData = useMemo(() => {
-        if (!data) return null;
-        // console.log(data);
+        const base = confirmedData || data;
+        if (!base) return null;
+        // console.log(base);
         return {
-            ...data,
+            ...base,
             hideMetalValue,
             hideMaking,
             hideCustomerDetails,
+            hideRate,
         };
-    }, [data, hideMetalValue, hideMaking, hideCustomerDetails]);
+    }, [data, confirmedData, hideMetalValue, hideMaking, hideCustomerDetails, hideRate]);
 
-    const handlePrint = async () => {
+    /* Render/save/print the physical document (native PDF in desktop, window.print on web). */
+    const doPhysicalPrint = async (activeData) => {
         if (window.electronAPI) {
-            setPrinting(true);
-            try {
-                // Determine a nice filename based on the data
-                const filename = `${data.docType?.replace(' ', '_') || 'Document'}_${data.meta?.number || 'TBD'}.pdf`;
-                const res = await window.electronAPI.printToPDF(filename);
-                if (res.success) {
-                    onClose(); // Close on success
-                } else if (res.reason !== 'canceled') {
-                    toast.error(`Failed to save PDF: ${res.error}`);
-                }
-            } catch (err) {
-                toast.error(`Print Error: ${err.message}`);
-            } finally {
-                setPrinting(false);
+            // Determine a nice filename based on the data
+            const filename = `${activeData.docType?.replace(' ', '_') || 'Document'}_${activeData.meta?.number || 'TBD'}.pdf`;
+            const res = await window.electronAPI.printToPDF(filename);
+            if (res.success) {
+                onClose(); // Close on success
+            } else if (res.reason !== 'canceled') {
+                toast.error(`Failed to save PDF: ${res.error}`);
             }
         } else {
             // Web browser fallback
             window.print();
+        }
+    };
+
+    const handlePrint = async () => {
+        setPrinting(true);
+        try {
+            let activeData = confirmedData || data;
+
+            // Creation flow: persist to backend on confirm, only once.
+            if (onConfirmPrint && !confirmedData) {
+                const result = await onConfirmPrint();
+                if (!result || result.success === false) {
+                    // Save failed — keep the preview open so the user can retry.
+                    return;
+                }
+                // Prefer the freshly-numbered data returned by the save handler.
+                activeData = result.data || result || data;
+                setConfirmedData(activeData);
+            }
+
+            await doPhysicalPrint(activeData);
+        } catch (err) {
+            toast.error(`Print Error: ${err.message}`);
+        } finally {
+            setPrinting(false);
         }
     };
 
@@ -66,7 +104,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
                     <div className="flex gap-2">
                         <button className="btn btn--primary btn--sm" onClick={handlePrint} disabled={printing}>
                             {printing ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-print"></i>}
-                            {printing ? ' Saving PDF...' : ' Confirm Print'}
+                            {printing ? (onConfirmPrint ? ' Saving...' : ' Saving PDF...') : ' Confirm Print'}
                         </button>
                         <button className="btn btn--ghost btn--sm btn--icon" onClick={onClose} disabled={printing}>
                             <i className="fa-solid fa-xmark"></i>
@@ -75,7 +113,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
                 </div>
 
                 {/* ─── PDF Options Bar (invoices only) ─── */}
-                {!data.isVoucher && (
+                {!data.isVoucher && !data.isCreditNote && (
                 <div style={{
                     flexShrink: 0,
                     display: 'flex',
@@ -116,6 +154,34 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
                             style={{ accentColor: 'var(--color-primary, #6366f1)', width: 16, height: 16, cursor: 'pointer' }}
                         />
                         <span>Hide Customer Details</span>
+                    </label>
+                </div>
+                )}
+
+                {/* ─── PDF Options Bar (vouchers only) ─── */}
+                {data.isVoucher && (
+                <div style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '20px',
+                    padding: '10px 20px',
+                    background: 'var(--bg-tertiary, #f1f5f9)',
+                    borderBottom: '1px solid var(--border-primary, #e2e8f0)',
+                    fontSize: 'var(--text-sm, 13px)',
+                }}>
+                    <span style={{ fontWeight: 700, opacity: 0.6, marginRight: 4, color: 'black' }}>
+                        <i className="fa-solid fa-sliders" style={{ marginRight: 6, color: 'black' }}></i>
+                        PDF Options:
+                    </span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none', color: 'black' }}>
+                        <input
+                            type="checkbox"
+                            checked={hideRate}
+                            onChange={e => setHideRate(e.target.checked)}
+                            style={{ accentColor: 'var(--color-primary, #6366f1)', width: 16, height: 16, cursor: 'pointer' }}
+                        />
+                        <span>Hide Rate</span>
                     </label>
                 </div>
                 )}

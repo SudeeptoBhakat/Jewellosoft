@@ -42,6 +42,7 @@ export function TabProvider({ children }) {
       '/advances': { title: 'Advance Payments', closable: true },
       '/dues-credits': { title: 'Dues & Credits', closable: true },
       '/old-purchases/list': { title: 'Vouchers List', closable: true },
+      '/credit-notes': { title: 'Credit Notes', closable: true },
     };
 
 

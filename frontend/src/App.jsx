@@ -21,10 +21,12 @@ import Advances from './features/advances/Advances';
 import DuesCreditsList from './features/dashboard/DuesCreditsList';
 import OldPurchaseVoucher from './features/old-purchases/OldPurchaseVoucher';
 import OldPurchaseVoucherList from './features/old-purchases/OldPurchaseVoucherList';
+import CreditNotesList from './features/credit-notes/CreditNotesList';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { TabProvider } from './contexts/TabContext';
+import { RefreshProvider } from './contexts/RefreshContext';
 import AuthGuard from './features/auth/AuthGuard';
 import AuthLayout from './features/auth/AuthLayout';
 import Login from './features/auth/Login';
@@ -35,6 +37,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
+        <RefreshProvider>
         <TabProvider>
           <AutoUpdater />
           <ToastContainer />
@@ -58,12 +61,14 @@ export default function App() {
               <Route path="/customers" element={<Customers />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/advances" element={<Advances />} />
+              <Route path="/credit-notes" element={<CreditNotesList />} />
               <Route path="/dues-credits" element={<DuesCreditsList />} />
               <Route path="/old-purchases" element={<OldPurchaseVoucher />} />
               <Route path="/old-purchases/list" element={<OldPurchaseVoucherList />} />
             </Route>
           </Routes>
         </TabProvider>
+        </RefreshProvider>
       </ThemeProvider>
     </AuthProvider>
   );

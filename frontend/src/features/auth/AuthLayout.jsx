@@ -1,6 +1,7 @@
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import useOnlineStatus from '../../hooks/useOnlineStatus';
+import logoImg from '../../assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png';
 import './auth.css';
 
 export default function AuthLayout() {
@@ -33,7 +34,7 @@ export default function AuthLayout() {
         <aside className="auth-brand">
           <div className="auth-brand-mark">
             <span className="auth-brand-logo">
-              <i className="fa-solid fa-gem"></i>
+              <img src={logoImg} alt="JewelloSoft Logo" />
             </span>
             <span className="auth-brand-wordmark">JewelloSoft</span>
           </div>

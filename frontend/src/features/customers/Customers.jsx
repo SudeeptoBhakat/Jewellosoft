@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import api, { extractList } from '../../lib/axios';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
 const typeBadge = (t) => {
   const map = { VIP: 'warning', Regular: 'primary', 'Walk-in': 'info' };
@@ -173,7 +174,7 @@ function DeleteCustomerModal({ customer, onClose, onConfirm }) {
 /* ═══════════════════════════════════════════
    CUSTOMERS PAGE
    ═══════════════════════════════════════════ */
-export default function Customers() {
+export default function Customers({ isActive = true }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('All');
   const [customersData, setCustomersData] = useState([]);
@@ -206,6 +207,8 @@ export default function Customers() {
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  useTabRefresh(() => fetchCustomers(), isActive);
 
   const filtered = useMemo(() => {
     return customersData.filter(

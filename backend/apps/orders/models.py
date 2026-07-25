@@ -67,6 +67,10 @@ class Order(BaseModel):
     )
     old_voucher_rate_used = models.CharField(max_length=10, default='saved') # 'saved' | 'current'
     advance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_applied = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Total credit note amount applied against this order at booking time"
+    )
 
     cgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sgst = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -112,7 +116,8 @@ class Order(BaseModel):
             receipt_total -= p.amount if p.is_refund else -p.amount
 
         order_advance = self.advance or Decimal('0')
-        total_collected = order_advance + receipt_total
+        credit_val = getattr(self, 'credit_applied', Decimal('0')) or Decimal('0')
+        total_collected = order_advance + receipt_total + credit_val
         due = self.grand_total - total_collected
 
         if total_collected == 0:

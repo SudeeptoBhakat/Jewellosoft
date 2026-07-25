@@ -4,12 +4,14 @@ import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { fmtCurrency as fmt, fmtInt, amountWords } from '../../utils/billingCalcEngine';
+import useTabRefresh from '../../hooks/useTabRefresh';
 
 const statusMap = { Paid: 'success', Pending: 'warning', Partial: 'info', Cancelled: 'danger' };
 const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'primary'}`}>{s}</span>;
 
 
 function BillDetailModal({ bill, onClose, onPrint }) {
+  const navigate = useNavigate();
   if (!bill) return null;
 
   const totalWeight = (bill.items || []).reduce((s, i) => s + (i.weight || 0), 0);
@@ -153,6 +155,7 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                 )}
                 {bill.advance > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Advance</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.advance)}</span></div>}
                 {bill.discount > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Discount</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.discount)}</span></div>}
+                {bill.creditApplied > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>(−) Credit Note Applied</span><span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>−{fmt(bill.creditApplied)}</span></div>}
               </div>
             </div>
           </div>
@@ -166,6 +169,18 @@ function BillDetailModal({ bill, onClose, onPrint }) {
 
         {/* Footer Actions */}
         <div style={{ padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', position: 'sticky', bottom: 0, background: 'var(--bg-card)' }}>
+          {isInvoice && (
+            <button
+              className="btn btn--outline"
+              style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', marginRight: 'auto' }}
+              onClick={() => {
+                onClose();
+                navigate(`/credit-notes?customer_id=${bill.customerId}&invoice_id=${bill.dbId}`);
+              }}
+            >
+              <i className="fa-solid fa-wallet"></i> Issue Credit Note
+            </button>
+          )}
           <button className="btn btn--ghost" onClick={onClose}>Close</button>
           <button className="btn btn--primary" onClick={onPrint}><i className="fa-solid fa-print"></i> Print Bill</button>
         </div>
@@ -234,7 +249,7 @@ function DeleteModal({ bill, onClose, onConfirm }) {
 }
 
 
-export default function BillsList() {
+export default function BillsList({ isActive = true }) {
   const { shop } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -252,6 +267,8 @@ export default function BillsList() {
 
   const mapBill = useCallback((b, type) => ({
     dbId: b.id,
+    customerId: b.customer,
+    creditApplied: parseFloat(b.credit_applied || 0),
     id: b.invoice_no || b.estimate_no || `BILL-${b.id}`,
     customer: b.customer_detail?.name || 'Walk-in',
     phone: b.customer_detail?.phone || '',
@@ -360,6 +377,9 @@ export default function BillsList() {
     }, 400);
     return () => clearTimeout(delay);
   }, [page, search, typeFilter, fetchBills]);
+
+  // Re-fetch when this tab regains focus or the global refresh fires
+  useTabRefresh(() => fetchBills(page, search, typeFilter), isActive);
 
   /* Modals */
   const [viewBill, setViewBill] = useState(null);
@@ -475,7 +495,8 @@ export default function BillsList() {
             roundOff: bill.roundOff,
             finalAmount: bill.finalAmount,
             amountInWords: amountWords(bill.finalAmount),
-            transactionType: bill.transactionType || 'payable'
+            transactionType: bill.transactionType || 'payable',
+            creditApplied: bill.creditApplied,
         },
         payment: { amounts: [
             { mode: 'CASH', amount: bill.paidCash },
