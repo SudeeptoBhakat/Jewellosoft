@@ -1,13 +1,16 @@
 import { useEffect, useRef } from 'react';
 
 const BURST_MAX_INTERVAL_MS = 50;
-const MIN_SCAN_LENGTH = 4;
+const MIN_SCAN_LENGTH = 3;
 
 export default function useBarcodeScanner(onScan, { enabled = true, allowInputIds = [] } = {}) {
   const bufferRef = useRef('');
   const lastKeyTimeRef = useRef(0);
   const callbackRef = useRef(onScan);
-  callbackRef.current = onScan;
+
+  useEffect(() => {
+    callbackRef.current = onScan;
+  }, [onScan]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -30,7 +33,7 @@ export default function useBarcodeScanner(onScan, { enabled = true, allowInputId
       lastKeyTimeRef.current = now;
 
       if (e.key === 'Enter') {
-        const code = bufferRef.current;
+        const code = bufferRef.current.trim();
         bufferRef.current = '';
         if (code.length >= MIN_SCAN_LENGTH) {
           e.preventDefault();

@@ -7,7 +7,7 @@ import ProductNameInput from '../../components/elements/ProductNameInput';
 import { calculateBill, fmtCurrency as fmt, fmtInt } from '../../utils/billingCalcEngine';
 import { useTabs } from '../../contexts/TabContext';
 import { toast } from '../../utils/toast';
-import useBarcodeScanner from '../../hooks/useBarcodeScanner';
+import { useBarcode } from '../../contexts/BarcodeContext';
 import CreditNoteApplicator from '../credit-notes/CreditNoteApplicator';
 
 
@@ -154,6 +154,7 @@ export default function Billing({ tabId, isActive }) {
   const navigate = useNavigate();
   const { shop } = useAuth();
   const { closeTab, closeTabAndSwitch } = useTabs();
+  const { registerBillingListener, triggerScanAlert } = useBarcode();
   const searchRef = useRef(null);
   const searchWrapRef = useRef(null);
 
@@ -369,7 +370,12 @@ export default function Billing({ tabId, isActive }) {
       if (!product) return;
 
       if (product.metal_type && metalType && product.metal_type.toLowerCase() !== metalType.toLowerCase()) {
-        toast.warning(`'${product.name}' is ${product.metal_type} — this bill is for ${metalType}.`);
+        triggerScanAlert({
+          title: 'Metal Type Conflict',
+          barcode: code,
+          message: `'${product.name}' is ${product.metal_type.toUpperCase()}, but this bill is set for ${metalType.toUpperCase()}.`,
+          type: 'warning'
+        });
         return;
       }
 
@@ -390,26 +396,47 @@ export default function Billing({ tabId, isActive }) {
       });
 
       if (duplicate) {
-        toast.warning(`'${product.name}' (${product.barcode}) is already on this bill.`);
+        triggerScanAlert({
+          title: 'Item Already on Bill',
+          barcode: code,
+          message: `'${product.name}' (${product.barcode}) is already added to this bill.`,
+          type: 'warning'
+        });
       } else {
         toast.success(`Scanned: ${product.name} (${product.barcode})`);
       }
     } catch (err) {
       const status = err.response?.status;
+      const detail = err.response?.data?.detail;
       if (status === 404) {
-        toast.error(`No product found for barcode '${code}'.`);
+        triggerScanAlert({
+          title: 'Product Out of Inventory',
+          barcode: code,
+          message: detail || `No product found in inventory with barcode '${code}'.`,
+          type: 'danger'
+        });
       } else if (status === 409) {
-        toast.error(err.response?.data?.detail || 'Scanned product is already sold.');
+        triggerScanAlert({
+          title: 'Product Out of Inventory',
+          barcode: code,
+          message: detail || `Product with barcode '${code}' is already sold or out of inventory.`,
+          type: 'danger'
+        });
       } else {
-        toast.error('Barcode lookup failed. Check backend connection.');
+        triggerScanAlert({
+          title: 'Scan Lookup Error',
+          barcode: code,
+          message: 'Barcode lookup failed. Check backend server connection.',
+          type: 'danger'
+        });
       }
     }
-  }, [metalType, metalRate, makingRate]);
+  }, [metalType, metalRate, makingRate, triggerScanAlert]);
 
-  useBarcodeScanner(handleBarcodeScan, {
-    enabled: isActive && !showModal,
-    allowInputIds: ['bill-product-search'],
-  });
+  useEffect(() => {
+    if (!tabId) return;
+    return registerBillingListener(tabId, handleBarcodeScan);
+  }, [tabId, registerBillingListener, handleBarcodeScan]);
 
   /* ─── Click-outside & Keyboard Shortcuts ─── */
   useEffect(() => {

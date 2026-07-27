@@ -1,16 +1,11 @@
-/*
- * JewelloSoft Community Edition
- * Copyright (c) 2026 Sudeepta Bhakat
- * Licensed under the JewelloSoft Community License.
- */
-
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import ErrorBoundary from '../elements/ErrorBoundary';
 import { useTabs } from '../../contexts/TabContext';
+import { BarcodeProvider, useBarcode } from '../../contexts/BarcodeContext';
+import BarcodeScanAlertModal from '../elements/BarcodeScanAlertModal';
 
-// Import all page components
 import Dashboard from '../../features/dashboard/Dashboard';
 import Billing from '../../features/billing/Billing';
 import BillsList from '../../features/billing/BillsList';
@@ -26,9 +21,9 @@ import OldPurchaseVoucher from '../../features/old-purchases/OldPurchaseVoucher'
 import OldPurchaseVoucherList from '../../features/old-purchases/OldPurchaseVoucherList';
 import CreditNotesList from '../../features/credit-notes/CreditNotesList';
 
-
-export default function MainLayout() {
+function MainLayoutContent() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTabId } = useTabs();
+  const { scanAlert, closeScanAlert } = useBarcode();
   const navigate = useNavigate();
 
   const getTabIcon = (path) => {
@@ -51,7 +46,6 @@ export default function MainLayout() {
       default: return 'fa-solid fa-file';
     }
   };
-
 
   const renderTabContent = (tab, isActive) => {
     const path = tab.path.split('?')[0];
@@ -76,14 +70,13 @@ export default function MainLayout() {
     }
   };
 
-
   return (
     <div className="app-layout">
+      <BarcodeScanAlertModal alert={scanAlert} onClose={closeScanAlert} />
       <div className="app-layout__sidebar">
         <Sidebar />
       </div>
       <div className="app-layout__main">
-        {/* Chrome-like Tab Bar */}
         <div className="chrome-tab-bar">
           {tabs.map((tab) => (
             <div
@@ -138,3 +131,10 @@ export default function MainLayout() {
   );
 }
 
+export default function MainLayout() {
+  return (
+    <BarcodeProvider>
+      <MainLayoutContent />
+    </BarcodeProvider>
+  );
+}
