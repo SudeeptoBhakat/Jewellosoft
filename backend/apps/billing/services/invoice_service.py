@@ -8,39 +8,99 @@ from .inventory_service import deduct_inventory
 from .payment_service import process_payments
 from apps.billing.models import Invoice, BillingItem, Estimate
 
-def generate_invoice_no(shop, max_retries=20):
+def generate_invoice_no(shop, max_retries=100):
     """
     Generates a unique Invoice number.
     Uses a per-year sequence key so rolling over to a new year auto-resets.
-    Retries up to max_retries times if the generated number already exists
-    (handles edge-cases where a previous transaction rolled back but the
-    document was already manually created with that number).
+    Checks global table uniqueness and auto-syncs if sequence falls behind existing records.
     """
     from apps.accounts.models import NumberingSequence
     from apps.billing.models import Invoice
     year = date.today().year
     seq_key = f'invoice_{year}'
+    prefix = f"INV-{year}-"
+
+    existing_nos = Invoice.objects.filter(invoice_no__istartswith=prefix).values_list('invoice_no', flat=True)
+    max_num = 0
+    for no in existing_nos:
+        try:
+            parts = no.split('-')
+            if len(parts) >= 3 and parts[2].isdigit():
+                max_num = max(max_num, int(parts[2]))
+        except Exception:
+            pass
+
+    try:
+        seq, _ = NumberingSequence.objects.get_or_create(
+            shop=shop,
+            sequence_type=seq_key,
+            defaults={'last_number': max_num}
+        )
+        if seq.last_number < max_num:
+            seq.last_number = max_num
+            seq.save(update_fields=['last_number'])
+    except Exception:
+        pass
+
     for _ in range(max_retries):
         next_num = NumberingSequence.get_next_number(shop, seq_key)
         candidate = f"INV-{year}-{next_num:03d}"
-        if not Invoice.objects.filter(shop=shop, invoice_no=candidate).exists():
+        if not Invoice.objects.filter(invoice_no__iexact=candidate).exists():
             return candidate
-    raise RuntimeError(f"Could not generate a unique invoice number after {max_retries} attempts.")
 
-def generate_estimate_no(shop, max_retries=20):
+    max_num += 1
+    candidate = f"INV-{year}-{max_num:03d}"
+    while Invoice.objects.filter(invoice_no__iexact=candidate).exists():
+        max_num += 1
+        candidate = f"INV-{year}-{max_num:03d}"
+
+    return candidate
+
+def generate_estimate_no(shop, max_retries=100):
     """
-    Generates a unique Estimate number with the same collision-safe logic.
+    Generates a unique Estimate number with collision-safe logic.
     """
     from apps.accounts.models import NumberingSequence
     from apps.billing.models import Estimate
     year = date.today().year
     seq_key = f'estimate_{year}'
+    prefix = f"EST-{year}-"
+
+    existing_nos = Estimate.objects.filter(estimate_no__istartswith=prefix).values_list('estimate_no', flat=True)
+    max_num = 0
+    for no in existing_nos:
+        try:
+            parts = no.split('-')
+            if len(parts) >= 3 and parts[2].isdigit():
+                max_num = max(max_num, int(parts[2]))
+        except Exception:
+            pass
+
+    try:
+        seq, _ = NumberingSequence.objects.get_or_create(
+            shop=shop,
+            sequence_type=seq_key,
+            defaults={'last_number': max_num}
+        )
+        if seq.last_number < max_num:
+            seq.last_number = max_num
+            seq.save(update_fields=['last_number'])
+    except Exception:
+        pass
+
     for _ in range(max_retries):
         next_num = NumberingSequence.get_next_number(shop, seq_key)
         candidate = f"EST-{year}-{next_num:03d}"
-        if not Estimate.objects.filter(shop=shop, estimate_no=candidate).exists():
+        if not Estimate.objects.filter(estimate_no__iexact=candidate).exists():
             return candidate
-    raise RuntimeError(f"Could not generate a unique estimate number after {max_retries} attempts.")
+
+    max_num += 1
+    candidate = f"EST-{year}-{max_num:03d}"
+    while Estimate.objects.filter(estimate_no__iexact=candidate).exists():
+        max_num += 1
+        candidate = f"EST-{year}-{max_num:03d}"
+
+    return candidate
 
 
 @transaction.atomic
@@ -79,7 +139,9 @@ def create_invoice(payload):
 
     from apps.accounts.models import Shop
     shop = Shop.objects.get(id=shop_id)
-    invoice_no = payload.get("invoice_no") or generate_invoice_no(shop)
+    invoice_no = payload.get("invoice_no")
+    if not invoice_no or Invoice.objects.filter(invoice_no=invoice_no).exists():
+        invoice_no = generate_invoice_no(shop)
 
     # Resolve linked order + optional delivery block
     linked_order = None
@@ -279,7 +341,9 @@ def create_estimate(payload):
 
     from apps.accounts.models import Shop
     shop = Shop.objects.get(id=shop_id)
-    estimate_no = payload.get("invoice_no") or payload.get("estimate_no") or generate_estimate_no(shop)
+    estimate_no = payload.get("estimate_no") or payload.get("invoice_no")
+    if not estimate_no or Estimate.objects.filter(estimate_no=estimate_no).exists():
+        estimate_no = generate_estimate_no(shop)
 
     # Check and apply Old Purchase Voucher if mode is voucher
     old_purchase_voucher_val = None

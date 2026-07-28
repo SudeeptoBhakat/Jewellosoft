@@ -1,6 +1,6 @@
 import logging
 from django.db.models import Count, Sum, Max
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, response, status
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Customer
 from .serializers import CustomerSerializer
@@ -27,6 +27,16 @@ class CustomerViewSet(viewsets.ModelViewSet):
             total_spent=Sum('invoice__grand_total'),
             last_visit=Max('invoice__created_at')
         ).order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        phone = request.data.get('phone')
+        if phone and request.shop:
+            phone_clean = str(phone).strip()
+            existing = Customer.objects.filter(shop=request.shop, phone=phone_clean).first()
+            if existing:
+                serializer = self.get_serializer(existing)
+                return response.Response(serializer.data, status=status.HTTP_200_OK)
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         serializer.save(shop=self.request.shop)

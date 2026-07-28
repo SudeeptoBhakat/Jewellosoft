@@ -4,7 +4,7 @@
 # Licensed under the JewelloSoft Community License.
 #
 from decimal import Decimal
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from datetime import date, timedelta
 
@@ -16,17 +16,49 @@ from apps.customers.models import Customer
 from apps.billing.models import Invoice
 from apps.orders.models import Order
 
-def _generate_credit_note_no(shop, max_retries=20):
+def _generate_credit_note_no(shop, max_retries=100):
     year = date.today().year
     seq_key = f'credit_note_{year}'
+    prefix = f"CN-{year}-"
+
+    # Find highest numeric suffix among existing credit notes for this year
+    existing_nos = CreditNote.objects.filter(credit_note_no__istartswith=prefix).values_list('credit_note_no', flat=True)
+    max_num = 0
+    for no in existing_nos:
+        try:
+            parts = no.split('-')
+            if len(parts) >= 3 and parts[2].isdigit():
+                max_num = max(max_num, int(parts[2]))
+        except Exception:
+            pass
+
+    # Ensure sequence last_number is at least max_num so get_next_number starts above existing numbers
+    try:
+        seq, _ = NumberingSequence.objects.get_or_create(
+            shop=shop,
+            sequence_type=seq_key,
+            defaults={'last_number': max_num}
+        )
+        if seq.last_number < max_num:
+            seq.last_number = max_num
+            seq.save(update_fields=['last_number'])
+    except Exception:
+        pass
+
     for _ in range(max_retries):
         next_num = NumberingSequence.get_next_number(shop, seq_key)
         candidate = f"CN-{year}-{next_num:03d}"
-        if not CreditNote.objects.filter(shop=shop, credit_note_no=candidate).exists():
+        if not CreditNote.objects.filter(credit_note_no__iexact=candidate).exists():
             return candidate
-    raise RuntimeError(
-        f"Could not generate a unique credit note number after {max_retries} attempts."
-    )
+
+    # Fallback if candidates are still occupied
+    max_num += 1
+    candidate = f"CN-{year}-{max_num:03d}"
+    while CreditNote.objects.filter(credit_note_no__iexact=candidate).exists():
+        max_num += 1
+        candidate = f"CN-{year}-{max_num:03d}"
+
+    return candidate
 
 
 @transaction.atomic
@@ -54,20 +86,32 @@ def create_credit_note(payload):
     if validity_days and validity_days > 0:
         expires_at = date.today() + timedelta(days=validity_days)
 
-    credit_note_no = (payload.get('credit_note_no') or '').strip() or _generate_credit_note_no(shop)
+    credit_note_no = (payload.get('credit_note_no') or '').strip()
+    if not credit_note_no or CreditNote.objects.filter(credit_note_no__iexact=credit_note_no).exists():
+        credit_note_no = _generate_credit_note_no(shop)
 
-    cn = CreditNote.objects.create(
-        shop=shop,
-        customer=customer,
-        credit_note_no=credit_note_no,
-        source_invoice=source_invoice,
-        reason=reason,
-        credit_amount=credit_amount,
-        used_amount=Decimal('0'),
-        status='open',
-        notes=payload.get('notes', ''),
-        expires_at=expires_at,
-    )
+    cn = None
+    for attempt in range(5):
+        try:
+            with transaction.atomic():
+                cn = CreditNote.objects.create(
+                    shop=shop,
+                    customer=customer,
+                    credit_note_no=credit_note_no,
+                    source_invoice=source_invoice,
+                    reason=reason,
+                    credit_amount=credit_amount,
+                    used_amount=Decimal('0'),
+                    status='open',
+                    notes=payload.get('notes', ''),
+                    expires_at=expires_at,
+                )
+            break
+        except IntegrityError as ie:
+            if 'credit_note_no' in str(ie) and attempt < 4:
+                credit_note_no = _generate_credit_note_no(shop)
+            else:
+                raise
 
     LedgerEntry.objects.create(
         shop=shop,

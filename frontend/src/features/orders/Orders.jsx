@@ -1050,6 +1050,7 @@ export default function Orders({ tabId, isActive }) {
                     <div className="bill-old-summary animate-fade-in">
                       {oldSettlementMode === 'weight' && (
                         <>
+                          <div className="flex justify-between"><span>Old metal Rate</span><span style={{ fontWeight: 600 }}>{fmt(Math.abs((metalRate * (calc.returnBreakdown?.deductionPct ?? calc.oldDeductPct ?? 0) / 100) - metalRate))}</span></div>
                           <div className="flex justify-between"><span>Old Metal Value</span><span style={{ fontWeight: 600 }}>{fmt(calc.oldMV)}</span></div>
                           {calc.oldDeductAmt > 0 && (
                             <div className="flex justify-between"><span>Deduction ({oldDeductPct}%)</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.oldDeductAmt)}</span></div>
@@ -1224,7 +1225,7 @@ export default function Orders({ tabId, isActive }) {
                       {step.isFlip && (
                         <div style={{ textAlign: 'center', margin: '6px 0', padding: '4px 0' }}>
                           <span style={{ fontSize: '0.65rem', padding: '3px 12px', background: 'rgba(251,191,36,0.15)', color: '#b45309', borderRadius: 12, fontWeight: 700, letterSpacing: '0.03em' }}>
-                            ⚡ Return Fulfilled — Customer Now Pays
+                            Return Fulfilled — Customer Now Pays
                           </span>
                         </div>
                       )}

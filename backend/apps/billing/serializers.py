@@ -77,6 +77,7 @@ class EstimateSerializer(serializers.ModelSerializer):
     advance_payments = serializers.SerializerMethodField()
 
     old_purchase_voucher_no = serializers.SerializerMethodField()
+    credit_note_usages = serializers.SerializerMethodField()
 
     class Meta:
         model = Estimate
@@ -84,6 +85,22 @@ class EstimateSerializer(serializers.ModelSerializer):
 
     def get_old_purchase_voucher_no(self, obj):
         return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None
+
+    def get_credit_note_usages(self, obj):
+        try:
+            return [
+                {
+                    "id": u.id,
+                    "credit_note_id": u.credit_note.id,
+                    "credit_note_no": u.credit_note.credit_note_no,
+                    "amount_used": str(u.amount_used),
+                    "reason": u.credit_note.reason,
+                    "created_at": u.created_at.isoformat() if u.created_at else None,
+                }
+                for u in obj.credit_note_usages.all()
+            ]
+        except Exception:
+            return []
 
     def get_advance_payments(self, obj):
         try:

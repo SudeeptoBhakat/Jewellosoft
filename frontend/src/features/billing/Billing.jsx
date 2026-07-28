@@ -1390,6 +1390,7 @@ export default function Billing({ tabId, isActive }) {
                     <div className="bill-old-summary animate-fade-in">
                       {oldSettlementMode === 'weight' && (
                         <>
+                          <div className="flex justify-between"><span>Old metal Rate</span><span style={{ fontWeight: 600 }}>{fmt(Math.abs((metalRate * (calc.returnBreakdown?.deductionPct ?? calc.oldDeductPct ?? 0) / 100) - metalRate))}</span></div>
                           <div className="flex justify-between"><span>Old Metal Value</span><span style={{ fontWeight: 600 }}>{fmt(calc.oldMV)}</span></div>
                           {calc.oldDeductAmt > 0 && (
                             <div className="flex justify-between"><span>Deduction ({oldDeductPct}%)</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.oldDeductAmt)}</span></div>

@@ -322,6 +322,13 @@ export default function BillsList({ isActive = true }) {
       status: adv.status || 'active',
       isRefund: adv.is_refund || false,
     })),
+    // Credit note usages for reprint (comes from API via get_credit_note_usages serializer method)
+    creditNoteUsages: (b.credit_note_usages || []).map(u => ({
+      credit_note_no: u.credit_note_no || '',
+      amount_used: parseFloat(u.amount_used || 0),
+      reason: u.reason || '',
+      created_at: u.created_at || '',
+    })),
     status: 'Paid',
     date: b.created_at || new Date().toISOString()
   }), []);
@@ -502,7 +509,9 @@ export default function BillsList({ isActive = true }) {
             { mode: 'CASH', amount: bill.paidCash },
             { mode: 'ONLINE', amount: bill.paidOnline }
         ].filter(x => x.amount > 0) },
-        advanceHistory: bill.advanceHistory || []
+        advanceHistory: bill.advanceHistory || [],
+        // Pass credit note usages for display in the PDF
+        creditNoteUsages: bill.creditNoteUsages || [],
     };
 
     setPrintData(docData);

@@ -4,8 +4,52 @@ from datetime import date
 from django.core.files.base import ContentFile
 from rest_framework import serializers
 from .models import Order, OrderItem, OrderImage
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from decimal import Decimal
+
+def generate_order_no(shop, order_type='invoice', max_retries=100):
+    from apps.orders.models import Order
+    from apps.accounts.models import NumberingSequence
+    year = date.today().year
+    prefix = "ORD-INV" if order_type == "invoice" else "ORD-EST"
+    seq_key = f"order_{order_type}_{year}"
+    full_prefix = f"{prefix}-{year}-"
+
+    existing_nos = Order.objects.filter(order_no__istartswith=full_prefix).values_list('order_no', flat=True)
+    max_num = 0
+    for no in existing_nos:
+        try:
+            parts = no.split('-')
+            if len(parts) >= 3 and parts[-1].isdigit():
+                max_num = max(max_num, int(parts[-1]))
+        except Exception:
+            pass
+
+    try:
+        seq, _ = NumberingSequence.objects.get_or_create(
+            shop=shop,
+            sequence_type=seq_key,
+            defaults={'last_number': max_num}
+        )
+        if seq.last_number < max_num:
+            seq.last_number = max_num
+            seq.save(update_fields=['last_number'])
+    except Exception:
+        pass
+
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"{full_prefix}{next_num:03d}"
+        if not Order.objects.filter(order_no__iexact=candidate).exists():
+            return candidate
+
+    max_num += 1
+    candidate = f"{full_prefix}{max_num:03d}"
+    while Order.objects.filter(order_no__iexact=candidate).exists():
+        max_num += 1
+        candidate = f"{full_prefix}{max_num:03d}"
+
+    return candidate
 
 
 class OrderImageSerializer(serializers.ModelSerializer):
@@ -116,17 +160,27 @@ class OrderSerializer(serializers.ModelSerializer):
 
         advance_amount = validated_data.get('advance', 0) or 0
 
-        order_no = validated_data.get('order_no')
-        if not order_no:
-            from apps.accounts.models import NumberingSequence
-            order_type = validated_data.get('order_type', 'invoice')
-            prefix = "ORD-INV" if order_type == "invoice" else "ORD-EST"
-            shop = validated_data.get('shop')
-            year = date.today().year
-            next_num = NumberingSequence.get_next_number(shop, f"order_{order_type}_{year}")
-            validated_data['order_no'] = f"{prefix}-{year}-{next_num:03d}"
+        order_no = (validated_data.get('order_no') or '').strip()
+        from apps.orders.models import Order
+        shop = validated_data.get('shop')
+        order_type = validated_data.get('order_type', 'invoice')
 
-        order = Order.objects.create(**validated_data)
+        if not order_no or Order.objects.filter(order_no__iexact=order_no).exists():
+            order_no = generate_order_no(shop, order_type)
+            validated_data['order_no'] = order_no
+
+        order = None
+        for attempt in range(5):
+            try:
+                with transaction.atomic():
+                    order = Order.objects.create(**validated_data)
+                break
+            except IntegrityError as ie:
+                if 'order_no' in str(ie) and attempt < 4:
+                    order_no = generate_order_no(shop, order_type)
+                    validated_data['order_no'] = order_no
+                else:
+                    raise
 
         if order.old_settlement_mode == 'voucher' and order.old_purchase_voucher:
             from apps.old_purchases.services import apply_voucher

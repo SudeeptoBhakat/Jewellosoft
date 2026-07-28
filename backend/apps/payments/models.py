@@ -71,31 +71,80 @@ class AdvancePayment(BaseModel):
     refund_notes = models.TextField(blank=True, null=True)
 
     @classmethod
-    def record_payment(cls, shop, order, amount, payment_mode, notes=None, reference_number=None, user=None, payment_splits=None, is_refund=False):
+    def generate_receipt_no(cls, shop, is_refund=False, max_retries=100):
+        from datetime import date
         from apps.accounts.models import NumberingSequence
+        year = date.today().year
+        prefix = f"REF-{year}-" if is_refund else f"ADV-RCT-{year}-"
+        seq_type = "refund_receipt" if is_refund else "advance_receipt"
+        seq_key = f"{seq_type}_{year}"
+
+        existing_nos = cls.objects.filter(receipt_no__istartswith=prefix).values_list('receipt_no', flat=True)
+        max_num = 0
+        for no in existing_nos:
+            try:
+                parts = no.split('-')
+                if len(parts) >= 3 and parts[-1].isdigit():
+                    max_num = max(max_num, int(parts[-1]))
+            except Exception:
+                pass
+
+        try:
+            seq, _ = NumberingSequence.objects.get_or_create(
+                shop=shop,
+                sequence_type=seq_key,
+                defaults={'last_number': max_num}
+            )
+            if seq.last_number < max_num:
+                seq.last_number = max_num
+                seq.save(update_fields=['last_number'])
+        except Exception:
+            pass
+
+        for _ in range(max_retries):
+            next_num = NumberingSequence.get_next_number(shop, seq_key)
+            candidate = f"{prefix}{next_num:03d}"
+            if not cls.objects.filter(receipt_no__iexact=candidate).exists():
+                return candidate
+
+        max_num += 1
+        candidate = f"{prefix}{max_num:03d}"
+        while cls.objects.filter(receipt_no__iexact=candidate).exists():
+            max_num += 1
+            candidate = f"{prefix}{max_num:03d}"
+
+        return candidate
+
+    @classmethod
+    def record_payment(cls, shop, order, amount, payment_mode, notes=None, reference_number=None, user=None, payment_splits=None, is_refund=False):
         from decimal import Decimal
-        from django.db import transaction
+        from django.db import transaction, IntegrityError
         
         with transaction.atomic():
-            if is_refund:
-                next_receipt_num = NumberingSequence.get_next_number(shop, 'refund_receipt')
-                receipt_no = f"REF-2026-{next_receipt_num:03d}"
-            else:
-                next_receipt_num = NumberingSequence.get_next_number(shop, 'advance_receipt')
-                receipt_no = f"ADV-RCT-2026-{next_receipt_num:03d}"
-                
-            payment = cls.objects.create(
-                shop=shop,
-                order=order,
-                amount=amount,
-                payment_mode=payment_mode,
-                payment_splits=payment_splits or [],
-                receipt_no=receipt_no,
-                notes=notes,
-                reference_number=reference_number,
-                received_by=user,
-                is_refund=is_refund
-            )
+            receipt_no = cls.generate_receipt_no(shop, is_refund=is_refund)
+
+            payment = None
+            for attempt in range(5):
+                try:
+                    with transaction.atomic():
+                        payment = cls.objects.create(
+                            shop=shop,
+                            order=order,
+                            amount=amount,
+                            payment_mode=payment_mode,
+                            payment_splits=payment_splits or [],
+                            receipt_no=receipt_no,
+                            notes=notes,
+                            reference_number=reference_number,
+                            received_by=user,
+                            is_refund=is_refund
+                        )
+                    break
+                except IntegrityError as ie:
+                    if 'receipt_no' in str(ie) and attempt < 4:
+                        receipt_no = cls.generate_receipt_no(shop, is_refund=is_refund)
+                    else:
+                        raise
             
             # 1. Post Customer Ledger Entry
             LedgerEntry.objects.create(

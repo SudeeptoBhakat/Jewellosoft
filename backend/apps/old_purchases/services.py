@@ -16,15 +16,52 @@ from django.utils import timezone
 logger = logging.getLogger("jewellosoft")
 
 
-def generate_voucher_no(shop):
+def generate_voucher_no(shop, max_retries=100):
     """
     Generates a unique Purchase Voucher number using the dynamic current year.
     Format: PV-{YYYY}-{NNN}  e.g.  PV-2026-001
     """
     from apps.accounts.models import NumberingSequence
+    from apps.old_purchases.models import OldPurchaseVoucher
     year = date.today().year
-    next_num = NumberingSequence.get_next_number(shop, f"purchase_voucher_{year}")
-    return f"PV-{year}-{next_num:03d}"
+    seq_key = f"purchase_voucher_{year}"
+    prefix = f"PV-{year}-"
+
+    existing_nos = OldPurchaseVoucher.objects.filter(voucher_no__istartswith=prefix).values_list('voucher_no', flat=True)
+    max_num = 0
+    for no in existing_nos:
+        try:
+            parts = no.split('-')
+            if len(parts) >= 3 and parts[2].isdigit():
+                max_num = max(max_num, int(parts[2]))
+        except Exception:
+            pass
+
+    try:
+        seq, _ = NumberingSequence.objects.get_or_create(
+            shop=shop,
+            sequence_type=seq_key,
+            defaults={'last_number': max_num}
+        )
+        if seq.last_number < max_num:
+            seq.last_number = max_num
+            seq.save(update_fields=['last_number'])
+    except Exception:
+        pass
+
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"PV-{year}-{next_num:03d}"
+        if not OldPurchaseVoucher.objects.filter(voucher_no__iexact=candidate).exists():
+            return candidate
+
+    max_num += 1
+    candidate = f"PV-{year}-{max_num:03d}"
+    while OldPurchaseVoucher.objects.filter(voucher_no__iexact=candidate).exists():
+        max_num += 1
+        candidate = f"PV-{year}-{max_num:03d}"
+
+    return candidate
 
 
 @transaction.atomic
