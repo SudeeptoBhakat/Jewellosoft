@@ -146,7 +146,7 @@ class BillingEngine:
                     old_deduct_amt = _r2(excess_value * self.old_less_percent / Decimal(100))
                     effective_old_value = _r2(excess_value - old_deduct_amt)
             else:
-                val = self.old_value_direct or _safe(extra.get('old_amount', 0))
+                val = self.old_value_direct
                 effective_old_value = val
                 old_mv = val
                 has_old = True
@@ -177,7 +177,6 @@ class BillingEngine:
             transaction_type = 'payable' if pre_round >= 0 else 'return'
 
         else:
-            # SCENARIO 3: Old > New (shop returns)
             subtotal = _r2(effective_old_value - total_making)
             net_total = _r2(subtotal - self.hallmark - total_gst)
             pre_round = _r2(net_total - self.other + self.advance + self.discount)

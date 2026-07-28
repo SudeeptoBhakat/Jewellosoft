@@ -1058,7 +1058,7 @@ export default function Orders({ tabId, isActive }) {
                       )}
                       <div className="flex justify-between" style={{ fontWeight: 700, color: 'var(--color-accent)', borderTop: oldSettlementMode === 'weight' ? '1px solid var(--border-primary)' : 'none', paddingTop: oldSettlementMode === 'weight' ? 6 : 0, marginTop: oldSettlementMode === 'weight' ? 6 : 0 }}>
                         <span>{oldSettlementMode === 'value' ? 'Old Value (Direct Entry)' : 'Old Value (Credit)'}</span>
-                        <span>{fmt(calc.effectiveOldValue)}</span>
+                        <span>{fmt(calc.oldMV - calc.oldDeductAmt)}</span>
                       </div>
                     </div>
                   )}
@@ -1209,8 +1209,8 @@ export default function Orders({ tabId, isActive }) {
                   </div>
                   {calc.returnBreakdown.deductionAmt > 0 && (
                     <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
-                      <span>(−) Deduction ({calc.returnBreakdown.deductionPct}%)</span>
-                      <span>−{fmt(calc.returnBreakdown.deductionAmt)}</span>
+                      <span>(−) Deduction {calc.returnBreakdown.deductionPct}% <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.returnBreakdown.excessWeight.toFixed(3)}g × ₹{(metalRate * calc.returnBreakdown.deductionPct / 100).toLocaleString('en-IN')})</span></span>
+                      <span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.returnBreakdown.deductionAmt)}</span>
                     </div>
                   )}
                   <div className="bill-sline" style={{ fontWeight: 700, borderTop: '1px solid var(--border-primary)', paddingTop: 6, marginTop: 4, marginBottom: 10 }}>
@@ -1218,7 +1218,7 @@ export default function Orders({ tabId, isActive }) {
                     <span style={{ color: 'var(--color-success)' }}>{fmt(calc.returnBreakdown.afterDeduction)}</span>
                   </div>
 
-                  <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Charges Deducted from Return</div>
+                  <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Charges & Credits Applied to Return</div>
                   {calc.returnBreakdown.steps.map((step, i) => (
                     <div key={i}>
                       {step.isFlip && (

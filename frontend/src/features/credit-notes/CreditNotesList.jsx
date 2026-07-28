@@ -416,8 +416,7 @@ function CreditNoteDetailModal({ cn, onClose, onPrint }) {
    ═══════════════════════════════════════════ */
 function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerId, initialInvoiceId }) {
   const { shop } = useAuth();
-  
-  // Customer autocomplete
+
   const [custName, setCustName] = useState('');
   const [custMobile, setCustMobile] = useState('');
   const [custAddress, setCustAddress] = useState('');
@@ -426,7 +425,6 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
   const [custSuggestions, setCustSuggestions] = useState([]);
   const custWrapRef = useRef(null);
 
-  // Form Fields
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
@@ -439,12 +437,10 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
     return '';
   });
 
-  // Source Invoice Lookup
   const [invoices, setInvoices] = useState([]);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
-  // Customer suggestions click-out
   useEffect(() => {
     const mouseHandler = (e) => {
       if (custWrapRef.current && !custWrapRef.current.contains(e.target)) {
@@ -455,14 +451,14 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
     return () => document.removeEventListener('mousedown', mouseHandler);
   }, []);
 
-  // Fetch suggestions
   useEffect(() => {
     const handler = setTimeout(async () => {
       if (custName.length > 2 && !customerId) {
         try {
           const res = await api.get(`/customers/?search=${encodeURIComponent(custName)}`);
-          setCustSuggestions(extractList(res.data));
-          if (extractList(res.data).length > 0) setShowCustSuggestions(true);
+          const list = extractList(res.data);
+          setCustSuggestions(list);
+          if (list.length > 0) setShowCustSuggestions(true);
         } catch (e) {
           console.error(e);
           setCustSuggestions([]);
@@ -474,18 +470,12 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
     return () => clearTimeout(handler);
   }, [custName, customerId]);
 
-  // Load Invoices for selected Customer
   useEffect(() => {
     if (customerId) {
       setLoadingInvoices(true);
       api.get(`/billing/invoices/?customer=${customerId}`)
-        .then(res => {
-          setInvoices(extractList(res.data));
-        })
-        .catch(err => {
-          console.error(err);
-          setInvoices([]);
-        })
+        .then(res => setInvoices(extractList(res.data)))
+        .catch(() => setInvoices([]))
         .finally(() => setLoadingInvoices(false));
     } else {
       setInvoices([]);
@@ -493,7 +483,6 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
     }
   }, [customerId]);
 
-  // Load initial customer details if provided
   useEffect(() => {
     if (initialCustomerId) {
       api.get(`/customers/${initialCustomerId}/`)
@@ -504,13 +493,10 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
           setCustMobile(c.phone || '');
           setCustAddress(c.address || '');
         })
-        .catch(err => {
-          console.error('Error fetching customer details:', err);
-        });
+        .catch(err => console.error('Error fetching customer details:', err));
     }
   }, [initialCustomerId]);
 
-  // Select initial invoice if provided and invoices loaded
   useEffect(() => {
     if (initialInvoiceId && invoices.length > 0) {
       const match = invoices.find(i => String(i.id) === String(initialInvoiceId));
@@ -536,7 +522,6 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
     if (invId) {
       const match = invoices.find(i => String(i.id) === String(invId));
       if (match) {
-        // Prefill amount and default reason
         setAmount(String(match.grand_total));
         setReason(`Exchange against Invoice ${match.invoice_no}`);
       }
@@ -548,13 +533,12 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!custName.trim()) return toast.error("Customer name is required.");
-    if (!amount || parseFloat(amount) <= 0) return toast.error("Please enter a valid credit amount.");
-    if (!reason.trim()) return toast.error("Reason is required.");
+    if (!custName.trim()) return toast.error('Customer name is required.');
+    if (!amount || parseFloat(amount) <= 0) return toast.error('Please enter a valid credit amount.');
+    if (!reason.trim()) return toast.error('Reason is required.');
 
     try {
       let finalCustId = customerId;
-      // Create new customer if needed
       if (!finalCustId) {
         const custRes = await api.post('/customers/', {
           shop: shop?.id || 1,
@@ -575,40 +559,63 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
       };
 
       await api.post('/billing/credit-notes/', payload);
-      toast.success("Credit Note issued successfully!");
+      toast.success('Credit Note issued successfully!');
       onSave();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.detail || "Failed to create Credit Note.");
+      toast.error(err.response?.data?.detail || 'Failed to create Credit Note.');
     }
   };
 
   return (
     <>
       <div className="overlay" onClick={onClose} />
-      <div className="modal" style={{ maxWidth: 580, overflow: 'visible' }}>
+      <div className="modal" style={{ maxWidth: 800, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',}}>
         <div className="modal__header">
-          <h2 className="modal__title">
-            <i className="fa-solid fa-plus" style={{ marginRight: 8 }}></i>
-            Issue Credit Note
-          </h2>
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 'var(--radius-md)',
+              background: 'var(--color-primary-muted)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <i className="fa-solid fa-wallet" style={{ color: 'var(--color-primary)', fontSize: '1rem' }} />
+            </div>
+            <div>
+              <h2 className="modal__title" style={{ marginBottom: 2 }}>Issue Credit Note</h2>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>
+                Issue store credit for returns, exchanges, or adjustments
+              </p>
+            </div>
+          </div>
+          <button className="btn btn--ghost btn--sm btn--icon" onClick={onClose}>
+            <i className="fa-solid fa-xmark" />
+          </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="modal__body" style={{ padding: 'var(--space-5)' }}>
-            {/* Customer Lookup section */}
-            <div className="billing-form" style={{ marginBottom: 'var(--space-4)', overflow: 'visible' }}>
-              <div className="billing-form__header">
-                <span className="billing-form__header-title">Customer Details</span>
+          <div style={{ padding: 'var(--space-5)', display: 'flex', gap: 'var(--space-5)' }}>
+
+            <div style={{
+              background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-primary)', overflow: 'visible',
+            }}>
+              <div style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderBottom: '1px solid var(--border-primary)',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <i className="fa-solid fa-user" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', opacity: 0.8 }} />
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Customer
+                </span>
               </div>
-              <div className="billing-form__body" style={{ overflow: 'visible' }}>
+              <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', overflow: 'visible' }}>
                 <div style={{ position: 'relative' }} ref={custWrapRef}>
-                  <label className="form-label">Search/Name *</label>
+                  <label className="form-label">Name *</label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Search name/phone or enter new customer..."
+                    placeholder="Search name or phone..."
                     value={custName}
                     onChange={e => {
                       setCustName(e.target.value);
@@ -621,21 +628,21 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
                     autoComplete="off"
                     required
                   />
-
                   {showCustSuggestions && custSuggestions.length > 0 && (
-                    <div className="autocomplete-suggestions">
+                    <div className="search-ac__dropdown" style={{ top: '100%', left: 0, right: 0, zIndex: 9999 }}>
                       {custSuggestions.map(c => (
-                        <div key={c.id} className="autocomplete-suggestion-item" onClick={() => selectCustomer(c)}>
-                          <div style={{ fontWeight: 600 }}>{c.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.phone} | {c.address || 'No address'}</div>
+                        <div key={c.id} className="search-ac__item" onMouseDown={() => selectCustomer(c)}>
+                          <span style={{ fontWeight: 600 }}>{c.name}</span>
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                            {c.phone}{c.address ? ` · ${c.address}` : ''}
+                          </span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-
-                <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
-                  <div className="form-group">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Phone</label>
                     <input
                       type="text"
@@ -646,7 +653,7 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
                       disabled={!!customerId}
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Address</label>
                     <input
                       type="text"
@@ -661,63 +668,80 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
               </div>
             </div>
 
-            {/* Credit Note Specifics */}
-            <div className="billing-form">
-              <div className="billing-form__header">
-                <span className="billing-form__header-title">Credit Info</span>
+            <div style={{
+              background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-primary)',
+            }}>
+              <div style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderBottom: '1px solid var(--border-primary)',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <i className="fa-solid fa-indian-rupee-sign" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)', opacity: 0.8 }} />
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Credit Details
+                </span>
               </div>
-              <div className="billing-form__body">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Link Source Invoice (Optional)</label>
+              <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Link Source Invoice</label>
                     <select
                       className="form-input form-select"
                       value={selectedInvoiceId}
                       onChange={handleInvoiceChange}
                       disabled={!customerId || loadingInvoices}
                     >
-                      <option value="">-- None --</option>
+                      <option value="">— None —</option>
                       {invoices.map(i => (
                         <option key={i.id} value={i.id}>
-                          {i.invoice_no} ({fmt(i.grand_total)}) - {new Date(i.created_at).toLocaleDateString('en-IN')}
+                          {i.invoice_no} ({fmt(i.grand_total)})
                         </option>
                       ))}
                     </select>
                     {!customerId && (
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
-                        Select a saved customer first to link invoice.
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                        Select a customer first
                       </span>
                     )}
                   </div>
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Credit Amount (₹) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-input"
-                      placeholder="0.00"
-                      value={amount}
-                      onChange={e => setAmount(e.target.value)}
-                      required
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                        color: 'var(--color-success)', fontWeight: 700, fontSize: 'var(--text-sm)', pointerEvents: 'none',
+                      }}>₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        className="form-input"
+                        style={{ paddingLeft: 28, fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-success)' }}
+                        placeholder="0.00"
+                        value={amount}
+                        onChange={e => setAmount(e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="form-group" style={{ marginTop: 'var(--space-3)' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Reason *</label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. Exchange of Gold Ring, Returned bangle"
+                    placeholder="e.g. Exchange of Gold Ring, Returned bangle..."
                     value={reason}
                     onChange={e => setReason(e.target.value)}
                     required
                   />
                 </div>
 
-                <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
-                  <div className="form-group">
-                    <label className="form-label">Expiry Date (Optional)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Expiry Date</label>
                     <input
                       type="date"
                       className="form-input"
@@ -725,8 +749,8 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
                       onChange={e => setExpiryDate(e.target.value)}
                     />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Internal Notes (Optional)</label>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Internal Notes</label>
                     <input
                       type="text"
                       className="form-input"
@@ -738,11 +762,36 @@ function CreateCreditNoteModal({ onClose, onSave, validityDays, initialCustomerI
                 </div>
               </div>
             </div>
+
+            {amount && parseFloat(amount) > 0 && (
+              <div style={{
+                background: 'var(--color-success-muted)',
+                border: '1px solid rgba(34,197,94,0.25)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3) var(--space-4)',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <i className="fa-solid fa-circle-check" style={{ color: 'var(--color-success)', fontSize: '1.1rem' }} />
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--color-success)', fontSize: 'var(--text-md)' }}>
+                    {fmt(parseFloat(amount))} Credit will be issued
+                  </div>
+                  {custName && (
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: 2 }}>
+                      to {custName}{reason ? ` · ${reason}` : ''}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="modal__footer">
+          <div className="modal__footer" style={{flexShrink: 0}}>
             <button type="button" className="btn btn--ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn--primary">Issue Credit Note</button>
+            <button type="submit" className="btn btn--primary" style={{ gap: 8 }}>
+              <i className="fa-solid fa-wallet" />
+              Issue Credit Note
+            </button>
           </div>
         </form>
       </div>

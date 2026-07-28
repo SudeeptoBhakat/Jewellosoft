@@ -174,12 +174,12 @@ export function calculateBill(p) {
     // ═══ SCENARIO 3: Old > New (shop returns to customer) ═══
     // Smart Return Logic:
     //   1. effectiveOldValue = excess weight value after deduction (shop owes this)
-    //   2. Subtract ALL charges: making, hallmark, GST, other charges, discount
+    //   2. Subtract ALL charges: making, hallmark, GST, other charges; Exception ADD: discount
     //   3. Add advance (customer already paid → shop owes this back too)
     //   4. If balance > 0 → return to customer; ≤ 0 → customer pays difference
     subtotal = r2(effectiveOldValue - totalMaking);
     netTotal = r2(subtotal - hallmarkAmt - totalGst);
-    preRound = r2(netTotal - otherCharges + advance - discount);
+    preRound = r2(netTotal - otherCharges + advance + discount);
     transactionType = preRound > 0 ? 'return' : 'payable';
   }
 
@@ -189,14 +189,12 @@ export function calculateBill(p) {
     const excessWt = r2(oldWt - totalWeight);
     const excessValue = r2(excessWt * metalRate);
 
-    // Ordered list of charges to subtract from return balance
     const chargeList = [];
     if (totalMaking > 0) chargeList.push({ label: 'Making Charges', amount: totalMaking, detail: totalWeight + 'g new product' });
     if (otherCharges > 0) chargeList.push({ label: 'Other Charges', amount: otherCharges });
     if (hallmarkAmt > 0) chargeList.push({ label: 'Hallmark Charges', amount: hallmarkAmt, detail: hallmarkCount + ' × ₹' + hallmarkValue });
     if (cgst > 0) chargeList.push({ label: 'CGST (1.5%)', amount: cgst });
     if (sgst > 0) chargeList.push({ label: 'SGST (1.5%)', amount: sgst });
-    if (discount > 0) chargeList.push({ label: 'Discount', amount: discount });
 
     let bal = effectiveOldValue;
     const steps = [];
@@ -215,12 +213,20 @@ export function calculateBill(p) {
       });
     }
 
-    // Advance — always added (customer already paid, increases return / reduces payable)
     if (advance > 0) {
       bal = r2(bal + advance);
       steps.push({
-        label: 'Advance (Customer Credit)', amount: advance,
+        label: 'Advance Paid (Customer Credit)', amount: advance,
         absorbed: advance, balance: bal, detail: null,
+        isFlip: false, isSubtract: false,
+      });
+    }
+
+    if (discount > 0) {
+      bal = r2(bal + discount);
+      steps.push({
+        label: 'Discount by Shop', amount: discount,
+        absorbed: discount, balance: bal, detail: 'Added to return — shop concession',
         isFlip: false, isSubtract: false,
       });
     }

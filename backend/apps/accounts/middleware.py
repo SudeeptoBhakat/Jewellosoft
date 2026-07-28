@@ -79,13 +79,15 @@ class SupabaseAuthMiddleware:
 
     @classmethod
     def _get_jwks_client(cls):
-        """Lazily initialize the JWKS client for asymmetric key verification."""
         if cls._jwks_client is None:
             supabase_url = getattr(settings, 'SUPABASE_URL', '')
             if supabase_url:
-                jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
-                cls._jwks_client = jwt.PyJWKClient(jwks_url, cache_keys=True)
-                logger.info(f'[SupabaseAuth] JWKS client initialized: {jwks_url}')
+                try:
+                    jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+                    cls._jwks_client = jwt.PyJWKClient(jwks_url, cache_keys=True)
+                    logger.info(f'[SupabaseAuth] JWKS client initialized: {jwks_url}')
+                except Exception as exc:
+                    logger.warning(f'[SupabaseAuth] JWKS client init failed: {exc}')
         return cls._jwks_client
 
     def _verify_jwt(self, token):

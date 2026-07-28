@@ -305,6 +305,59 @@ export default function StandardTemplate({ data }) {
                     </div>
                 </div>
 
+                {/* ── SCENARIO 3: Return Waterfall Breakdown ── */}
+                {/* {returnBreakdown && (
+                    <div style={{ margin: '12px 25px 0', padding: '10px 14px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, fontSize: '10px', lineHeight: 1.8 }}>
+                        <div style={{ fontWeight: 700, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#15803d', marginBottom: 6 }}>
+                            Old Metal Return Breakdown
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(34,197,94,0.2)', paddingBottom: 4, marginBottom: 4 }}>
+                            <span style={{ color: '#555' }}>Old: {Number(oldMetal?.weight || 0).toFixed(3)}g → New: {items.reduce((s, it) => s + Number(it.weight || 0), 0).toFixed(3)}g</span>
+                            <span style={{ color: '#15803d', fontWeight: 700 }}>+{returnBreakdown.excessWeight.toFixed(3)}g extra</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Excess Value ({returnBreakdown.excessWeight.toFixed(3)}g × ₹{(Number(rates.rate10gm || 0) / 10).toLocaleString('en-IN')})</span>
+                            <span style={{ fontWeight: 600 }}>{fmt(returnBreakdown.excessMetalValue)}</span>
+                        </div>
+                        {returnBreakdown.deductionAmt > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
+                                <span>Less Deduction ({returnBreakdown.deductionPct}%)</span>
+                                <span>−{fmt(returnBreakdown.deductionAmt)}</span>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, borderTop: '1px solid rgba(34,197,94,0.2)', paddingTop: 4, marginTop: 4 }}>
+                            <span>Return Base</span>
+                            <span style={{ color: '#15803d' }}>{fmt(returnBreakdown.afterDeduction)}</span>
+                        </div>
+                        <div style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#888', margin: '6px 0 2px' }}>Charges &amp; Credits Applied</div>
+                        {returnBreakdown.steps.map((step, i) => (
+                            <React.Fragment key={i}>
+                                {step.isFlip && (
+                                    <div style={{ textAlign: 'center', fontSize: '8px', fontWeight: 700, color: '#b45309', background: '#fffbeb', padding: '2px 0', margin: '3px 0', borderRadius: 3 }}>
+                                        ⚡ RETURN FULFILLED — CUSTOMER NOW PAYS
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: step.isSubtract ? '#dc2626' : '#15803d' }}>
+                                    <span style={{ paddingLeft: 8 }}>
+                                        {step.isSubtract ? '(−)' : '(+)'} {step.label}
+                                        {step.detail && <span style={{ color: '#888', fontSize: '8px' }}> ({step.detail})</span>}
+                                        {step.isFlip && <span style={{ color: '#888', fontSize: '8px' }}> [{fmt(step.absorbed)} absorbed]</span>}
+                                    </span>
+                                    <span style={{ fontWeight: 600 }}>
+                                        {step.isSubtract ? '−' : '+'}{fmt(step.amount)}
+                                    </span>
+                                </div>
+                            </React.Fragment>
+                        ))}
+                        {has(totals.roundOff) && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888', fontSize: '9px', borderTop: '1px solid rgba(34,197,94,0.2)', paddingTop: 4, marginTop: 4 }}>
+                                <span>Round Off</span>
+                                <span>{Number(totals.roundOff).toFixed(2)}</span>
+                            </div>
+                        )}
+                    </div>
+                )} */}
+
                 {totals.creditApplied > 0 && (
                     <div style={{
                         marginTop: 15,
@@ -322,6 +375,25 @@ export default function StandardTemplate({ data }) {
                     }}>
                         <span>CREDIT NOTE APPLIED: {fmt(totals.creditApplied)}</span>
                         <span>NET PAYABLE (CASH/CARD/UPI): {fmt(totals.finalAmount - totals.creditApplied)}</span>
+                    </div>
+                )}
+
+                {has(totals.discount) && (
+                    <div style={{
+                        margin: '8px 25px 0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: 'rgba(239,68,68,0.06)',
+                        border: '1px solid rgba(239,68,68,0.2)',
+                        borderRadius: '6px',
+                        padding: '6px 14px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: '#dc2626',
+                    }}>
+                        <span>DISCOUNT APPLIED (−)</span>
+                        <span>{fmt(totals.discount)}</span>
                     </div>
                 )}
 
@@ -350,7 +422,7 @@ export default function StandardTemplate({ data }) {
                 ) : (
                     <div className="pdf-payment">
                         <div className="label">TRANSACTION TYPE</div>
-                        <div style={{ color: '#dc2626', fontWeight: 700 }}>
+                        <div>
                             RETURN AMOUNT TO CUSTOMER : {fmt(totals?.finalAmount)}
                         </div>
                     </div>
