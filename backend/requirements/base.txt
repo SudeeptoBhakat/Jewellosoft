@@ -1,5 +1,5 @@
 # Core Django packages
-Django>=5.0,<6.0
+Django>=6.0.7,<7.0
 djangorestframework>=3.17.1
 djangorestframework-simplejwt>=5.4
 django-cors-headers>=4.9.0
