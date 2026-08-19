@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="theme-dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JewelloSoft — Jewellery Billing Software</title>
+
+  <!-- Bootstrap -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="theme-dark">
+
+  <!-- ═══════════════════════════════════════════════
+       THEME SWITCHER (Fixed)
+  ═══════════════════════════════════════════════ -->
+  <div class="theme-switcher" id="themeSwitcher">
+    <span class="theme-label">Theme</span>
+    <div class="theme-swatches">
+      <button class="swatch swatch-dark active" data-theme="theme-dark" title="Black + Gold">
+        <span class="swatch-inner"></span>
+        <span class="swatch-tip">Black + Gold</span>
+      </button>
+      <button class="swatch swatch-green" data-theme="theme-green" title="Deep Green + Gold">
+        <span class="swatch-inner"></span>
+        <span class="swatch-tip">Deep Green + Gold</span>
+      </button>
+      <button class="swatch swatch-light" data-theme="theme-light" title="Cream + Gold">
+        <span class="swatch-inner"></span>
+        <span class="swatch-tip">Cream + Gold</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       NAVBAR
+  ═══════════════════════════════════════════════ -->
+  <nav class="navbar navbar-expand-lg fixed-top js-navbar" id="mainNavbar">
+    <div class="container">
+      <a class="navbar-brand brand-logo" href="#">
+        <img src="media/logo.png" alt="JewelloSoft" style="width: 10%;">
+        <span class="brand-name">JewelloSoft</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+        <i class="bi bi-list text-gold fs-4"></i>
+      </button>
+      <div class="collapse navbar-collapse" id="navMenu">
+        <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
+          <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
+          <li class="nav-item"><a class="nav-link" href="#how-it-works">How It Works</a></li>
+          <li class="nav-item"><a class="nav-link" href="#pricing">Pricing</a></li>
+          <li class="nav-item"><a class="nav-link" href="#faq">FAQ</a></li>
+          <li class="nav-item"><a class="nav-link" href="#feedback">Feedback</a></li>
+          <li class="nav-item ms-lg-3">
+            <button class="btn btn-gold-outline btn-sm" onclick="openDownloadModal()">Download Free</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════
+       HERO SECTION
+  ═══════════════════════════════════════════════ -->
+  <section class="hero-section" id="hero">
+    <div class="hero-bg-pattern"></div>
+    <div class="container">
+      <div class="row align-items-center min-vh-100">
+
+        <!-- Left: Copy -->
+        <div class="col-lg-6 hero-left animate-fadein">
+          <!-- <div class="hero-badge">
+            <i class="bi bi-gem"></i>&nbsp; Trusted by 1,200+ Jewellers Across India
+          </div> -->
+          <h1 class="hero-title">
+            Your Shop.<br/>
+            <em>Your Rules.</em><br/>
+            Your Billing.
+          </h1>
+          <p class="hero-sub">
+            JewelloSoft is a modern, <strong>offline-first</strong> jewellery billing &amp; inventory management software — From meticulous inventory tracking to seamless billing, get the professional-grade tools you need to run your shop by your own rules..
+          </p>
+          <ul class="hero-checks">
+            <li><i class="bi bi-check-circle-fill"></i> Works 100% Offline</li>
+            <li><i class="bi bi-check-circle-fill"></i> Fully Customizable Billing</li>
+            <li><i class="bi bi-check-circle-fill"></i> Built for Jewellery Shops — Not Generic Businesses</li>
+          </ul>
+          <div class="hero-actions">
+            <button class="btn btn-gold btn-lg" onclick="openDownloadModal()">
+              <i class="bi bi-download me-2"></i>Download Now — Free
+            </button>
+            <a href="#features" class="btn btn-ghost btn-lg ms-3">
+              View Features <i class="bi bi-arrow-down ms-1"></i>
+            </a>
+          </div>
+          <p class="hero-note" id="heroVersionNote">Windows 10 / 11 &nbsp;·&nbsp; No internet required &nbsp;·&nbsp; Free forever plan</p>
+        </div>
+
+        <!-- Right: Desktop Mockup -->
+        <div class="col-lg-6 hero-right animate-fadein-delay">
+          <div class="desktop-mockup">
+            <div class="mockup-stand"></div>
+            <div class="mockup-base"></div>
+            <div class="mockup-screen">
+              <div class="mockup-titlebar">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
+                <span class="titlebar-text">JewelloSoft — New Invoice</span>
+              </div>
+              <div class="mockup-body">
+                <!-- Sidebar -->
+                <div class="mockup-sidebar">
+                  <div class="sidebar-logo"><img src="media/logo.png" alt="JewelloSoft" style="width: 50%"></div>
+                  <ul class="sidebar-nav">
+                    <li class="active"><i class="bi bi-receipt"></i></li>
+                    <li><i class="bi bi-box-seam"></i></li>
+                    <li><i class="bi bi-people"></i></li>
+                    <li><i class="bi bi-bar-chart"></i></li>
+                    <li><i class="bi bi-gear"></i></li>
+                  </ul>
+                </div>
+                <!-- Content -->
+                <div class="mockup-content">
+                  <div class="invoice-header">
+                    <div>
+                      <div class="inv-shop">Sharma Gold House</div>
+                      <div class="inv-sub">GST No: 27AABCS1429B1Z</div>
+                    </div>
+                    <div class="inv-badge">INVOICE #2847</div>
+                  </div>
+                  <div class="inv-customer">
+                    <span class="inv-label">Customer</span>
+                    <span class="inv-val">Priya Mehta</span>
+                  </div>
+                  <table class="inv-table">
+                    <thead>
+                      <tr><th>Item</th><th>Wt</th><th>Rate</th><th>Amt</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>Gold Ring 22K</td><td>4.2g</td><td>₹6,200</td><td>₹26,040</td></tr>
+                      <tr><td>Necklace 18K</td><td>12.5g</td><td>₹5,800</td><td>₹72,500</td></tr>
+                      <tr><td>Making Charges</td><td>—</td><td>—</td><td>₹3,200</td></tr>
+                    </tbody>
+                  </table>
+                  <div class="inv-footer">
+                    <div class="inv-row"><span>Subtotal</span><span>₹1,01,740</span></div>
+                    <div class="inv-row"><span>GST (3%)</span><span>₹3,052</span></div>
+                    <div class="inv-row inv-total"><span>Total</span><span>₹1,04,792</span></div>
+                    <button class="inv-btn"><i class="bi bi-printer me-1"></i>Print &amp; Save PDF</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="gold-divider"></div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       MARQUEE STRIP
+  ═══════════════════════════════════════════════ -->
+  <div class="marquee-strip">
+    <div class="marquee-track">
+      <span>Smart Billing</span><i class="bi bi-gem mx-3"></i>
+      <span>GST Ready</span><i class="bi bi-gem mx-3"></i>
+      <span>Offline First</span><i class="bi bi-gem mx-3"></i>
+      <span>Weight-Based Pricing</span><i class="bi bi-gem mx-3"></i>
+      <span>PDF Invoices</span><i class="bi bi-gem mx-3"></i>
+      <span>Inventory Management</span><i class="bi bi-gem mx-3"></i>
+      <span>Customer Ledger</span><i class="bi bi-gem mx-3"></i>
+      <span>Payment Tracking</span><i class="bi bi-gem mx-3"></i>
+      <span>Business Reports</span><i class="bi bi-gem mx-3"></i>
+      <!-- duplicate for loop -->
+      <span>Smart Billing</span><i class="bi bi-gem mx-3"></i>
+      <span>GST Ready</span><i class="bi bi-gem mx-3"></i>
+      <span>Offline First</span><i class="bi bi-gem mx-3"></i>
+      <span>Weight-Based Pricing</span><i class="bi bi-gem mx-3"></i>
+      <span>PDF Invoices</span><i class="bi bi-gem mx-3"></i>
+      <span>Inventory Management</span><i class="bi bi-gem mx-3"></i>
+      <span>Customer Ledger</span><i class="bi bi-gem mx-3"></i>
+      <span>Payment Tracking</span><i class="bi bi-gem mx-3"></i>
+      <span>Business Reports</span><i class="bi bi-gem mx-3"></i>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       ABOUT SECTION
+  ═══════════════════════════════════════════════ -->
+  <section class="section-about alt-bg" id="about">
+    <div class="container">
+      <div class="row align-items-center gy-5">
+        <div class="col-lg-5 animate-slide-left">
+          <div class="about-icon-grid">
+            <div class="aig-card"><i class="bi bi-receipt-cutoff"></i><span>Invoice Control</span></div>
+            <div class="aig-card"><i class="bi bi-boxes"></i><span>Inventory Control</span></div>
+            <div class="aig-card"><i class="bi bi-graph-up-arrow"></i><span>Business Control</span></div>
+            <div class="aig-card"><i class="bi bi-shield-lock"></i><span>Secure &amp; Local</span></div>
+          </div>
+        </div>
+        <div class="col-lg-6 offset-lg-1 animate-slide-right">
+          <div class="section-eyebrow">About JewelloSoft</div>
+          <h2 class="section-title">
+            Built for Jewellers,<br/><em>Not Generic Businesses</em>
+          </h2>
+          <p class="section-body">
+            Running a jewellery business requires precision, flexibility, and trust that a generic billing tool simply cannot provide. You deal with weight-based pricing, making charges, wastage, hallmarking, GST on gold — complexities that off-the-shelf software ignores.
+          </p>
+          <p class="section-body">
+            JewelloSoft was crafted from the ground up by studying how real jewellery shops operate. It gives you complete invoice control — customise every line, hide or show charges, add your logo, and export polished PDFs in seconds. Inventory control means real-time tracking by weight, purity, and category. And business control means reports, payment tracking, and customer ledgers that tell you exactly where your money is.
+          </p>
+          <div class="highlight-line">
+            "JewelloSoft adapts to your business — not the other way around."
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FEATURES SECTION (ZIG-ZAG)
+  ═══════════════════════════════════════════════ -->
+  <section class="section-features" id="features">
+    <div class="container">
+      <div class="text-center mb-section">
+        <div class="section-eyebrow">Core Features</div>
+        <h2 class="section-title">Everything a Jeweller Needs</h2>
+        <div class="gold-line-center"></div>
+      </div>
+
+      <!-- Feature 1 -->
+      <div class="feature-row row align-items-center gy-5 mb-feature">
+        <div class="col-lg-5 animate-slide-left">
+          <div class="feature-visual fv-billing">
+            <i class="bi bi-receipt-cutoff fv-icon"></i>
+            <div class="fv-lines">
+              <div class="fvl long"></div><div class="fvl mid"></div><div class="fvl short"></div>
+              <div class="fvl long"></div><div class="fvl mid gold"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6 offset-lg-1 animate-slide-right">
+          <div class="feature-number">01</div>
+          <h3 class="feature-title">Smart Billing System</h3>
+          <p class="feature-desc">Create professional invoices tailored to jewellery — with GST, making charges, wastage, stone charges, and hallmarking fees. Show or hide any line item per customer, per invoice. Auto-calculation means zero manual errors.</p>
+          <ul class="feature-list">
+            <li><i class="bi bi-check2"></i> Custom invoice templates</li>
+            <li><i class="bi bi-check2"></i> GST, making charges &amp; wastage auto-calc</li>
+            <li><i class="bi bi-check2"></i> Hide/show charge fields per bill</li>
+            <li><i class="bi bi-check2"></i> Instant PDF &amp; print export</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Feature 2 (reversed) -->
+      <div class="feature-row row align-items-center gy-5 mb-feature flex-lg-row-reverse">
+        <div class="col-lg-5 animate-slide-right">
+          <div class="feature-visual fv-inventory">
+            <i class="bi bi-boxes fv-icon"></i>
+            <div class="fv-chips">
+              <span class="chip">22K Gold</span><span class="chip">18K Gold</span>
+              <span class="chip gold-chip">Diamonds</span><span class="chip">Silver</span>
+              <span class="chip">Platinum</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6 offset-lg-1 animate-slide-left">
+          <div class="feature-number">02</div>
+          <h3 class="feature-title">Inventory Management</h3>
+          <p class="feature-desc">Track every piece by weight, purity, category, and location. Know exactly what's in your vault, what's sold, and what needs replenishment — all in real time.</p>
+          <ul class="feature-list">
+            <li><i class="bi bi-check2"></i> Real-time stock tracking</li>
+            <li><i class="bi bi-check2"></i> Weight-based item management</li>
+            <li><i class="bi bi-check2"></i> Category &amp; purity filters</li>
+            <li><i class="bi bi-check2"></i> Low-stock alerts</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="feature-row row align-items-center gy-5 mb-feature">
+        <div class="col-lg-5 animate-slide-left">
+          <div class="feature-visual fv-offline">
+            <i class="bi bi-wifi-off fv-icon"></i>
+            <div class="fv-offline-badge">OFFLINE<br/>READY</div>
+          </div>
+        </div>
+        <div class="col-lg-6 offset-lg-1 animate-slide-right">
+          <div class="feature-number">03</div>
+          <h3 class="feature-title">Offline-First System</h3>
+          <p class="feature-desc">No internet? No problem. JewelloSoft stores all your data locally on your machine. Power cuts, slow networks, rural areas — nothing stops your billing.</p>
+          <ul class="feature-list">
+            <li><i class="bi bi-check2"></i> 100% offline operation</li>
+            <li><i class="bi bi-check2"></i> Secure local database</li>
+            <li><i class="bi bi-check2"></i> No monthly cloud fees</li>
+            <li><i class="bi bi-check2"></i> Optional backup export</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Feature 4 (reversed) -->
+      <div class="feature-row row align-items-center gy-5 mb-feature flex-lg-row-reverse">
+        <div class="col-lg-5 animate-slide-right">
+          <div class="feature-visual fv-invoice">
+            <i class="bi bi-file-earmark-richtext fv-icon"></i>
+            <div class="fv-pdf-preview">
+              <div class="pdf-line bold"></div>
+              <div class="pdf-line short"></div>
+              <div class="pdf-line long"></div>
+              <div class="pdf-line mid"></div>
+              <div class="pdf-badge">PDF</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6 offset-lg-1 animate-slide-left">
+          <div class="feature-number">04</div>
+          <h3 class="feature-title">Invoice Customization</h3>
+          <p class="feature-desc">Your invoice should look like <em>your</em> shop, not a generic template. Add your logo, choose layouts, set your own terms, and produce stunning PDFs customers will trust.</p>
+          <ul class="feature-list">
+            <li><i class="bi bi-check2"></i> Upload shop logo &amp; branding</li>
+            <li><i class="bi bi-check2"></i> Multiple invoice layouts</li>
+            <li><i class="bi bi-check2"></i> One-click PDF export</li>
+            <li><i class="bi bi-check2"></i> Print directly from software</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Feature Cards Row -->
+      <div class="row g-4 mt-4">
+        <div class="col-md-4 animate-fadein">
+          <div class="mini-feature-card">
+            <i class="bi bi-people-fill mfc-icon"></i>
+            <h4>Customer Management</h4>
+            <p>Maintain customer profiles, purchase history, and outstanding balances in one place.</p>
+          </div>
+        </div>
+        <div class="col-md-4 animate-fadein" style="animation-delay:.15s">
+          <div class="mini-feature-card">
+            <i class="bi bi-cash-coin mfc-icon"></i>
+            <h4>Payment Tracking</h4>
+            <p>Record advance payments, partial settlements, and dues. Never lose track of money owed.</p>
+          </div>
+        </div>
+        <div class="col-md-4 animate-fadein" style="animation-delay:.3s">
+          <div class="mini-feature-card">
+            <i class="bi bi-bar-chart-line-fill mfc-icon"></i>
+            <h4>Reports &amp; Insights</h4>
+            <p>Daily sales, monthly summaries, GST reports, and inventory valuations at a glance.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       WHY CHOOSE US
+  ═══════════════════════════════════════════════ -->
+  <section class="section-why alt-bg" id="why">
+    <div class="container">
+      <div class="text-center mb-section">
+        <div class="section-eyebrow">Why JewelloSoft</div>
+        <h2 class="section-title">The Difference Is in the Details</h2>
+        <div class="gold-line-center"></div>
+      </div>
+      <div class="row g-4 justify-content-center">
+        <div class="col-sm-6 col-lg-4">
+          <div class="why-card animate-fadein">
+            <div class="why-icon"><i class="bi bi-gem"></i></div>
+            <h4>Built for Jewellery</h4>
+            <p>Every feature — weight pricing, making charges, purity categories — speaks the language of your trade.</p>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="why-card animate-fadein" style="animation-delay:.1s">
+            <div class="why-icon"><i class="bi bi-wifi-off"></i></div>
+            <h4>Works Offline</h4>
+            <p>No dependency on internet connectivity. Your shop keeps running even when the network doesn't.</p>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="why-card animate-fadein" style="animation-delay:.2s">
+            <div class="why-icon"><i class="bi bi-shield-check"></i></div>
+            <h4>Completely Secure</h4>
+            <p>Your data never leaves your computer. No cloud leaks, no third-party access, no privacy risk.</p>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="why-card animate-fadein" style="animation-delay:.3s">
+            <div class="why-icon"><i class="bi bi-stars"></i></div>
+            <h4>Genuinely Simple</h4>
+            <p>Designed for shopkeepers — not accountants or IT professionals. Anyone can learn it in one day.</p>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="why-card animate-fadein" style="animation-delay:.4s">
+            <div class="why-icon"><i class="bi bi-sliders2"></i></div>
+            <h4>Zero Complexity</h4>
+            <p>No confusing menus, no hidden settings. Everything is where you expect it to be.</p>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="why-card animate-fadein" style="animation-delay:.5s">
+            <div class="why-icon"><i class="bi bi-telephone-fill"></i></div>
+            <h4>Real Support</h4>
+            <p>Dedicated support from people who understand jewellery businesses — not generic chat bots.</p>
+          </div>
+        </div>
+      </div>
+      <div class="why-highlight text-center mt-5 animate-fadein">
+        <span>"JewelloSoft adapts to your business — not the other way around."</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       HOW IT WORKS
+  ═══════════════════════════════════════════════ -->
+  <section class="section-hiw" id="how-it-works">
+    <div class="container">
+      <div class="text-center mb-section">
+        <div class="section-eyebrow">Getting Started</div>
+        <h2 class="section-title">Up &amp; Running in Minutes</h2>
+        <div class="gold-line-center"></div>
+      </div>
+      <div class="hiw-steps">
+        <div class="hiw-step animate-fadein">
+          <div class="hiw-num">01</div>
+          <div class="hiw-connector"></div>
+          <div class="hiw-icon"><i class="bi bi-download"></i></div>
+          <h5>Install Software</h5>
+          <p>Download the .exe and install in under 2 minutes on your Windows PC.</p>
+        </div>
+        <div class="hiw-step animate-fadein" style="animation-delay:.1s">
+          <div class="hiw-num">02</div>
+          <div class="hiw-connector"></div>
+          <div class="hiw-icon"><i class="bi bi-shop-window"></i></div>
+          <h5>Setup Your Shop</h5>
+          <p>Enter your shop name, GST number, logo, and basic preferences.</p>
+        </div>
+        <div class="hiw-step animate-fadein" style="animation-delay:.2s">
+          <div class="hiw-num">03</div>
+          <div class="hiw-connector"></div>
+          <div class="hiw-icon"><i class="bi bi-boxes"></i></div>
+          <h5>Add Inventory</h5>
+          <p>Import or manually add your jewellery stock with weights and categories.</p>
+        </div>
+        <div class="hiw-step animate-fadein" style="animation-delay:.3s">
+          <div class="hiw-num">04</div>
+          <div class="hiw-connector"></div>
+          <div class="hiw-icon"><i class="bi bi-receipt"></i></div>
+          <h5>Create Bills</h5>
+          <p>Pick items, add charges, and generate a professional invoice instantly.</p>
+        </div>
+        <div class="hiw-step animate-fadein" style="animation-delay:.4s">
+          <div class="hiw-num">05</div>
+          <div class="hiw-icon"><i class="bi bi-graph-up-arrow"></i></div>
+          <h5>Track Reports</h5>
+          <p>View daily sales, GST summaries, and inventory value at any time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       PRICING SECTION
+  ═══════════════════════════════════════════════ -->
+  <!-- <section class="section-pricing alt-bg" id="pricing">
+    <div class="container">
+      <div class="text-center mb-section">
+        <div class="section-eyebrow">Plans &amp; Pricing</div>
+        <h2 class="section-title">Simple, Transparent Pricing</h2>
+        <div class="gold-line-center"></div>
+      </div>
+      <div class="row g-4 justify-content-center">
+
+        
+        <div class="col-md-6 col-lg-4">
+          <div class="pricing-card animate-fadein">
+            <div class="pricing-tier">Basic</div>
+            <div class="pricing-price">
+              <span class="price-currency">₹</span>
+              <span class="price-amount">0</span>
+              <span class="price-period">/ forever</span>
+            </div>
+            <div class="pricing-subtitle">Perfect for single-counter shops</div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check2-circle"></i> Up to 100 bills/month</li>
+              <li><i class="bi bi-check2-circle"></i> Basic invoice template</li>
+              <li><i class="bi bi-check2-circle"></i> Inventory up to 200 items</li>
+              <li><i class="bi bi-check2-circle"></i> PDF export</li>
+              <li><i class="bi bi-check2-circle"></i> 1 user account</li>
+              <li class="disabled"><i class="bi bi-x-circle"></i> Advanced reports</li>
+              <li class="disabled"><i class="bi bi-x-circle"></i> Multi-counter</li>
+            </ul>
+            <button class="btn btn-pricing-outline w-100" onclick="openDownloadModal()">Download Free</button>
+          </div>
+        </div>
+
+        
+        <div class="col-md-6 col-lg-4">
+          <div class="pricing-card pricing-featured animate-fadein" style="animation-delay:.15s">
+            <div class="pricing-popular">Most Popular</div>
+            <div class="pricing-tier">Pro</div>
+            <div class="pricing-price">
+              <span class="price-currency">₹</span>
+              <span class="price-amount">1,499</span>
+              <span class="price-period">/ year</span>
+            </div>
+            <div class="pricing-subtitle">For growing jewellery businesses</div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check2-circle"></i> Unlimited bills</li>
+              <li><i class="bi bi-check2-circle"></i> Custom invoice templates</li>
+              <li><i class="bi bi-check2-circle"></i> Unlimited inventory</li>
+              <li><i class="bi bi-check2-circle"></i> GST &amp; advanced reports</li>
+              <li><i class="bi bi-check2-circle"></i> Customer ledger</li>
+              <li><i class="bi bi-check2-circle"></i> Payment tracking</li>
+              <li><i class="bi bi-check2-circle"></i> Priority support</li>
+            </ul>
+            <button class="btn btn-gold w-100" onclick="openDownloadModal()">Get Pro</button>
+          </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+          <div class="pricing-card animate-fadein" style="animation-delay:.3s">
+            <div class="pricing-tier">Enterprise</div>
+            <div class="pricing-price">
+              <span class="price-currency">₹</span>
+              <span class="price-amount">3,999</span>
+              <span class="price-period">/ year</span>
+            </div>
+            <div class="pricing-subtitle">For multi-branch jewellery houses</div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check2-circle"></i> Everything in Pro</li>
+              <li><i class="bi bi-check2-circle"></i> Multi-counter &amp; branches</li>
+              <li><i class="bi bi-check2-circle"></i> Staff accounts &amp; roles</li>
+              <li><i class="bi bi-check2-circle"></i> Custom branding</li>
+              <li><i class="bi bi-check2-circle"></i> Data backup automation</li>
+              <li><i class="bi bi-check2-circle"></i> Onboarding support</li>
+              <li><i class="bi bi-check2-circle"></i> Dedicated account manager</li>
+            </ul>
+            <button class="btn btn-pricing-outline w-100">Contact Sales</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section> -->
+
+  <!-- ═══════════════════════════════════════════════
+       SECURITY SECTION
+  ═══════════════════════════════════════════════ -->
+  <section class="section-security" id="security">
+    <div class="container">
+      <div class="security-inner">
+        <div class="row align-items-center gy-5">
+          <div class="col-lg-5 text-center animate-slide-left">
+            <div class="security-shield">
+              <i class="bi bi-shield-lock-fill"></i>
+            </div>
+          </div>
+          <div class="col-lg-6 offset-lg-1 animate-slide-right">
+            <div class="section-eyebrow">Security &amp; Privacy</div>
+            <h2 class="section-title">Your Data Stays <em>With You</em></h2>
+            <p class="section-body">JewelloSoft is engineered with a local-first philosophy. Every byte of your business data — customer information, billing records, inventory — lives on <em>your</em> computer and only your computer.</p>
+            <div class="security-points">
+              <div class="sec-point"><i class="bi bi-database-lock"></i><div><strong>Local Storage Only</strong><p>No cloud, no external servers. Your data is stored in an encrypted local database on your PC.</p></div></div>
+              <div class="sec-point"><i class="bi bi-eye-slash"></i><div><strong>Zero Data Sharing</strong><p>We have no access to your business records, customer names, or transaction history — ever.</p></div></div>
+              <div class="sec-point"><i class="bi bi-key"></i><div><strong>Password Protected</strong><p>Role-based access ensures only authorised staff can access sensitive billing and reporting data.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FAQ SECTION
+  ═══════════════════════════════════════════════ -->
+  <section class="section-faq alt-bg" id="faq">
+    <div class="container">
+      <div class="text-center mb-section">
+        <div class="section-eyebrow">FAQ</div>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <div class="gold-line-center"></div>
+      </div>
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          <div class="accordion faq-accordion" id="faqAccordion">
+
+            <div class="accordion-item faq-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button faq-btn" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                  Does JewelloSoft work without internet?
+                </button>
+              </h2>
+              <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                <div class="accordion-body faq-body">
+                  Yes, absolutely. JewelloSoft is built offline-first. It runs entirely on your local machine with no internet connection required. You can bill customers, manage inventory, and generate reports 24/7 — even during network outages.
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item faq-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button faq-btn collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                  Can I customise my invoices?
+                </button>
+              </h2>
+              <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body faq-body">
+                  Yes. You can add your shop logo, choose from multiple layouts, show or hide specific charge fields (making charges, wastage, hallmarking), set custom terms &amp; conditions, and export to a print-ready PDF.
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item faq-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button faq-btn collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                  Is my business data safe?
+                </button>
+              </h2>
+              <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body faq-body">
+                  Completely safe. All data is stored in an encrypted local database on your computer. JewelloSoft has zero access to your records. No data is ever transmitted to any external server.
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item faq-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button faq-btn collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                  Is it suitable for small shops?
+                </button>
+              </h2>
+              <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body faq-body">
+                  Yes. JewelloSoft's free Basic plan is designed specifically for single-counter jewellery shops. It has no complexity, no setup fees, and anyone can learn it in a single day regardless of technical background.
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item faq-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button faq-btn collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                  Does it support GST billing?
+                </button>
+              </h2>
+              <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body faq-body">
+                  Yes. JewelloSoft auto-calculates GST on gold, silver, and making charges as per Indian tax regulations. It also generates GST-compliant invoices and summary reports ready for your accountant.
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item faq-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button faq-btn collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                  What operating systems are supported?
+                </button>
+              </h2>
+              <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body faq-body">
+                  Currently JewelloSoft supports Windows 10 and Windows 11. A macOS version is under active development and will be released soon.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FINAL CTA
+  ═══════════════════════════════════════════════ -->
+  <section class="section-cta" id="cta">
+    <div class="cta-bg-pattern"></div>
+    <div class="container text-center">
+      <div class="section-eyebrow animate-fadein">Start Today — Free</div>
+      <h2 class="cta-title animate-fadein">
+        Download JewelloSoft &amp; Start Managing<br/>
+        <em>Your Jewellery Business Today</em>
+      </h2>
+      <p class="cta-sub animate-fadein">No credit card. No internet. No complexity. Just powerful billing built for jewellers.</p>
+      <button class="btn btn-gold btn-lg btn-cta-main animate-fadein" onclick="openDownloadModal()">
+        <i class="bi bi-download me-2"></i>Download JewelloSoft Free
+      </button>
+      <p class="cta-note animate-fadein" id="ctaVersionNote">Windows 10 / 11 &nbsp;·&nbsp; Fetching latest version…</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FEEDBACK & BUG REPORT SECTION
+  ═══════════════════════════════════════════════ -->
+  <section class="section-feedback" id="feedback">
+    <div class="container">
+      <div class="text-center mb-section">
+        <div class="section-eyebrow animate-fadein">Feedback & Suggestions</div>
+        <h2 class="section-title animate-fadein">Help Us Build the <em>Next Version</em></h2>
+        <div class="gold-line-center"></div>
+        <p class="section-body text-center mt-3 animate-fadein" style="max-width:640px;margin-left:auto;margin-right:auto;">
+          Found a bug? Have a feature request? We'd love to hear from you — your feedback directly shapes the next release of JewelloSoft.
+        </p>
+      </div>
+      <div class="row justify-content-center gy-4">
+        <!-- Left: Contact Info Cards -->
+        <div class="col-lg-4 animate-slide-left">
+          <div class="feedback-contact-card">
+            <div class="fcc-icon"><i class="bi bi-envelope-fill"></i></div>
+            <h5>Email Us</h5>
+            <p>Send your feedback, bugs or feature requests directly.</p>
+            <a href="mailto:sudeeptabhakat03@gmail.com" class="fcc-link">sudeeptabhakat03@gmail.com</a>
+          </div>
+          <div class="feedback-contact-card mt-3">
+            <div class="fcc-icon"><i class="bi bi-phone-fill"></i></div>
+            <h5>Call / WhatsApp</h5>
+            <p>Speak directly for urgent issues or support.</p>
+            <a href="tel:+919733248165" class="fcc-link">+91 97332 48165</a>
+          </div>
+          <div class="feedback-suggest-box mt-3 animate-fadein">
+            <div class="fsb-header"><i class="bi bi-lightbulb-fill"></i> What to include</div>
+            <ul>
+              <li><strong>Bug?</strong> — Steps to reproduce, expected vs actual behaviour</li>
+              <li><strong>Feature?</strong> — Describe what you need and how it helps</li>
+              <li><strong>UI Issue?</strong> — Screenshot or screen area description</li>
+              <li><strong>Performance?</strong> — When it slows down, your PC specs</li>
+            </ul>
+          </div>
+        </div>
+        <!-- Right: Feedback Form -->
+        <div class="col-lg-7 offset-lg-1 animate-slide-right">
+          <div class="feedback-card">
+            <form id="feedbackForm" class="feedback-form">
+              <div class="feedback-row">
+                <div class="feedback-field">
+                  <label class="feedback-label" for="feedbackName"><i class="bi bi-person me-1"></i>Your Name</label>
+                  <input type="text" id="feedbackName" name="name" class="feedback-input" placeholder="e.g. Rajesh Kumar" required />
+                </div>
+                <div class="feedback-field">
+                  <label class="feedback-label" for="feedbackEmail"><i class="bi bi-envelope me-1"></i>Your Email</label>
+                  <input type="email" id="feedbackEmail" name="email" class="feedback-input" placeholder="e.g. rajesh@example.com" required />
+                </div>
+              </div>
+
+              <div class="feedback-field">
+                <label class="feedback-label" for="feedbackType"><i class="bi bi-tag me-1"></i>Feedback Type</label>
+                <select id="feedbackType" name="feedback_type" class="feedback-input feedback-select" required>
+                  <option value="" disabled selected>Select a category…</option>
+                  <option value="Bug Report">🐛 Bug Report — Something isn't working</option>
+                  <option value="Feature Request">✨ Feature Request — I'd like a new capability</option>
+                  <option value="UI/UX Improvement">🎨 UI/UX Improvement — Design or layout suggestion</option>
+                  <option value="Performance Issue">⚡ Performance Issue — App is slow or crashing</option>
+                  <option value="General Feedback">💬 General Feedback — Other thoughts or praise</option>
+                </select>
+              </div>
+
+              <div class="feedback-field">
+                <label class="feedback-label" for="feedbackMessage"><i class="bi bi-chat-left-text me-1"></i>Describe in Detail</label>
+                <textarea id="feedbackMessage" name="message" class="feedback-input feedback-textarea" rows="5" required
+                  placeholder="Please describe the issue or suggestion in detail:&#10;&#10;• What happened / what do you need?&#10;• What did you expect to happen?&#10;• Steps to reproduce (if reporting a bug)&#10;• How would this feature help your workflow?"></textarea>
+              </div>
+
+              <div class="feedback-actions">
+                <button type="submit" class="btn btn-gold btn-lg feedback-submit-btn" id="feedbackSubmitBtn">
+                  <i class="bi bi-send-fill me-2"></i>Submit Feedback
+                </button>
+                <span class="feedback-privacy-note"><i class="bi bi-shield-lock me-1"></i>Your data is sent directly to our team. We never share it.</span>
+              </div>
+            </form>
+            <!-- Success State (hidden by default) -->
+            <div class="feedback-success" id="feedbackSuccess" style="display:none;">
+              <div class="feedback-success-icon"><i class="bi bi-check-circle-fill"></i></div>
+              <h4>Thank You!</h4>
+              <p>Your feedback has been sent successfully. We'll review it and include improvements in the next release.</p>
+              <button class="btn btn-gold-outline" onclick="resetFeedbackForm()">Send Another</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="row gy-4 align-items-start">
+        <div class="col-lg-4">
+          <div class="footer-brand">
+        <img src="media/logo.png" alt="JewelloSoft" style="width: 10%;">
+            <span class="brand-name">JewelloSoft</span>
+          </div>
+          <p class="footer-tagline">Craft Your Bills. Upgrade Your Business.</p>
+          <p class="footer-sub">Designed to operate with precision where the real work happens, we provide the flexibility and absolute control necessary to manage your shop with confidence—anywhere, anytime.</p>
+        </div>
+        <div class="col-sm-6 col-lg-2 offset-lg-2">
+          <h6 class="footer-heading">Product</h6>
+          <ul class="footer-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="#feedback">Feedback</a></li>
+          </ul>
+        </div>
+        <div class="col-sm-6 col-lg-2">
+          <h6 class="footer-heading">Legal</h6>
+          <ul class="footer-links">
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms &amp; Conditions</a></li>
+            <li><a href="#">Refund Policy</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-2">
+          <h6 class="footer-heading">Contact</h6>
+          <ul class="footer-links">
+            <li><a href="mailto:sudeeptabhakat03@gmail.com">sudeeptabhakat03@gmail.com</a></li>
+            <li><a href="tel:+919733248165">+91 97332 48165</a></li>
+          </ul>
+          <div class="footer-socials mt-3">
+            <a href="#"><i class="bi bi-twitter-x"></i></a>
+            <a href="#"><i class="bi bi-instagram"></i></a>
+            <a href="#"><i class="bi bi-linkedin"></i></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="gold-divider mb-4"></div>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <p class="mb-0 footer-copy">© 2025 GetJewelloSoft.com — All rights reserved.</p>
+          <p class="mb-0 footer-copy">Made with <i class="bi bi-heart-fill text-gold"></i> for India's jewellers.</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════
+       DOWNLOAD MODAL
+  ═══════════════════════════════════════════════ -->
+  <div class="modal fade" id="downloadModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content modal-premium">
+        <div class="modal-header modal-premium-header">
+          <div>
+            <div class="modal-eyebrow">Ready to transform your business?</div>
+            <h5 class="modal-title">Download JewelloSoft</h5>
+          </div>
+          <button type="button" class="btn-close btn-close-modal" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body modal-premium-body">
+
+          <div class="dl-version-info">
+            <span class="dl-version-badge" id="dlVersionBadge">Fetching…</span>
+            <span class="dl-size" id="dlVersionSize">Loading release info…</span>
+          </div>
+
+          <!-- Windows Download -->
+          <a href="https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest" target="_blank" rel="noopener" class="dl-btn dl-btn-primary" id="winDownloadBtn">
+            <div class="dl-btn-icon"><i class="bi bi-windows"></i></div>
+            <div class="dl-btn-text">
+              <span class="dl-btn-title">Download for Windows</span>
+              <span class="dl-btn-sub" id="dlBtnSub">Fetching latest release…</span>
+            </div>
+            <i class="bi bi-download dl-btn-arrow"></i>
+          </a>
+
+          <!-- View on GitHub -->
+          <a href="https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest" target="_blank" rel="noopener" class="dl-btn dl-btn-secondary" id="releasePageBtn">
+            <div class="dl-btn-icon"><i class="bi bi-github"></i></div>
+            <div class="dl-btn-text">
+              <span class="dl-btn-title">View on GitHub</span>
+              <span class="dl-btn-sub">Release notes, changelog & all assets</span>
+            </div>
+            <i class="bi bi-box-arrow-up-right dl-btn-arrow"></i>
+          </a>
+
+          <!-- Mac Coming Soon -->
+          <div class="dl-btn dl-btn-disabled">
+            <div class="dl-btn-icon"><i class="bi bi-apple"></i></div>
+            <div class="dl-btn-text">
+              <span class="dl-btn-title">Mac Version</span>
+              <span class="dl-btn-sub">Coming Soon — Join waitlist below</span>
+            </div>
+            <span class="dl-coming-soon">Soon</span>
+          </div>
+
+          <div class="dl-mac-waitlist">
+            <input type="email" class="dl-email-input" placeholder="Enter email for Mac release notification" />
+            <button class="dl-email-btn">Notify Me</button>
+          </div>
+
+          <p class="dl-disclaimer">Free forever plan included. No credit card required. Works fully offline.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="script.js"></script>
+</body>
+</html>

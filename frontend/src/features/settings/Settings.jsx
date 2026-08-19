@@ -164,6 +164,203 @@ function ThemeCard({ themeDef, isActive, onClick }) {
   );
 }
 
+function BarcodeTagVisualizer({ settings }) {
+  const isDumbbell = settings.tagType === 'dumbbell';
+  const leftMargin = settings.leftMarginMm !== undefined ? settings.leftMarginMm : 0;
+  const topMargin = settings.topMarginMm !== undefined ? settings.topMarginMm : 0.5;
+  const bodyW = settings.bodyWidthMm || 50;
+
+  return (
+    <div style={{
+      marginTop: 'var(--space-4)',
+      padding: 'var(--space-3)',
+      background: 'var(--bg-elevated)',
+      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--border-primary)',
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+      }}>
+        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <i className="fa-solid fa-eye" style={{ marginRight: 6 }}></i>Live Label Preview ({settings.labelWidthMm}mm × {settings.labelHeightMm}mm)
+        </span>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+          {isDumbbell ? `Wide Body: ${bodyW}mm | Left Margin: ${leftMargin}mm | Top: ${topMargin}mm` : 'Rectangular Sticker'}
+        </span>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: '16px 12px',
+        background: '#1a1d24',
+        borderRadius: 'var(--radius-sm)',
+        overflowX: 'auto',
+      }}>
+        {isDumbbell ? (
+          /* Jewelry Tag */
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            height: 52,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}>
+            {/* Wide Printable Body*/}
+            <div style={{
+              width: 240,
+              height: 52,
+              background: '#ffffff',
+              borderRadius: '4px 0 0 4px',
+              display: 'flex',
+              position: 'relative',
+              boxSizing: 'border-box',
+              borderRight: '1px solid #e0e0e0',
+            }}>
+              {/* Left Flap */}
+              <div style={{
+                width: '50%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                paddingLeft: `${Math.max(4, leftMargin * 3)}px`,
+                paddingTop: `${Math.max(2, topMargin * 3)}px`,
+                paddingRight: 4,
+                overflow: 'hidden',
+              }}>
+                <div style={{ fontSize: 9.5, fontWeight: 'bold', color: '#000', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Maa Sabramangala Jewellers
+                </div>
+                <div style={{ fontSize: 8.5, fontWeight: 600, color: '#222', lineHeight: 1.1, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Chik Necklace
+                </div>
+                <div style={{ fontSize: 7.5, color: '#444', lineHeight: 1.1, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  22K | 3.694g | H:HUID21
+                </div>
+              </div>
+
+              {/* Center Fold Crease Line */}
+              <div style={{
+                position: 'absolute',
+                left: '50%',
+                top: 0,
+                bottom: 0,
+                width: 0,
+                borderLeft: '1px dashed #ff4d4f',
+                zIndex: 2,
+              }} title="Center Fold Line" />
+
+              {/* Right Flap */}
+              <div style={{
+                width: '50%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2px 4px',
+                paddingTop: `${Math.max(2, topMargin * 3)}px`,
+                background: '#ffffff',
+              }}>
+                <div style={{
+                  width: '95%',
+                  height: `${Math.min(40, Math.max(22, (settings.barcodeHeightMm || 8.5) * 4))}px`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {/* SVG Code128 Auto Barcode */}
+                  <svg width="100%" height="80%" viewBox="0 0 100 24" preserveAspectRatio="none" style={{ shapeRendering: 'crispEdges' }}>
+                    <rect x="2" y="0" width="4" height="24" fill="#000"/>
+                    <rect x="8" y="0" width="2" height="24" fill="#000"/>
+                    <rect x="13" y="0" width="5" height="24" fill="#000"/>
+                    <rect x="20" y="0" width="3" height="24" fill="#000"/>
+                    <rect x="25" y="0" width="6" height="24" fill="#000"/>
+                    <rect x="33" y="0" width="3" height="24" fill="#000"/>
+                    <rect x="38" y="0" width="5" height="24" fill="#000"/>
+                    <rect x="45" y="0" width="3" height="24" fill="#000"/>
+                    <rect x="50" y="0" width="6" height="24" fill="#000"/>
+                    <rect x="58" y="0" width="4" height="24" fill="#000"/>
+                    <rect x="64" y="0" width="3" height="24" fill="#000"/>
+                    <rect x="69" y="0" width="5" height="24" fill="#000"/>
+                    <rect x="76" y="0" width="3" height="24" fill="#000"/>
+                    <rect x="81" y="0" width="6" height="24" fill="#000"/>
+                    <rect x="89" y="0" width="4" height="24" fill="#000"/>
+                    <rect x="95" y="0" width="3" height="24" fill="#000"/>
+                  </svg>
+              <span style={{ fontSize: 7, fontFamily: 'monospace', color: '#000', fontWeight: 'bold' }}>10042</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Narrow Tail Strip */}
+            <div style={{
+              width: 90,
+              height: 20,
+              background: '#f8f9fa',
+              borderRadius: '0 999px 999px 0',
+              border: '1px dashed #bbb',
+              borderLeft: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <span style={{ fontSize: 7.5, color: '#888', fontStyle: 'italic' }}>Tail Loop</span>
+            </div>
+          </div>
+        ) : (
+          /* Rectangular Sticker Label view */
+          <div style={{
+            width: 280,
+            height: 52,
+            background: '#ffffff',
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingLeft: `${Math.max(6, leftMargin * 4)}px`,
+            paddingTop: `${Math.max(2, topMargin * 3)}px`,
+            paddingRight: 8,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: 9.5, fontWeight: 'bold', color: '#000' }}>Maa Sabramangala Jewellers</div>
+              <div style={{ fontSize: 8.5, fontWeight: 600, color: '#222', marginTop: 2 }}>Chik Necklace</div>
+              <div style={{ fontSize: 7.5, color: '#444', marginTop: 2 }}>22K | 3.694g | H:HUID21</div>
+            </div>
+            <div style={{ width: 95, height: `${Math.min(40, (settings.barcodeHeightMm || 8.5) * 4)}px`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="100%" height="80%" viewBox="0 0 100 24" preserveAspectRatio="none">
+                <rect x="2" y="0" width="4" height="24" fill="#000"/>
+                <rect x="8" y="0" width="2" height="24" fill="#000"/>
+                <rect x="13" y="0" width="5" height="24" fill="#000"/>
+                <rect x="20" y="0" width="3" height="24" fill="#000"/>
+                <rect x="25" y="0" width="6" height="24" fill="#000"/>
+                <rect x="33" y="0" width="3" height="24" fill="#000"/>
+                <rect x="38" y="0" width="5" height="24" fill="#000"/>
+                <rect x="45" y="0" width="3" height="24" fill="#000"/>
+                <rect x="50" y="0" width="6" height="24" fill="#000"/>
+                <rect x="58" y="0" width="4" height="24" fill="#000"/>
+                <rect x="64" y="0" width="3" height="24" fill="#000"/>
+                <rect x="69" y="0" width="5" height="24" fill="#000"/>
+                <rect x="76" y="0" width="3" height="24" fill="#000"/>
+                <rect x="81" y="0" width="6" height="24" fill="#000"/>
+                <rect x="89" y="0" width="4" height="24" fill="#000"/>
+                <rect x="95" y="0" width="3" height="24" fill="#000"/>
+              </svg>
+              <span style={{ fontSize: 7, fontFamily: 'monospace', color: '#000', fontWeight: 'bold' }}>10042</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BarcodePrinterPanel() {
   const [settings, setSettings] = useState(getPrinterSettings());
   const [printers, setPrinters] = useState([]);
@@ -179,11 +376,17 @@ function BarcodePrinterPanel() {
     savePrinterSettings(next);
   };
 
+  const handleResetDefaults = () => {
+    setSettings({ ...DEFAULT_PRINTER_SETTINGS });
+    savePrinterSettings({ ...DEFAULT_PRINTER_SETTINGS });
+    toast.success('Printer settings reset to defaults.');
+  };
+
   const handleTestPrint = async () => {
     setTesting(true);
     const res = await printBarcodeLabel(
-      { barcode: 'JS-TEST-1234', name: 'Test Label', purity: '22K', net_weight: 5.25 },
-      'JewelloSoft',
+      { barcode: '10042', name: 'Chik Necklace', purity: '22K', net_weight: 3.694, huid: 'HUID21' },
+      'Maa Sabramangala Jewellers',
       settings
     );
     setTesting(false);
@@ -195,10 +398,10 @@ function BarcodePrinterPanel() {
     <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
       <div className="billing-form__header">
         <span className="billing-form__header-title">
-          <i className="fa-solid fa-barcode" style={{ marginRight: 8, opacity: 0.6 }}></i>Barcode Label Printer
+          <i className="fa-solid fa-barcode" style={{ marginRight: 8, opacity: 0.6 }}></i>Barcode Label Printer Setup
         </span>
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
-          RP-3160 GOLD & compatible thermal printers — saved instantly on this device
+          Calibrated for RP-3160 GOLD, TSC, Zebra, TVS & standard thermal printers
         </span>
       </div>
       <div className="billing-form__body">
@@ -213,43 +416,114 @@ function BarcodePrinterPanel() {
             </select>
             {printers.length === 0 && (
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Printer list available in the desktop app. System default will be used.
+                Printer list auto-loaded in Desktop App.
               </span>
             )}
           </div>
+
           <div className="form-group">
-            <label className="form-label">Label Width (mm)</label>
+            <label className="form-label">Tag Layout Format</label>
+            <select className="form-input form-select" value={settings.tagType || 'dumbbell'} onChange={e => update({ tagType: e.target.value })}>
+              <option value="dumbbell">Jewelry Dumbbell / Barbell Tag (70x11 mm)</option>
+              <option value="rectangle">Standard Rectangular Label</option>
+            </select>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Dumbbell layout: 50mm body (Details + Barcode) & 20mm tail.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Total Label Width (mm)</label>
             <input className="form-input" type="number" step="0.5" min="20" max="120" value={settings.labelWidthMm}
               onChange={e => update({ labelWidthMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelWidthMm })} />
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Jewellery tag default: <strong>70 mm</strong>
+              Standard Jewellery Tag: <strong>70 mm</strong>
             </span>
           </div>
+
           <div className="form-group">
-            <label className="form-label">Label Height (mm)</label>
+            <label className="form-label">Total Label Height (mm)</label>
             <input className="form-input" type="number" step="0.5" min="5" max="80" value={settings.labelHeightMm}
               onChange={e => update({ labelHeightMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelHeightMm })} />
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Jewellery tag height: <strong>11 mm</strong> (1.1 cm)
-            </span>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Copies per Label</label>
-            <input className="form-input" type="number" step="1" min="1" max="10" value={settings.copies}
-              onChange={e => update({ copies: Math.max(1, parseInt(e.target.value) || 1) })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Active: {settings.labelWidthMm} mm × {settings.labelHeightMm} mm (Barcode: 1.7 cm)
+              Standard Jewellery Tag: <strong>11 mm</strong>
             </span>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+
+        <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
+          <div className="form-group">
+            <label className="form-label">Left Safety Margin (mm)</label>
+            <input className="form-input" type="number" step="0.1" min="0" max="10" value={settings.leftMarginMm !== undefined ? settings.leftMarginMm : 1.5}
+              onChange={e => update({ leftMarginMm: parseFloat(e.target.value) ?? 1.5 })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Fixes text clipping on left edge (Default: <strong>1.5 mm</strong>)
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Top Safety Margin (mm)</label>
+            <input className="form-input" type="number" step="0.1" min="0" max="5" value={settings.topMarginMm !== undefined ? settings.topMarginMm : 0.5}
+              onChange={e => update({ topMarginMm: parseFloat(e.target.value) ?? 0.5 })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Adjust vertical alignment (Default: <strong>0.5 mm</strong>)
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Printable Body Width (mm)</label>
+            <input className="form-input" type="number" step="0.5" min="20" max="60" value={settings.bodyWidthMm || 50}
+              onChange={e => update({ bodyWidthMm: parseFloat(e.target.value) || 50 })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Wide section before tail (Default: <strong>50 mm</strong>)
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Barcode Height (mm)</label>
+            <input className="form-input" type="number" step="0.5" min="3" max="20" value={settings.barcodeHeightMm || 8.5}
+              onChange={e => update({ barcodeHeightMm: parseFloat(e.target.value) || 8.5 })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Tall barcode for fast scanning (Default: <strong>8.5 mm</strong>)
+            </span>
+          </div>
+        </div>
+
+        <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
+          <div className="form-group">
+            <label className="form-label">Barcode Zoom / Thickness (x)</label>
+            <input className="form-input" type="number" step="0.1" min="1.0" max="4.0" value={settings.moduleWidth || 2.0}
+              onChange={e => update({ moduleWidth: parseFloat(e.target.value) || 2.0 })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Thick bars for instant scanning (Default: <strong>2.0x</strong>)
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Copies per Print</label>
+            <input className="form-input" type="number" step="1" min="1" max="10" value={settings.copies}
+              onChange={e => update({ copies: Math.max(1, parseInt(e.target.value) || 1) })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+              Default: <strong>1 copy</strong>
+            </span>
+          </div>
+        </div>
+
+        <BarcodeTagVisualizer settings={settings} />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
             <input type="checkbox" checked={settings.autoPrintOnCreate} onChange={e => update({ autoPrintOnCreate: e.target.checked })} />
             Automatically print a barcode label when a new product is added
           </label>
-          <button className="btn btn--outline btn--sm" onClick={handleTestPrint} disabled={testing}>
-            <i className={`fa-solid ${testing ? 'fa-spinner fa-spin' : 'fa-print'}`}></i> {testing ? 'Printing...' : 'Print Test Label'}
-          </button>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <button className="btn btn--secondary btn--sm" onClick={handleResetDefaults}>
+              <i className="fa-solid fa-rotate-left"></i> Reset Defaults
+            </button>
+            <button className="btn btn--primary btn--sm" onClick={handleTestPrint} disabled={testing}>
+              <i className={`fa-solid ${testing ? 'fa-spinner fa-spin' : 'fa-print'}`}></i> {testing ? 'Printing...' : 'Print Test Label'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

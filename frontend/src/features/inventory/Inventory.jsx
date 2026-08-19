@@ -119,7 +119,7 @@ function ProductModal({ product, onClose, onSave }) {
                   </label>
                   <input
                     className="form-input" type="text"
-                    placeholder={autoBarcode ? 'Generated automatically on save' : 'JW-GN-001'}
+                    placeholder={autoBarcode ? 'Generated automatically on save' : 'e.g. 10042'}
                     value={barcode}
                     onChange={e => setBarcode(e.target.value)}
                     disabled={!isEdit && autoBarcode}

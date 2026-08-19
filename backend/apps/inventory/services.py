@@ -4,20 +4,29 @@
 # Licensed under the JewelloSoft Community License.
 #
 
-import secrets
-import string
-
 from .models import ProductInventory
 
-_BARCODE_ALPHABET = ''.join(c for c in string.ascii_uppercase + string.digits if c not in 'OI01')
-_BARCODE_RANDOM_LEN = 8
-_MAX_ATTEMPTS = 25
+def generate_unique_barcode(shop=None):
+    existing_barcodes = set(
+        ProductInventory.objects.values_list('barcode', flat=True)
+    )
 
+    numeric_values = []
+    for code in existing_barcodes:
+        if code and code.isdigit():
+            try:
+                numeric_values.append(int(code))
+            except ValueError:
+                pass
 
-def generate_unique_barcode(shop):
-    prefix = f"JS{shop.id}-"
-    for _ in range(_MAX_ATTEMPTS):
-        code = prefix + ''.join(secrets.choice(_BARCODE_ALPHABET) for _ in range(_BARCODE_RANDOM_LEN))
-        if not ProductInventory.objects.filter(barcode=code).exists():
-            return code
-    raise RuntimeError("Could not generate a unique barcode after multiple attempts.")
+    if numeric_values:
+        candidate = max(numeric_values) + 1
+        if candidate < 10001:
+            candidate = 10001
+    else:
+        candidate = 10001
+
+    while str(candidate) in existing_barcodes:
+        candidate += 1
+
+    return str(candidate)

@@ -851,8 +851,8 @@ ipcMain.handle('print-barcode-label', async (event, { html, printerName, widthMi
 
     labelWindow = new BrowserWindow({
       show: false,
-      width: 800,
-      height: 400,
+      width: Math.round(((widthMicrons || 70000) / 1000 + 3) * 3.7795),
+      height: Math.round((heightMicrons || 11000) / 1000 * 3.7795),
       frame: false,
       webPreferences: {
         nodeIntegration: false,
@@ -864,6 +864,8 @@ ipcMain.handle('print-barcode-label', async (event, { html, printerName, widthMi
     fs.writeFileSync(tempHtmlPath, html, 'utf-8');
     await labelWindow.loadFile(tempHtmlPath);
 
+    await new Promise(r => setTimeout(r, 350));
+
     try {
       await labelWindow.webContents.capturePage();
     } catch (_) {}
@@ -874,6 +876,8 @@ ipcMain.handle('print-barcode-label', async (event, { html, printerName, widthMi
       deviceName: printerName || '',
       copies: Math.max(1, parseInt(copies) || 1),
       margins: { marginType: 'none' },
+      scaleFactor: 100,
+      color: false,
     };
 
     if (widthMicrons && heightMicrons) {

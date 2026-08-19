@@ -1,13 +1,20 @@
-import { code128Svg } from './code128';
+import { generateBarcodeSvg } from './code128';
 
 const SETTINGS_KEY = 'jewellosoft_barcode_printer_settings';
-const SETTINGS_MIGRATION_VERSION = 5;
+const SETTINGS_MIGRATION_VERSION = 11;
 const MIGRATION_KEY = 'jewellosoft_barcode_printer_migration_v';
 
 export const DEFAULT_PRINTER_SETTINGS = {
   printerName: '',
+  tagType: 'dumbbell',
   labelWidthMm: 70,
   labelHeightMm: 11,
+  bodyWidthMm: 50,
+  leftMarginMm: 0,
+  topMarginMm: 0.2,
+  barcodeHeightMm: 8.5,
+  moduleWidth: 2.4,
+  fontSizePt: 5.5,
   copies: 1,
   autoPrintOnCreate: true,
 };
@@ -18,13 +25,17 @@ function migrateSettingsIfNeeded() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const stored = JSON.parse(raw);
-      if (stored.labelWidthMm !== 70 || stored.labelHeightMm !== 11) {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-          ...stored,
-          labelWidthMm: 70,
-          labelHeightMm: 11,
-        }));
-      }
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        ...DEFAULT_PRINTER_SETTINGS,
+        ...stored,
+        tagType: stored.tagType || 'dumbbell',
+        bodyWidthMm: 50,
+        leftMarginMm: 0,
+        topMarginMm: 0.2,
+        barcodeHeightMm: 8.5,
+        moduleWidth: 2.0,
+        fontSizePt: stored.fontSizePt || 5.5,
+      }));
     }
     localStorage.setItem(MIGRATION_KEY + SETTINGS_MIGRATION_VERSION, '1');
   } catch {}
@@ -48,141 +59,200 @@ export function savePrinterSettings(settings) {
 }
 
 export async function listSystemPrinters() {
-  if (window.electronAPI?.listPrinters) {
-    return window.electronAPI.listPrinters();
-  }
+  if (window.electronAPI?.listPrinters) return window.electronAPI.listPrinters();
   return [];
 }
 
 function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
+  return String(str).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
 }
 
 export function buildLabelHtml(product, shopName, settings = getPrinterSettings()) {
-  const { labelWidthMm, labelHeightMm } = settings;
+  const merged = { ...DEFAULT_PRINTER_SETTINGS, ...settings };
+  const {
+    labelWidthMm, labelHeightMm, bodyWidthMm,
+    leftMarginMm, topMarginMm,
+    barcodeHeightMm, moduleWidth, fontSizePt, tagType,
+  } = merged;
 
-  const svg = code128Svg(product.barcode, {
-    moduleWidth: 1.5,
-    height: 24,
-    showText: true,
-    fontSize: 7,
-    quietZone: 2,
+  const bcText = String(product.barcode || '').trim() || '00000';
+
+  const bcSvgH = Math.max(20, Math.round(barcodeHeightMm * 7));
+
+  const bcSvg = generateBarcodeSvg(bcText, {
+    symbology: 'code128',
+    moduleWidth: parseFloat(moduleWidth) || 2.0,
+    height: bcSvgH,
+    showText: false,
+    quietZone: 4,
   });
 
   const weight = product.net_weight ? `${Number(product.net_weight).toFixed(3)}g` : '';
-  const meta = [product.purity, weight, product.huid].filter(Boolean).join(' | ');
+  const meta = [
+    product.purity,
+    weight,
+    product.huid ? `H:${product.huid}` : '',
+  ].filter(Boolean).join(' | ');
 
-  return `<!DOCTYPE html>
+  const isDumbbell = tagType === 'dumbbell';
+
+  if (isDumbbell) {
+    const sideAMm   = (bodyWidthMm * 0.52).toFixed(2);
+    const sideBMm   = (bodyWidthMm * 0.48).toFixed(2);
+
+    const hrtMaxChars = Math.floor(parseFloat(sideBMm) / (5 * 0.35 * 0.6));
+    const hrtText = bcText.length > hrtMaxChars
+      ? bcText.slice(0, hrtMaxChars - 1) + '…'
+      : bcText;
+    const hrtPt = Math.min(7, Math.max(4.5, parseFloat(sideBMm) * 0.28));
+
+    const shopPt = (parseFloat(fontSizePt) + 0.5).toFixed(1);
+    const namePt = parseFloat(fontSizePt).toFixed(1);
+    const metaPt = Math.max(3.5, parseFloat(fontSizePt) - 0.8).toFixed(1);
+
+    const bcBoxMm  = (barcodeHeightMm - hrtPt * 0.36).toFixed(2);
+
+    return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <style>
-  @page {
-    size: ${labelWidthMm}mm ${labelHeightMm}mm;
-    margin: 0;
-  }
-  *, *::before, *::after {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  html, body {
-    width: ${labelWidthMm}mm;
-    height: ${labelHeightMm}mm;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: #ffffff;
-    font-family: Arial, Helvetica, sans-serif;
+  @page { size: ${labelWidthMm}mm ${labelHeightMm}mm; margin: 0 !important; }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html {
+    width: ${labelWidthMm}mm; height: ${labelHeightMm}mm;
+    margin: 0 !important; padding: 0 !important;
+    margin-left: -3mm !important;
+    overflow: hidden; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   body {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.4mm 0.8mm;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    width: ${labelWidthMm}mm; height: ${labelHeightMm}mm;
+    margin: 0 !important; padding: 0 !important;
+    overflow: hidden; background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .lbl-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+
+  .lc {
+    width: ${labelWidthMm}mm; height: ${labelHeightMm}mm;
+    display: flex; flex-direction: row; overflow: hidden;
+  }
+
+  .lb {
+    width: ${bodyWidthMm}mm; min-width: ${bodyWidthMm}mm; max-width: ${bodyWidthMm}mm;
+    height: ${labelHeightMm}mm; display: flex; flex-direction: row; overflow: hidden;
+  }
+  /* Side A */
+  .la {
+    width: ${sideAMm}mm; min-width: ${sideAMm}mm; max-width: ${sideAMm}mm;
+    height: ${labelHeightMm}mm;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    padding-left: ${Math.max(0, parseFloat(leftMarginMm))}mm;
+    padding-top: ${topMarginMm}mm; padding-right: 0.4mm; padding-bottom: 0.2mm;
     overflow: hidden;
-    padding-right: 0.8mm;
   }
-  .lbl-shop {
-    font-size: 6pt;
-    font-weight: bold;
-    line-height: 1.1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #000000;
+  .ls { font-size: ${shopPt}pt; font-weight: 800; line-height: 1.1;
+        word-break: break-word; overflow-wrap: break-word;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; max-width: 100%; color: #000; }
+  .ln { font-size: ${namePt}pt; font-weight: 700; line-height: 1.1;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        max-width: 100%; margin-top: 0.1mm; color: #000; }
+  .lm { font-size: ${metaPt}pt; font-weight: 500; line-height: 1.1;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        max-width: 100%; margin-top: 0.1mm; color: #000; }
+  /* Side B */
+  .lb2 {
+    width: ${sideBMm}mm; min-width: ${sideBMm}mm; max-width: ${sideBMm}mm;
+    height: ${labelHeightMm}mm;
+    display: flex; flex-direction: column; align-items: stretch; justify-content: center;
+    padding: ${topMarginMm}mm 0.2mm 0.1mm 0mm; overflow: hidden;
   }
-  .lbl-name {
-    font-size: 5.5pt;
-    font-weight: 600;
-    line-height: 1.1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-top: 0.2mm;
-    color: #000000;
+  /* Barcode bars */
+  .lbc {
+    width: 100%; height: ${bcBoxMm}mm; max-height: ${bcBoxMm}mm;
+    overflow: hidden; display: block; flex-shrink: 0;
   }
-  .lbl-meta {
-    font-size: 4.8pt;
-    font-weight: normal;
-    line-height: 1.1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #000000;
-    margin-top: 0.2mm;
+  .lbc svg {
+    width: 100% !important; height: 100% !important; display: block;
+    shape-rendering: crispEdges; image-rendering: pixelated;
   }
-  .lbl-bc {
-    width: 17mm;
-    min-width: 17mm;
-    max-width: 17mm;
-    height: 6.3mm;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    flex-shrink: 0;
+
+  .lhrt {
+    width: 100%; font-family: 'Courier New', Courier, monospace;
+    font-size: ${hrtPt.toFixed(1)}pt; font-weight: 700; line-height: 1;
+    text-align: center; white-space: nowrap; overflow: hidden;
+    color: #000; margin-top: 0.15mm; flex-shrink: 0;
   }
-  .lbl-bc svg {
-    width: 100%;
-    height: 6.3mm;
-    display: block;
-    image-rendering: pixelated;
-    shape-rendering: crispEdges;
-  }
+  /* Tail */
+  .ltail { flex: 1; height: ${labelHeightMm}mm; background: #fff; }
 </style>
 </head>
 <body>
-  <div class="lbl-info">
-    ${shopName ? `<div class="lbl-shop">${escapeHtml(shopName)}</div>` : ''}
-    <div class="lbl-name">${escapeHtml(product.name || '')}</div>
-    ${meta ? `<div class="lbl-meta">${escapeHtml(meta)}</div>` : ''}
+<div class="lc">
+  <div class="lb">
+    <div class="la">
+      ${shopName ? `<div class="ls">${escapeHtml(shopName)}</div>` : ''}
+      <div class="ln">${escapeHtml(product.name || '')}</div>
+      ${meta ? `<div class="lm">${escapeHtml(meta)}</div>` : ''}
+    </div>
+    <div class="lb2">
+      <div class="lbc">${bcSvg}</div>
+      <div class="lhrt">${escapeHtml(hrtText)}</div>
+    </div>
   </div>
-  <div class="lbl-bc">${svg}</div>
+  <div class="ltail"></div>
+</div>
 </body>
 </html>`;
+  }
+
+  const bcSvg2 = generateBarcodeSvg(bcText, {
+    symbology: 'code128', moduleWidth: parseFloat(moduleWidth) || 2.0,
+    height: 36, showText: false, quietZone: 4,
+  });
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: ${labelWidthMm}mm ${labelHeightMm}mm; margin: 0 !important; }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { width:${labelWidthMm}mm; height:${labelHeightMm}mm; margin-left:-3mm !important;
+         overflow:hidden; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { width:${labelWidthMm}mm; height:${labelHeightMm}mm; display:flex; flex-direction:row;
+         align-items:center; justify-content:space-between;
+         padding-left:${Math.max(0,parseFloat(leftMarginMm))}mm;
+         padding-top:${topMarginMm}mm; padding-right:0.5mm;
+         overflow:hidden; background:#fff; font-family:Arial,Helvetica,sans-serif;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .ri { flex:1; display:flex; flex-direction:column; justify-content:center; overflow:hidden; padding-right:1mm; }
+  .rs { font-size:${(parseFloat(fontSizePt)+0.5).toFixed(1)}pt; font-weight:800; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#000; }
+  .rn { font-size:${parseFloat(fontSizePt).toFixed(1)}pt; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:0.2mm; color:#000; }
+  .rm { font-size:${Math.max(3.5,parseFloat(fontSizePt)-0.8).toFixed(1)}pt; font-weight:500; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:0.2mm; color:#000; }
+  .rb { display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
+  .rbc { height:${barcodeHeightMm}mm; overflow:hidden; }
+  .rbc svg { height:100%; display:block; shape-rendering:crispEdges; image-rendering:pixelated; }
+  .rhrt { font-family:'Courier New',monospace; font-size:5pt; font-weight:700; text-align:center; color:#000; margin-top:0.2mm; white-space:nowrap; overflow:hidden; }
+</style></head>
+<body>
+  <div class="ri">
+    ${shopName ? `<div class="rs">${escapeHtml(shopName)}</div>` : ''}
+    <div class="rn">${escapeHtml(product.name || '')}</div>
+    ${meta ? `<div class="rm">${escapeHtml(meta)}</div>` : ''}
+  </div>
+  <div class="rb">
+    <div class="rbc">${bcSvg2}</div>
+    <div class="rhrt">${escapeHtml(bcText)}</div>
+  </div>
+</body></html>`;
 }
 
 export async function printBarcodeLabel(product, shopName, overrides = {}) {
-  if (!product?.barcode) {
-    return { success: false, error: 'Product has no barcode.' };
-  }
-
+  if (!product?.barcode) return { success: false, error: 'Product has no barcode.' };
   const settings = { ...getPrinterSettings(), ...overrides };
   const html = buildLabelHtml(product, shopName, settings);
-
   if (window.electronAPI?.printBarcodeLabel) {
     return window.electronAPI.printBarcodeLabel({
       html,
@@ -192,25 +262,13 @@ export async function printBarcodeLabel(product, shopName, overrides = {}) {
       copies: settings.copies,
     });
   }
-
   return new Promise((resolve) => {
-    const printWin = window.open('', '_blank', 'width=500,height=300');
-    if (!printWin) {
-      resolve({ success: false, error: 'Pop-up blocked. Please allow popups to print.' });
-      return;
-    }
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-    printWin.focus();
+    const w = window.open('', '_blank', 'width=600,height=350');
+    if (!w) { resolve({ success: false, error: 'Pop-up blocked.' }); return; }
+    w.document.open(); w.document.write(html); w.document.close(); w.focus();
     setTimeout(() => {
-      try {
-        printWin.print();
-        printWin.close();
-        resolve({ success: true });
-      } catch (e) {
-        resolve({ success: false, error: e.message });
-      }
-    }, 250);
+      try { w.print(); w.close(); resolve({ success: true }); }
+      catch (e) { resolve({ success: false, error: e.message }); }
+    }, 350);
   });
 }

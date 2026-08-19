@@ -273,7 +273,7 @@ function InventoryModal({ item, onClose, onSuccess }) {
       const pMetal = (item.metal_type || 'gold').toLowerCase();
       const payload = {
         name: item.product_name,
-        barcode: `INV-ORD-${Date.now().toString().slice(-6)}`, // Auto generate barcode
+        barcode: '',
         metal_type: pMetal,
         purity: pMetal === 'silver' ? '925' : '22K',
         huid: huid,
