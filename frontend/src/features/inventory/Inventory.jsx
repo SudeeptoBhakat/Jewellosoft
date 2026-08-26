@@ -6,7 +6,8 @@ import { toast } from '../../utils/toast';
 import { printBarcodeLabel, getPrinterSettings } from '../../utils/labelPrinter';
 import { code128Svg, isCode128Encodable } from '../../utils/code128';
 import useTabRefresh from '../../hooks/useTabRefresh';
-
+import { verifyAdminPassword } from '../../services/authService';
+import '../auth/auth.css';
 
 function BarcodePreview({ value }) {
   const svg = useMemo(() => {
@@ -204,10 +205,33 @@ function ProductModal({ product, onClose, onSave }) {
 function DeleteModal({ product, onClose, onConfirm }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const handleDelete = () => {
-    if (password === 'admin123') { onConfirm(product.id); onClose(); }
-    else { setError('Incorrect password.'); setTimeout(() => setError(''), 3000); }
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleDelete = async () => {
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await onConfirm(product.id, password);
+
+      if (response?.success) {
+        onClose();
+      } else {
+        setError(response?.message || 'Failed to delete product');
+      }
+    } catch (err) {
+      setError('Something went wrong');
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <>
       <div className="overlay" onClick={onClose} />
@@ -223,13 +247,34 @@ function DeleteModal({ product, onClose, onConfirm }) {
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', marginBottom: 'var(--space-4)' }}>This action cannot be undone.</p>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Admin Password *</label>
-            <input className={`form-input${error ? ' form-input--error' : ''}`} type="password" placeholder="Enter password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={e => e.key === 'Enter' && handleDelete()} autoFocus />
+            <div className="auth-input-wrap">
+              <input
+                className={`form-input${error ? ' form-input--error' : ''}`}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleDelete()}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="auth-reveal"
+                onClick={() => setShowPassword(prev => !prev)}
+                tabIndex="-1"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              </button>
+            </div>
             {error && <div className="form-error">{error}</div>}
           </div>
         </div>
         <div className="modal__footer">
           <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn--danger" onClick={handleDelete} disabled={!password}><i className="fa-solid fa-trash-can"></i> Delete</button>
+          <button className="btn btn--danger" onClick={handleDelete} disabled={loading || !password}>
+            <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-trash-can'}`}></i> Delete
+          </button>
         </div>
       </div>
     </>
@@ -323,7 +368,7 @@ export default function Inventory({ isActive = true }) {
 
       if (fields.id) {
         // Edit
-        await api.put(`/inventory/${fields.id}/`, formData, {
+        await api.patch(`/inventory/${fields.id}/`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } else {
@@ -346,12 +391,23 @@ export default function Inventory({ isActive = true }) {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, password) => {
+    const auth = await verifyAdminPassword(password);
+    if (!auth.success) {
+      return { success: false, message: auth.error || 'Incorrect admin password.' };
+    }
+
     try {
-      await api.delete(`/inventory/${id}/`);
+      const response = await api.delete(`/inventory/${id}/`, {
+        data: { password }
+      });
       fetchProducts();
+      return { success: true, ...response.data };
     } catch (err) {
-      console.error("Failed to delete product:", err);
+      return {
+        success: false,
+        message: err.response?.data?.detail || 'Failed to delete product.'
+      };
     }
   };
 

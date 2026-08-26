@@ -58,6 +58,7 @@ backend/apps/accounts/migrations
 backend/apps/billing/migrations
 backend/apps/orders/migrations
 backend/config.json
+backend/apps/accounts/tests
 
 # PyInstaller temporary
 /build/

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import api, { extractList } from '../../lib/axios';
 import useTabRefresh from '../../hooks/useTabRefresh';
+import { verifyAdminPassword } from '../../services/authService';
+import '../auth/auth.css';
 
 const typeBadge = (t) => {
   const map = { VIP: 'warning', Regular: 'primary', 'Walk-in': 'info' };
@@ -136,11 +138,33 @@ function CustomerModal({ customer, onClose, onSaved }) {
    ═══════════════════════════════════════════ */
 function DeleteCustomerModal({ customer, onClose, onConfirm }) {
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const handleDelete = () => {
-    if (password === 'admin123') { onConfirm(customer.id); onClose(); }
-    else { setError('Incorrect password.'); setTimeout(() => setError(''), 3000); }
+  const [loading, setLoading] = useState(false);
+
+  const handleDelete = async () => {
+    if (!password) {
+      setError('Please enter your admin password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      const auth = await verifyAdminPassword(password);
+      if (!auth.success) {
+        setError(auth.error || 'Incorrect admin password.');
+        return;
+      }
+      onConfirm(customer.id);
+      onClose();
+    } catch (err) {
+      setError('Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <>
       <div className="overlay" onClick={onClose} />
@@ -158,13 +182,34 @@ function DeleteCustomerModal({ customer, onClose, onConfirm }) {
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', marginBottom: 'var(--space-4)' }}>This action cannot be undone.</p>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Admin Password *</label>
-            <input className={`form-input${error ? ' form-input--error' : ''}`} type="password" placeholder="Enter password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={e => e.key === 'Enter' && handleDelete()} autoFocus />
+            <div className="auth-input-wrap">
+              <input
+                className={`form-input${error ? ' form-input--error' : ''}`}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleDelete()}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="auth-reveal"
+                onClick={() => setShowPassword(prev => !prev)}
+                tabIndex="-1"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              </button>
+            </div>
             {error && <div className="form-error">{error}</div>}
           </div>
         </div>
         <div className="modal__footer">
           <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn--danger" onClick={handleDelete} disabled={!password}><i className="fa-solid fa-trash-can"></i> Delete</button>
+          <button className="btn btn--danger" onClick={handleDelete} disabled={loading || !password}>
+            <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-trash-can'}`}></i> Delete
+          </button>
         </div>
       </div>
     </>

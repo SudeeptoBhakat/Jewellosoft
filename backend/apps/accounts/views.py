@@ -1,3 +1,4 @@
+import requests
 import logging
 import json
 from django.conf import settings
@@ -8,8 +9,17 @@ from django.shortcuts import get_object_or_404
 from .models import Shop, SyncQueue
 from .serializers import ShopSerializer
 from .crypto import LicenseManager
+from datetime import timedelta
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User as DjangoUser
+from supabase import create_client
+
 
 logger = logging.getLogger('jewellosoft')
+supabase_url = (getattr(settings, 'SUPABASE_URL', '') or '').rstrip('/')
+anon_key = (getattr(settings, 'SUPABASE_ANON_KEY', '') or '').strip()
+service_key = (getattr(settings, 'SUPABASE_SERVICE_ROLE_KEY', '') or '').strip()
+
 
 class ShopCurrentView(APIView):
     """
@@ -128,9 +138,6 @@ class LicenseActivateView(APIView):
 
             try:
                 from datetime import timedelta
-                supabase_url = (getattr(settings, 'SUPABASE_URL', '') or '').rstrip('/')
-                anon_key = (getattr(settings, 'SUPABASE_ANON_KEY', '') or '').strip()
-                service_key = (getattr(settings, 'SUPABASE_SERVICE_ROLE_KEY', '') or '').strip()
                 expires_val = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
 
                 if supabase_url and user_id:
@@ -153,7 +160,7 @@ class LicenseActivateView(APIView):
                             'expires_at': expires_val,
                             'updated_at': datetime.now(timezone.utc).isoformat(),
                         }
-                        import requests
+
                         patch_url = f"{supabase_url}/rest/v1/profiles?id=eq.{user_id}"
                         res_patch = requests.patch(patch_url, json=profile_payload, headers=headers, timeout=10)
                         
@@ -535,4 +542,469 @@ class ResetNumberingView(APIView):
                 {"detail": f"Reset failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class LoginView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        password = request.data.get('password', '')
+
+        if not email or not password:
+            return Response(
+                {"detail": "Email and password are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+        online_login_attempted = False
+        online_error_detail = None
+
+        if supabase_url and service_key:
+            try:
+                auth_url = f"{supabase_url}/auth/v1/token?grant_type=password"
+                headers = {
+                    "apikey": service_key,
+                    "Content-Type": "application/json"
+                }
+                res = requests.post(auth_url, json={"email": email, "password": password}, headers=headers, timeout=8)
+                online_login_attempted = True
+
+                if res.status_code == 200:
+                    data = res.json()
+                    user_data = data.get('user', {}) or {}
+                    user_id = user_data.get('id')
+                    access_token = data.get('access_token')
+                    refresh_token = data.get('refresh_token')
+                    meta = user_data.get('user_metadata', {}) or {}
+
+                    # Sync to local
+                    user_obj, _ = DjangoUser.objects.update_or_create(
+                        username=email,
+                        defaults={'email': email}
+                    )
+                    user_obj.set_password(password)
+                    user_obj.save()
+
+                    # sync or Create Shop
+                    shop = None
+                    if user_id:
+                        shop = Shop.objects.filter(supabase_user_id=user_id).first()
+                    if not shop:
+                        shop = Shop.objects.filter(supabase_email=email).first()
+
+                    shop_name_val = meta.get('shop_name') or meta.get('shopName') or "My Jewellery Shop"
+                    owner_name_val = meta.get('owner_name') or meta.get('ownerName') or ""
+                    phone_val = meta.get('mobile_number') or meta.get('mobileNumber') or meta.get('phone') or ""
+
+                    if shop:
+                        if user_id:
+                            shop.supabase_user_id = user_id
+                        shop.supabase_email = email
+                        if user_obj and shop.user != user_obj:
+                            shop.user = user_obj
+                        if not shop.name and shop_name_val:
+                            shop.name = shop_name_val
+                        if not shop.owner_name and owner_name_val:
+                            shop.owner_name = owner_name_val
+                        if not shop.phone and phone_val:
+                            shop.phone = phone_val
+                        shop.save()
+                    else:
+                        shop = Shop.objects.create(
+                            user=user_obj,
+                            supabase_user_id=user_id,
+                            supabase_email=email,
+                            name=shop_name_val,
+                            owner_name=owner_name_val,
+                            phone=phone_val
+                        )
+
+                    # Store/Update local license
+                    try:
+                        LicenseManager.store_license('offline-active-license')
+                        LicenseManager.update_last_verified()
+                    except Exception as e:
+                        logger.warning(f"[LoginView] License store notice: {e}")
+
+                    return Response({
+                        "status": "logged_in",
+                        "access_token": access_token,
+                        "refresh_token": refresh_token,
+                        "user": {
+                            "id": user_id,
+                            "email": email,
+                            "is_offline": False
+                        },
+                        "shop": ShopSerializer(shop).data if shop else None,
+                        "is_offline": False
+                    })
+
+                elif res.status_code in (400, 401, 422, 429):
+                    body = {}
+                    try:
+                        body = res.json()
+                    except:
+                        pass
+                    msg = body.get('error_description') or body.get('msg') or body.get('message') or body.get('detail')
+                    if not msg and res.status_code in (400, 401):
+                        msg = "Invalid email or password."
+                    online_error_detail = (res.status_code, msg)
+            except Exception as net_err:
+                logger.warning(f"[LoginView] Supabase online login failed or network error: {net_err}")
+                online_login_attempted = False
+
+        if online_error_detail:
+            status_code, msg = online_error_detail
+            return Response({"detail": msg}, status=status_code)
+
+
+        # offline checks
+        user = authenticate(username=email, password=password)
+        if not user:
+            user_obj = DjangoUser.objects.filter(username__iexact=email).first() or DjangoUser.objects.filter(email__iexact=email).first()
+            if user_obj and user_obj.check_password(password):
+                user = user_obj
+
+        if not user:
+            return Response(
+                {"detail": "Invalid credentials or Please connect to Internet"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        shop = Shop.objects.filter(supabase_email=email).first()
+        if not shop and user:
+            shop = getattr(user, 'shop', None) or Shop.objects.first()
+
+        l_info = LicenseManager.validate_license()
+        l_status = l_info.get('status', 'missing')
+
+        if l_status not in {'active', 'grace_period'}:
+            if l_status == 'force_sync_required':
+                return Response(
+                    {"detail": "You have not connected to the internet for over 7 days. Please connect to the internet to sign in."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            elif l_status == 'missing':
+                return Response(
+                    {"detail": "No local license found. Please connect to the internet and log in to activate offline access."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            else:
+                return Response(
+                    {"detail": f"License verification failed ({l_status}). Please connect to the internet to renew."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        return Response({
+            "status": "offline_logged_in",
+            "access_token": "offline-session-token",
+            "user": {
+                "id": shop.supabase_user_id if shop else None,
+                "email": email,
+                "is_offline": True
+            },
+            "shop": ShopSerializer(shop).data if shop else None,
+            "is_offline": True
+        })
+
+
+class RegisterView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        password = request.data.get('password', '')
+        shop_name = (request.data.get('shop_name') or request.data.get('shopName') or '').strip()
+        owner_name = (request.data.get('owner_name') or request.data.get('ownerName') or '').strip()
+        mobile_number = (request.data.get('mobile_number') or request.data.get('mobileNumber') or request.data.get('phone') or '').strip()
+
+        if not email or not password or not shop_name or not owner_name or not mobile_number:
+            return Response(
+                {"detail": "Please fill in all mandatory"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(password) < 6:
+            return Response(
+                {"detail": "Password must be at least 6 characters long."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not supabase_url or not anon_key:
+            return Response(
+                {"detail": "Supabase service is not configured on the backend"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        signup_url = f"{supabase_url}/auth/v1/signup"
+        headers = {
+            "apikey": anon_key,
+            "Content-Type": "application/json"
+        }
+
+        signup_payload = {
+            "email": email,
+            "password": password,
+            "shop_name": shop_name,
+            "shopName": shop_name,
+            "owner_name": owner_name,
+            "ownerName": owner_name,
+            "mobile_number": mobile_number,
+            "mobileNumber": mobile_number
+        }
+
+        try:
+            res = requests.post(
+                signup_url,
+                json=signup_payload,
+                headers=headers,
+                timeout=12
+            )
+
+        except Exception as e:
+            logger.error(f"[RegisterView] Connection error during signup: {e}")
+            return Response(
+                {"detail": "Unable to connect to registration server. Please check your internet connection."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        if res.status_code not in (200, 201):
+            body = {}
+            try:
+                body = res.json()
+            except:
+                pass
+            msg = body.get('error_description') or body.get('msg') or body.get('message') or body.get('detail') or "Registration failed."
+            if "already registered" in msg.lower() or "user already exists" in msg.lower():
+                msg = "An account with this email already exists. Try logging in."
+            return Response({"detail": msg}, status=res.status_code if res.status_code < 500 else status.HTTP_400_BAD_REQUEST)
+
+        data = res.json()
+
+        user_data = data.get('user', {}) or {}
+        user_id = user_data.get('id')
+
+        session_data = data.get('session') or {}
+        access_token = (
+            data.get('access_token')
+            or session_data.get('access_token')
+        ) or None
+        refresh_token = (
+            data.get('refresh_token')
+            or session_data.get('refresh_token')
+        ) or None
+
+
+        identities = user_data.get('identities', None)
+        if identities is not None and len(identities) == 0:
+            return Response(
+                {"detail": "An account with this email already exists. Please log in instead."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        needs_confirmation = not access_token
+
+
+        # saves data offline local db
+        user_obj, _ = DjangoUser.objects.update_or_create(
+            username=email,
+            defaults={'email': email}
+        )
+        user_obj.set_password(password)
+        user_obj.save()
+
+        # Isolate the shop
+        shop = Shop.objects.filter(supabase_user_id=user_id).first() if user_id else None
+        if not shop:
+            shop = Shop.objects.filter(supabase_email=email).first()
+
+        if shop:
+            if user_id:
+                shop.supabase_user_id = user_id
+            shop.name = shop_name
+            shop.owner_name = owner_name
+            shop.phone = mobile_number
+            shop.supabase_email = email
+            shop.user = user_obj
+            shop.save()
+        else:
+            shop = Shop.objects.create(
+                user=user_obj,
+                supabase_user_id=user_id,
+                supabase_email=email,
+                name=shop_name,
+                owner_name=owner_name,
+                phone=mobile_number
+            )
+
+        # Store local offline license
+        try:
+            LicenseManager.store_license('offline-active-license')
+            LicenseManager.update_last_verified()
+        except Exception as e:
+            logger.warning(f"[RegisterView] License storage notice: {e}")
+
+        # update advance data after user creation in above
+        if user_id:
+            bearer_token = service_key or access_token
+            api_key_header = service_key or anon_key
+
+            if bearer_token:
+                try:
+                    expires_val = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                    now_val = datetime.now(timezone.utc).isoformat()
+
+                    prof_payload_full = {
+                        'id': user_id,
+                        'email': email,
+                        'shop_name': shop_name,
+                        'owner_name': owner_name,
+                        'mobile_number': mobile_number,
+                        'plan': 'free',
+                        'is_active': True,
+                        'expires_at': expires_val,
+                        'updated_at': now_val,
+                    }
+                    prof_payload_patch = {
+                        'email': email,
+                        'shop_name': shop_name,
+                        'owner_name': owner_name,
+                        'mobile_number': mobile_number,
+                        'plan': 'free',
+                        'is_active': True,
+                        'expires_at': expires_val,
+                        'updated_at': now_val,
+                    }
+
+                    base_headers = {
+                        'Authorization': f'Bearer {bearer_token}',
+                        'apikey': api_key_header,
+                        'Content-Type': 'application/json',
+                    }
+
+                    patch_res = requests.patch(
+                        f"{supabase_url}/rest/v1/profiles?id=eq.{user_id}",
+                        json=prof_payload_patch,
+                        headers={**base_headers, 'Prefer': 'return=representation'},
+                        timeout=8
+                    )
+
+                    if patch_res.status_code in (200, 204):
+                        patched_rows = []
+                        try:
+                            patched_rows = patch_res.json() if patch_res.status_code == 200 else []
+                        except Exception:
+                            pass
+
+                        if patched_rows:
+                            logger.info(f"[RegisterView] Profile PATCH success for {user_id}")
+                        else:
+                            logger.info(f"[RegisterView] Profile PATCH matched 0 rows, trying POST upsert")
+                            post_res = requests.post(
+                                f"{supabase_url}/rest/v1/profiles",
+                                json=prof_payload_full,
+                                headers={**base_headers, 'Prefer': 'resolution=merge-duplicates,return=representation'},
+                                timeout=8
+                            )
+                            if post_res.status_code in (200, 201):
+                                logger.info(f"[RegisterView] Profile POST upsert success for {user_id}")
+                            else:
+                                logger.error(
+                                    f"[RegisterView] Profile POST upsert failed: "
+                                    f"status={post_res.status_code} body={post_res.text[:500]}"
+                                )
+                    else:
+                        logger.error(
+                            f"[RegisterView] Profile PATCH failed: "
+                            f"status={patch_res.status_code} body={patch_res.text[:500]}"
+                        )
+
+                except Exception as prof_err:
+                    logger.error(f"[RegisterView] Profile sync exception: {prof_err}")
+            else:
+                logger.warning(f"[RegisterView] No auth token available for profile sync - skipping")
+
+        return Response({
+            "status": "registered",
+            "needs_email_confirmation": needs_confirmation,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user": {
+                "id": user_id,
+                "email": email,
+                "is_offline": False
+            },
+            "shop": ShopSerializer(shop).data if shop else None
+        }, status=status.HTTP_201_CREATED)
+
+
+class VerifyAdminPasswordView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        password = request.data.get('password', '')
+        if not password:
+            return Response({"valid": False, "detail": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = (request.data.get('email') or '').strip().lower()
+        shop = getattr(request, 'shop', None)
+
+        if not email and shop:
+            email = shop.supabase_email or (shop.user.email if shop.user else shop.user.username if shop.user else None)
+
+        if not email and getattr(request, 'supabase_user', None):
+            email = request.supabase_user.get('email')
+
+        if not email:
+            active_shop = Shop.objects.first()
+            if active_shop:
+                email = active_shop.supabase_email or (active_shop.user.email if active_shop.user else None)
+
+        user = None
+        if email:
+            user = authenticate(username=email, password=password)
+            if not user:
+                user_obj = DjangoUser.objects.filter(username__iexact=email).first() or DjangoUser.objects.filter(email__iexact=email).first()
+                if user_obj and user_obj.check_password(password):
+                    user = user_obj
+
+        if not user and shop and shop.user:
+            if shop.user.check_password(password):
+                user = shop.user
+
+        if not user and not email:
+            first_user = DjangoUser.objects.filter(is_superuser=True).first() or DjangoUser.objects.first()
+            if first_user and first_user.check_password(password):
+                user = first_user
+
+        # Supabase online verification if email known and local check didn't match
+        if not user and email:
+            if supabase_url and anon_key:
+                try:
+                    auth_url = f"{supabase_url}/auth/v1/token?grant_type=password"
+                    headers = {"apikey": anon_key, "Content-Type": "application/json"}
+                    res = requests.post(auth_url, json={"email": email, "password": password}, headers=headers, timeout=3)
+                    if res.status_code == 200:
+                        user_obj, _ = DjangoUser.objects.update_or_create(
+                            username=email,
+                            defaults={'email': email}
+                        )
+                        user_obj.set_password(password)
+                        user_obj.save()
+                        if shop and shop.user != user_obj:
+                            shop.user = user_obj
+                            shop.save()
+                        user = user_obj
+                except Exception as e:
+                    logger.warning(f"[VerifyAdminPassword] Supabase online check exception: {e}")
+
+        if user:
+            return Response({"valid": True, "message": "Password verified."})
+
+        return Response({"valid": False, "detail": "Incorrect admin password."}, status=status.HTTP_403_FORBIDDEN)
 

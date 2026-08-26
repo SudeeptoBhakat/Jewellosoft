@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import api from '../../lib/axios';
 import { toast } from '../../utils/toast';
+import '../auth/auth.css';
 
 export default function ResetDataModal({ onClose, onReset }) {
   const [step, setStep] = useState(1);
   const [understood, setUnderstood] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -185,16 +187,27 @@ export default function ResetDataModal({ onClose, onReset }) {
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Admin Password *</label>
-                <input
-                  className={`form-input${error ? ' form-input--error' : ''}`}
-                  type="password"
-                  placeholder="Enter admin password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                  onKeyDown={(e) => e.key === 'Enter' && handleFinalReset()}
-                  autoFocus
-                  id="reset-data-password"
-                />
+                <div className="auth-input-wrap">
+                  <input
+                    className={`form-input${error ? ' form-input--error' : ''}`}
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter admin password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleFinalReset()}
+                    autoFocus
+                    id="reset-data-password"
+                  />
+                  <button
+                    type="button"
+                    className="auth-reveal"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    tabIndex="-1"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
                 {error && <div className="form-error">{error}</div>}
               </div>
             </div>

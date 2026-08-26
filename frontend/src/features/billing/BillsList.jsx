@@ -5,6 +5,8 @@ import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { fmtCurrency as fmt, fmtInt, amountWords } from '../../utils/billingCalcEngine';
 import useTabRefresh from '../../hooks/useTabRefresh';
+import { verifyAdminPassword } from '../../services/authService';
+import '../auth/auth.css';
 
 const statusMap = { Paid: 'success', Pending: 'warning', Partial: 'info', Cancelled: 'danger' };
 const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'primary'}`}>{s}</span>;
@@ -192,15 +194,30 @@ function BillDetailModal({ bill, onClose, onPrint }) {
 
 function DeleteModal({ bill, onClose, onConfirm }) {
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleDelete = () => {
-    if (password === 'admin123') {
+  const handleDelete = async () => {
+    if (!password) {
+      setError('Please enter your admin password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      const auth = await verifyAdminPassword(password);
+      if (!auth.success) {
+        setError(auth.error || 'Incorrect admin password.');
+        return;
+      }
       onConfirm(bill.id);
       onClose();
-    } else {
-      setError('Incorrect password. Deletion denied.');
-      setTimeout(() => setError(''), 3000);
+    } catch (err) {
+      setError('Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -224,23 +241,34 @@ function DeleteModal({ bill, onClose, onConfirm }) {
           </p>
           <div className="form-group" style={{ marginBottom: 'var(--space-2)' }}>
             <label className="form-label">Admin Password *</label>
-            <input
-              className={`form-input${error ? ' form-input--error' : ''}`}
-              type="password"
-              placeholder="Enter password to delete"
-              value={password}
-              onChange={e => { setPassword(e.target.value); setError(''); }}
-              onKeyDown={e => e.key === 'Enter' && handleDelete()}
-              autoFocus
-              id="delete-bill-password"
-            />
+            <div className="auth-input-wrap">
+              <input
+                className={`form-input${error ? ' form-input--error' : ''}`}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter password to delete"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleDelete()}
+                autoFocus
+                id="delete-bill-password"
+              />
+              <button
+                type="button"
+                className="auth-reveal"
+                onClick={() => setShowPassword(prev => !prev)}
+                tabIndex="-1"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              </button>
+            </div>
             {error && <div className="form-error">{error}</div>}
           </div>
         </div>
         <div className="modal__footer">
           <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn--danger" onClick={handleDelete} disabled={!password}>
-            <i className="fa-solid fa-trash-can"></i> Delete Permanently
+          <button className="btn btn--danger" onClick={handleDelete} disabled={loading || !password}>
+            <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-trash-can'}`}></i> Delete Permanently
           </button>
         </div>
       </div>

@@ -19,7 +19,9 @@ class ProductInventorySerializer(serializers.ModelSerializer):
             'barcode': {'required': False, 'allow_blank': True},
             'huid': {'required': False, 'allow_blank': True},
             'location': {'required': False, 'allow_blank': True},
+            'shop': {'required': False},
         }
+        read_only_fields = ['shop']
 
     # ── Field-level validation ───────────────────────────────────────
     def validate_net_weight(self, value):

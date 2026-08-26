@@ -5,7 +5,9 @@ import { useTheme, THEMES } from '../../contexts/ThemeContext';
 import { toast } from '../../utils/toast';
 import { getSuggestions, addSuggestion, updateSuggestion, deleteSuggestion, resetToDefaults } from '../../utils/productSuggestions';
 import { getPrinterSettings, savePrinterSettings, listSystemPrinters, printBarcodeLabel, DEFAULT_PRINTER_SETTINGS } from '../../utils/labelPrinter';
+import { verifyAdminPassword } from '../../services/authService';
 import ResetDataModal from './ResetDataModal';
+import '../auth/auth.css';
 
 const themeCardStyle = (preview, isActive) => ({
   position: 'relative',
@@ -530,6 +532,88 @@ function BarcodePrinterPanel() {
   );
 }
 
+function AdminAuthModal({ title, message, onConfirm, onClose, danger = false }) {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleVerify = async () => {
+    if (!password) {
+      setError('Please enter your admin password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      const auth = await verifyAdminPassword(password);
+      if (!auth.success) {
+        setError(auth.error || 'Incorrect admin password.');
+        return;
+      }
+      await onConfirm(password);
+      onClose();
+    } catch (err) {
+      setError(err?.response?.data?.detail || err.message || 'Verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="overlay" onClick={onClose} />
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal__header">
+          <h2 className="modal__title" style={{ color: danger ? 'var(--color-danger)' : 'var(--text-primary)' }}>
+            <i className={`fa-solid ${danger ? 'fa-triangle-exclamation' : 'fa-shield-halved'}`} style={{ marginRight: 8 }}></i>
+            {title}
+          </h2>
+          <button className="btn btn--ghost btn--sm btn--icon" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+        </div>
+        <div className="modal__body">
+          {message && (
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)', lineHeight: 1.5 }}>
+              {message}
+            </p>
+          )}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Admin Password *</label>
+            <div className="auth-input-wrap">
+              <input
+                className={`form-input${error ? ' form-input--error' : ''}`}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter admin password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleVerify()}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="auth-reveal"
+                onClick={() => setShowPassword(prev => !prev)}
+                tabIndex="-1"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              </button>
+            </div>
+            {error && <div className="form-error">{error}</div>}
+          </div>
+        </div>
+        <div className="modal__footer">
+          <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
+          <button className={`btn ${danger ? 'btn--danger' : 'btn--primary'}`} onClick={handleVerify} disabled={loading || !password}>
+            <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-check'}`}></i> Confirm
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function Settings() {
   const { syncShop } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
@@ -562,6 +646,7 @@ export default function Settings() {
   const [message, setMessage] = useState({ text: '', type: '' });
 
   const [showResetModal, setShowResetModal] = useState(false);
+  const [authModalConfig, setAuthModalConfig] = useState(null);
 
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionSearch, setSuggestionSearch] = useState('');
@@ -1011,30 +1096,55 @@ export default function Settings() {
             </div>
             <div className="billing-form__body">
               <div className="flex gap-3" style={{ flexWrap: 'wrap', gap: 10 }}>
-                <button className="btn btn--ghost" onClick={async () => {
-                  if (window.electronAPI) {
-                    const res = await window.electronAPI.backupDB();
-                    if (res.success) toast.success(`Backup saved successfully to: ${res.path}`);
-                    else if (res.reason !== 'canceled') toast.error(`Backup failed: ${res.error}`);
-                  } else {
-                    toast.warning('Offline backups are only supported in the Desktop app.');
-                  }
-                }}>
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    setAuthModalConfig({
+                      title: 'Authorize Data Export',
+                      message: 'Enter your admin password to authorize the database export.',
+                      onConfirm: async () => {
+                        if (window.electronAPI) {
+                          const res = await window.electronAPI.backupDB();
+                          if (res.success) toast.success(`Backup saved successfully to: ${res.path}`);
+                          else if (res.reason !== 'canceled') toast.error(`Backup failed: ${res.error}`);
+                        } else {
+                          toast.warning('Offline backups are only supported in the Desktop app.');
+                        }
+                      },
+                    });
+                  }}
+                >
                   <i className="fa-solid fa-download"></i> Export All Data
                 </button>
-                <button className="btn btn--outline" onClick={async () => {
-                  if (confirm("Are you sure you want to reset all bill and order numbering sequences to start from 001? This is typically done at the end of a commercial year. Subsequent bills/orders will restart from 1.")) {
-                    try {
-                      const res = await api.post('/accounts/shop/reset-numbering/');
-                      toast.success(res.data.detail || 'Numbering sequences reset successfully!');
-                    } catch (err) {
-                      toast.error(err.response?.data?.detail || 'Failed to reset numbering sequences.');
-                    }
-                  }
-                }}>
+
+                <button
+                  className="btn btn--outline"
+                  onClick={() => {
+                    setAuthModalConfig({
+                      title: 'Reset Bill & Order Numbering',
+                      message: 'Are you sure you want to reset all bill and order numbering sequences to start from 001? Subsequent bills/orders will restart from 1. Enter your admin password to confirm.',
+                      danger: true,
+                      onConfirm: async () => {
+                        try {
+                          const res = await api.post('/accounts/shop/reset-numbering/');
+                          toast.success(res.data.message || res.data.detail || 'Numbering sequences reset successfully!');
+                        } catch (err) {
+                          toast.error(err.response?.data?.detail || 'Failed to reset numbering sequences.');
+                        }
+                      },
+                    });
+                  }}
+                >
                   <i className="fa-solid fa-rotate-left"></i> Reset Bill Numbering
                 </button>
-                <button className="btn btn--danger" style={{ marginLeft: 'auto' }} onClick={() => setShowResetModal(true)}><i className="fa-solid fa-trash-can"></i> Reset Data</button>
+
+                <button
+                  className="btn btn--danger"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => setShowResetModal(true)}
+                >
+                  <i className="fa-solid fa-trash-can"></i> Reset Data
+                </button>
               </div>
             </div>
           </div>
@@ -1244,10 +1354,20 @@ export default function Settings() {
         <ResetDataModal
           onClose={() => setShowResetModal(false)}
           onReset={() => {
-            // Re-fetch settings + clear local suggestion state
             fetchSettings();
             setSuggestions(getSuggestions());
           }}
+        />
+      )}
+
+      {/* ═══ Admin Auth Modal ═══ */}
+      {authModalConfig && (
+        <AdminAuthModal
+          title={authModalConfig.title}
+          message={authModalConfig.message}
+          danger={authModalConfig.danger}
+          onConfirm={authModalConfig.onConfirm}
+          onClose={() => setAuthModalConfig(null)}
         />
       )}
     </div>

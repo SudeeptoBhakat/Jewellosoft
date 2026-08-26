@@ -1,10 +1,4 @@
-/**
- * ─── Auth Service Layer ─────────────────────────────────────────
- * Hand-rolled local auth service communicating with Django SimpleJWT.
- * ────────────────────────────────────────────────────────────────
- */
-
-import { supabase } from '../lib/supabaseClient';
+import api from '../lib/axios';
 
 const _locks = {};
 
@@ -18,14 +12,7 @@ function releaseLock(key) {
   _locks[key] = false;
 }
 
-function assertOnline() {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    throw new Error('You are offline. Please check your internet connection and try again.');
-  }
-}
-
 export async function signUp(email, password, metadata = {}) {
-  assertOnline();
   if (!acquireLock('signup')) throw new Error('Registration already in progress.');
 
   try {
@@ -33,92 +20,89 @@ export async function signUp(email, password, metadata = {}) {
     const ownerName = metadata.owner_name || metadata.ownerName || '';
     const mobileNumber = metadata.mobile_number || metadata.mobileNumber || metadata.phone || '';
 
-    const metaPayload = {
-      ...metadata,
+    const payload = {
+      email,
+      password,
       shop_name: shopName,
       shopName: shopName,
       owner_name: ownerName,
       ownerName: ownerName,
       mobile_number: mobileNumber,
       mobileNumber: mobileNumber,
+      ...metadata,
     };
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metaPayload,
-      }
-    });
-
-    if (error) throw error;
-
-    if (data.session?.access_token) {
-      localStorage.setItem('access_token', data.session.access_token);
-      localStorage.setItem('refresh_token', data.session.refresh_token);
+    const res = await api.post('/accounts/auth/register/', payload);
+    const data = res.data;
+    // console.log("Data ", data);
+    if (data.access_token) {
+      localStorage.setItem('access_token', data.access_token);
+    }
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
     }
 
-    if (data.user && data.session) {
-      try {
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          email: data.user.email,
-          shop_name: shopName,
-          owner_name: ownerName,
-          mobile_number: mobileNumber,
-          plan: 'free',
-          is_active: true,
-          expires_at: expiresAt,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'id' });
-      } catch (profileErr) {
-        console.warn('[authService] Profile sync notice:', profileErr?.message);
-      }
-    }
-
-    return { user: data.user, session: data.session };
+    return data;
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.message || 'Registration failed.';
+    throw new Error(detail);
   } finally {
     releaseLock('signup');
   }
 }
 
 export async function signIn(email, password) {
-  assertOnline();
   if (!acquireLock('signin')) throw new Error('Login already in progress.');
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    if (error) throw error;
-    
-    if (data.session?.access_token) {
-      localStorage.setItem('access_token', data.session.access_token);
-      localStorage.setItem('refresh_token', data.session.refresh_token);
+    const res = await api.post('/accounts/auth/login/', { email, password });
+    const data = res.data;
+
+    if (data.access_token) {
+      localStorage.setItem('access_token', data.access_token);
     }
-    
-    return { user: data.user, session: data.session };
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
+    }
+
+    return data;
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.message || 'Login failed. Please check your credentials.';
+    throw new Error(detail);
   } finally {
     releaseLock('signin');
   }
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
 }
 
 export async function resendConfirmation(email) {
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email,
-  });
-  if (error) throw error;
-  return true;
+  try {
+    const res = await api.post('/accounts/auth/resend-confirmation/', { email });
+    return res.data;
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.message || 'Failed to resend confirmation email.';
+    throw new Error(detail);
+  }
+}
+
+export async function verifyAdminPassword(password) {
+  if (!password) {
+    return { success: false, error: 'Password is required.' };
+  }
+  try {
+    const res = await api.post('/accounts/auth/verify-password/', { password });
+    if (res.data?.valid) {
+      return { success: true };
+    }
+    return { success: false, error: res.data?.detail || 'Incorrect password.' };
+  } catch (err) {
+    const detail = err.response?.data?.detail || 'Incorrect admin password.';
+    return { success: false, error: detail };
+  }
 }
 
 export async function getSession() {
@@ -126,8 +110,3 @@ export async function getSession() {
   if (!token) return null;
   return { access_token: token };
 }
-
-export function getSupabaseClient() {
-  return supabase;
-}
-
