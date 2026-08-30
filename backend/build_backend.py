@@ -95,6 +95,7 @@ PROJECT_APPS = [
     'payments',
     'customers',
     'core',
+    'old_purchases',
 ]
 
 for app in PROJECT_APPS:

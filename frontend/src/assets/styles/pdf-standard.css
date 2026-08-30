@@ -13,10 +13,12 @@
     flex-direction: column;
     margin: 0 auto;
 }
+
 @page {
     size: A4;
     margin: 0;
 }
+
 /* WATERMARK */
 .pdf-watermark {
     position: absolute;
@@ -97,9 +99,13 @@
 
 /* SHOP NAME */
 .pdf-shop-name {
-    font-family: 'Montserrat', 'Futura', sans-serif;
+    /* font-family: 'Montserrat', 'Futura', sans-serif;
+    font-weight: 700; */
+    font-family: "Playfair Display", serif;
     font-size: 35px;
+    font-optical-sizing: auto;
     font-weight: 700;
+    font-style: normal;
     letter-spacing: 2px;
     color: #0b0b3c;
     /* padding: 0 10px; */
@@ -216,7 +222,7 @@
 
 .old-calc-breakdown-row {
     box-sizing: border-box;
-    width: calc(100% - 50px); 
+    width: calc(100% - 50px);
     margin-left: auto;
     margin-right: auto;
     justify-content: center;
@@ -227,7 +233,7 @@
     gap: 5px;
     font-size: 13.5px;
     font-weight: bolder;
-    
+
     background-color: #f8faff8f;
     border-radius: 6px;
 }
@@ -238,7 +244,7 @@
     margin-top: 20px;
     display: grid;
     /* Changed to 6 columns to match your exact invoice metrics */
-    grid-template-columns: repeat(6, 1fr); 
+    grid-template-columns: repeat(6, 1fr);
     background: linear-gradient(90deg, #1e3b8aaf, #2564eb98);
     color: #fff;
     font-size: 11px;
@@ -246,14 +252,16 @@
     padding: 10px 0;
     text-align: center;
     text-transform: uppercase;
-    align-items: center; /* Ensures short/long text stays vertically aligned */
+    align-items: center;
+    /* Ensures short/long text stays vertically aligned */
 }
 
 /* SUMMARY VALUES */
 .pdf-summary-values {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    background: #f8faff; /* Light background tint matching image */
+    background: #f8faff;
+    /* Light background tint matching image */
     padding: 12px 0;
     font-size: 12px;
     font-weight: 600;
@@ -264,7 +272,8 @@
 
 /* SPECIAL UTILITIES */
 .red {
-    color: #dc2626; /* Slightly brighter red for high visibility print */
+    color: #dc2626;
+    /* Slightly brighter red for high visibility print */
 }
 
 .bold {

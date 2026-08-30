@@ -4,7 +4,7 @@
  * Licensed under the JewelloSoft Community License.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem, clipboard } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -292,10 +292,124 @@ function waitForBackend(port, retries = 30) {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Window Creation
-// ─────────────────────────────────────────────────────────────────
+// Natural Context Menu (Production & Development)
 
+function setupContextMenu(contents) {
+  if (!contents || contents._hasJewelloContextMenu) return;
+  contents._hasJewelloContextMenu = true;
+
+  contents.on('context-menu', (event, params) => {
+    if (!contents || contents.isDestroyed()) return;
+
+    const win = BrowserWindow.fromWebContents(contents);
+    if (!win || !win.isVisible() || win === splashWindow) return;
+
+    const menuTemplate = [];
+
+    if (params.misspelledWord && params.dictionarySuggestions && params.dictionarySuggestions.length > 0) {
+      for (const suggestion of params.dictionarySuggestions) {
+        menuTemplate.push({
+          label: suggestion,
+          click: () => contents.replaceMisspelling(suggestion)
+        });
+      }
+      menuTemplate.push({ type: 'separator' });
+    }
+
+    if (params.linkURL && params.linkURL.trim().length > 0) {
+      menuTemplate.push({
+        label: 'Open Link in Browser',
+        click: () => {
+          shell.openExternal(params.linkURL);
+        }
+      });
+      menuTemplate.push({
+        label: 'Copy Link Address',
+        click: () => {
+          clipboard.writeText(params.linkURL);
+        }
+      });
+      menuTemplate.push({ type: 'separator' });
+    }
+
+    if (params.mediaType === 'image') {
+      menuTemplate.push({
+        label: 'Copy Image',
+        click: () => {
+          contents.copyImageAt(params.x, params.y);
+        }
+      });
+      menuTemplate.push({ type: 'separator' });
+    }
+
+    const hasSelection = Boolean(params.selectionText && params.selectionText.trim().length > 0);
+
+    if (params.isEditable) {
+      menuTemplate.push(
+        { role: 'undo', label: 'Undo', accelerator: 'CmdOrCtrl+Z', enabled: params.editFlags ? params.editFlags.canUndo : true },
+        { role: 'redo', label: 'Redo', accelerator: 'CmdOrCtrl+Y', enabled: params.editFlags ? params.editFlags.canRedo : true },
+        { type: 'separator' },
+        { role: 'cut', label: 'Cut', accelerator: 'CmdOrCtrl+X', enabled: params.editFlags ? params.editFlags.canCut : true },
+        { role: 'copy', label: 'Copy', accelerator: 'CmdOrCtrl+C', enabled: params.editFlags ? (params.editFlags.canCopy || hasSelection) : true },
+        { role: 'paste', label: 'Paste', accelerator: 'CmdOrCtrl+V', enabled: params.editFlags ? params.editFlags.canPaste : true },
+        { type: 'separator' },
+        { role: 'selectAll', label: 'Select All', accelerator: 'CmdOrCtrl+A', enabled: params.editFlags ? params.editFlags.canSelectAll : true }
+      );
+    } else if (hasSelection) {
+      menuTemplate.push(
+        { role: 'copy', label: 'Copy', accelerator: 'CmdOrCtrl+C' },
+        { role: 'selectAll', label: 'Select All', accelerator: 'CmdOrCtrl+A' }
+      );
+    } else {
+      menuTemplate.push(
+        { role: 'selectAll', label: 'Select All', accelerator: 'CmdOrCtrl+A' }
+      );
+    }
+
+    menuTemplate.push({ type: 'separator' });
+    menuTemplate.push({
+      label: 'Refresh',
+      accelerator: 'CmdOrCtrl+R',
+      click: () => {
+        contents.reload();
+      }
+    });
+
+    if (isDev) {
+      menuTemplate.push({ type: 'separator' });
+      menuTemplate.push({
+        label: 'Inspect Element',
+        click: () => {
+          contents.inspectElement(params.x, params.y);
+        }
+      });
+    }
+
+    const cleanedTemplate = [];
+    for (let i = 0; i < menuTemplate.length; i++) {
+      const item = menuTemplate[i];
+      if (item.type === 'separator') {
+        if (cleanedTemplate.length === 0) continue;
+        if (cleanedTemplate[cleanedTemplate.length - 1].type === 'separator') continue;
+      }
+      cleanedTemplate.push(item);
+    }
+    while (cleanedTemplate.length > 0 && cleanedTemplate[cleanedTemplate.length - 1].type === 'separator') {
+      cleanedTemplate.pop();
+    }
+
+    if (cleanedTemplate.length > 0) {
+      const menu = Menu.buildFromTemplate(cleanedTemplate);
+      menu.popup({
+        window: win,
+        x: params.x,
+        y: params.y
+      });
+    }
+  });
+}
+
+// Window Creation
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -314,6 +428,7 @@ function createWindow() {
   });
 
   mainWindow.removeMenu();
+  setupContextMenu(mainWindow.webContents);
 
   const indexPath = isDev
     ? path.join(__dirname, '../frontend/dist/index.html')
@@ -338,10 +453,7 @@ function createWindow() {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────
 // Backend (Django) Lifecycle
-// ─────────────────────────────────────────────────────────────────
-
 let backendRetries = 0;
 const MAX_BACKEND_RETRIES = 2;
 
@@ -530,9 +642,10 @@ function showCrashWindow(reason) {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────
 // App Lifecycle
-// ─────────────────────────────────────────────────────────────────
+app.on('web-contents-created', (event, contents) => {
+  setupContextMenu(contents);
+});
 
 app.on('second-instance', () => {
   if (mainWindow) {
