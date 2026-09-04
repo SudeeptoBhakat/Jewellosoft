@@ -37,8 +37,8 @@ class OldPurchaseVoucher(BaseModel):
         related_name="old_purchase_vouchers",
     )
 
-    voucher_no = models.CharField(max_length=50, unique=True)
-    date = models.DateField(default=timezone.now)
+    voucher_no = models.CharField(max_length=50)
+    date = models.DateField(default=timezone.localdate)
 
     METAL_TYPE_CHOICES = [
         ("gold", "Gold"),
@@ -77,6 +77,7 @@ class OldPurchaseVoucher(BaseModel):
 
     class Meta:
         ordering = ["-created_at"]
+        unique_together = ("shop", "voucher_no")
         verbose_name = "Old Purchase Voucher"
         verbose_name_plural = "Old Purchase Vouchers"
 

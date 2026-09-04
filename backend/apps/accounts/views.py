@@ -526,7 +526,6 @@ class ResetNumberingView(APIView):
             from .models import NumberingSequence
             NumberingSequence.objects.filter(shop=shop).update(last_number=0)
             
-            # Also log warning
             try:
                 logger.warning(f"[RESET NUMBERING] All numbering sequences reset to 0 by user.")
             except:
@@ -542,6 +541,115 @@ class ResetNumberingView(APIView):
                 {"detail": f"Reset failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class NumberingSettingsView(APIView):
+    """
+    GET: Retrieve current numbering sequences and next numbers for the shop.
+    POST: Update next starting numbers for document sequences.
+    """
+    DEFINITIONS = [
+        ('invoice', 'Bill Invoice', 'INV', 'Tax Invoice series'),
+        ('estimate', 'Estimate', 'EST', 'Quotation / Estimate series'),
+        ('order_invoice', 'Order (Invoice)', 'ORD-INV', 'Custom Orders under Invoice series'),
+        ('order_estimate', 'Order (Estimate)', 'ORD-EST', 'Custom Orders under Estimate series'),
+        ('purchase_voucher', 'Purchase Voucher', 'PV', 'Old metal purchase series'),
+        ('credit_note', 'Credit Note', 'CN', 'Customer Credit / Return note series'),
+        ('advance_receipt', 'Advance Receipt', 'ADV-RCT', 'Advance payment receipt series'),
+        ('refund_receipt', 'Refund Receipt', 'REF', 'Refund payment receipt series'),
+    ]
+
+    def _get_year(self, request):
+        from datetime import date
+        year_param = request.query_params.get('year') or request.data.get('year')
+        try:
+            return int(year_param) if year_param else date.today().year
+        except (ValueError, TypeError):
+            return date.today().year
+
+    def get(self, request):
+        shop = request.shop
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
+
+        year = self._get_year(request)
+        from .models import NumberingSequence
+
+        sequences = []
+        for key, label, prefix_code, desc in self.DEFINITIONS:
+            seq_key = f"{key}_{year}"
+            prefix = f"{prefix_code}-{year}-"
+            seq = NumberingSequence.objects.filter(shop=shop, sequence_type=seq_key).first()
+            last_num = seq.last_number if seq else 0
+            next_num = last_num + 1
+            sample = f"{prefix}{next_num:03d}"
+
+            sequences.append({
+                'key': key,
+                'label': label,
+                'prefix': prefix,
+                'description': desc,
+                'last_number': last_num,
+                'next_number': next_num,
+                'preview': sample
+            })
+
+        return Response({
+            'year': year,
+            'sequences': sequences
+        })
+
+    def post(self, request):
+        shop = request.shop
+        if not shop:
+            return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
+
+        year = self._get_year(request)
+        new_sequences = request.data.get('sequences', {})
+        if not isinstance(new_sequences, dict):
+            return Response({"detail": "Invalid sequences payload."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .models import NumberingSequence
+
+        valid_keys = {item[0] for item in self.DEFINITIONS}
+
+        for key, next_val in new_sequences.items():
+            if key not in valid_keys:
+                continue
+            try:
+                val = int(next_val)
+                if val < 1:
+                    continue
+                seq_key = f"{key}_{year}"
+                NumberingSequence.set_next_number(shop, seq_key, val)
+            except (ValueError, TypeError):
+                continue
+
+        sequences = []
+        for key, label, prefix_code, desc in self.DEFINITIONS:
+            seq_key = f"{key}_{year}"
+            prefix = f"{prefix_code}-{year}-"
+            seq = NumberingSequence.objects.filter(shop=shop, sequence_type=seq_key).first()
+            last_num = seq.last_number if seq else 0
+            next_num = last_num + 1
+            sample = f"{prefix}{next_num:03d}"
+
+            sequences.append({
+                'key': key,
+                'label': label,
+                'prefix': prefix,
+                'description': desc,
+                'last_number': last_num,
+                'next_number': next_num,
+                'preview': sample
+            })
+
+        return Response({
+            'status': 'success',
+            'message': 'Numbering sequences updated successfully.',
+            'year': year,
+            'sequences': sequences
+        })
 
 
 class LoginView(APIView):

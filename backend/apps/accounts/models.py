@@ -94,6 +94,21 @@ class NumberingSequence(BaseModel):
                 defaults={'last_number': 0}
             )
             seq.last_number += 1
-            seq.save()
+            seq.save(update_fields=['last_number'])
             return seq.last_number
+
+    @classmethod
+    def set_next_number(cls, shop, sequence_type, next_number):
+        from django.db import transaction
+        target_last = max(0, int(next_number) - 1)
+        with transaction.atomic():
+            seq, created = cls.objects.select_for_update().get_or_create(
+                shop=shop,
+                sequence_type=sequence_type,
+                defaults={'last_number': target_last}
+            )
+            seq.last_number = target_last
+            seq.save(update_fields=['last_number'])
+            return seq.last_number + 1
+
 

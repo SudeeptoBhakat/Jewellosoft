@@ -432,11 +432,12 @@ export default function Orders({ tabId, isActive }) {
       otherCharges,
       advance,
       discount,
+      creditApplied: creditAppliedAmount,
       isIgst,
       gstRate: parseFloat(shop?.default_gst_rate) || 3.0,
       igstRate: parseFloat(shop?.default_igst_rate) || 3.0,
     });
-  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, oldVoucherRateMode, hallmarkCount, hallmarkValue, orderType, otherCharges, advance, discount, isIgst, shop]);
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, oldVoucherRateMode, hallmarkCount, hallmarkValue, orderType, otherCharges, advance, discount, creditAppliedAmount, isIgst, shop]);
 
   /* ─── Print Preview ─── */
   const [printData, setPrintData] = useState(null);
@@ -1253,13 +1254,25 @@ export default function Orders({ tabId, isActive }) {
                 </>
               ) : (
                 <>
-                  {/* ── Normal / Old≤New Scenario ── */}
                   <div className="bill-sline"><span>New Product Value <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.totalWeight.toFixed(3)}g × ₹{metalRate.toLocaleString('en-IN')} + Making)</span></span><span>{fmt(calc.newProductValue)}</span></div>
                   {calc.hasOld && (
-                    <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
-                      <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
-                      <span>{fmt(calc.effectiveOldValue)}</span>
-                    </div>
+                    oldSettlementMode === 'voucher' && oldVoucherData ? (
+                      <div style={{ padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', margin: '6px 0', fontSize: 'var(--text-xs)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 3 }}>
+                          <span><i className="fa-solid fa-ticket" style={{ marginRight: 5 }} />Voucher #{oldVoucherData.voucher_no}</span>
+                          <span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.effectiveOldValue)}</span>
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{oldVoucherData.metal_type?.toUpperCase()} {oldVoucherData.purity} • {Number(oldVoucherData.net_weight || 0).toFixed(3)}g</span>
+                          <span>{oldVoucherRateMode === 'saved' ? `Saved: ₹${Number(oldVoucherData.rate_per_10gm || 0).toLocaleString('en-IN')}/10g` : `Current: ₹${(metalRate * 10).toLocaleString('en-IN')}/10g`}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
+                        <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
+                        <span>{fmt(calc.effectiveOldValue)}</span>
+                      </div>
+                    )
                   )}
                   <div className="bill-sline" style={{ fontWeight: 600, borderBottom: '1px dashed var(--border-primary)', paddingBottom: 8, marginBottom: 8 }}>
                     <span>Subtotal</span><span>{fmt(calc.subtotal)}</span>
@@ -1282,7 +1295,12 @@ export default function Orders({ tabId, isActive }) {
                       <span>GST Base: {fmt(calc.gstBase)}</span><span></span>
                     </div>
                   </>)}
-                  {calc.advanceVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Advance</span><span>{fmt(calc.advanceVal)}</span></div>}
+                  {calc.advanceVal > 0 && (
+                    <div className="bill-sline bill-sline--deduct" style={{ color: '#059669' }}>
+                      <span>(−) Advance Paid <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({paymentMode?.toUpperCase() || 'CASH'})</span></span>
+                      <span>{fmt(calc.advanceVal)}</span>
+                    </div>
+                  )}
                   {calc.discountVal > 0 && <div className="bill-sline bill-sline--deduct"><span>(−) Discount</span><span>{fmt(calc.discountVal)}</span></div>}
                   {appliedCreditNotes.map(n => (
                     <div key={n.credit_note_id} className="bill-sline bill-sline--deduct" style={{ color: 'var(--color-primary, #d97706)', fontWeight: 600 }}>
@@ -1298,7 +1316,6 @@ export default function Orders({ tabId, isActive }) {
               )}
             </div>
 
-            {/* Final Amount */}
             <div className="bill-final-block">
               <div className="bill-final-label">{calc.transactionType === 'return' ? 'RETURN AMOUNT' : 'FINAL AMOUNT'}</div>
               <div className="bill-final-value" style={{ color: calc.transactionType === 'return' ? 'var(--color-success)' : 'var(--text-primary)' }}>{fmtInt(Math.abs(calc.finalAmt))}</div>
@@ -1314,18 +1331,43 @@ export default function Orders({ tabId, isActive }) {
               </div>
             )}
 
-            {/* Indicator */}
             {calc.finalAmt !== 0 && (
               <div style={{ textAlign: 'center', marginTop: 'var(--space-3)' }}>
                 {calc.transactionType === 'payable' ? (
-                  <span className="bill-indicator bill-indicator--pay"><i className="fa-solid fa-arrow-up"></i> Customer Pays</span>
+                  creditAppliedAmount > 0 && calc.finalAmt - creditAppliedAmount <= 0 ? (
+                    <span className="bill-indicator" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--color-success, #16a34a)', border: '1px solid rgba(34,197,94,0.3)', padding: '6px 14px', borderRadius: 999, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fa-solid fa-circle-check"></i> Fully Paid (Credit Note)
+                    </span>
+                  ) : creditAppliedAmount > 0 ? (
+                    <span className="bill-indicator bill-indicator--pay">
+                      <i className="fa-solid fa-arrow-up"></i> Customer Pays {fmt(calc.finalAmt - creditAppliedAmount)}
+                    </span>
+                  ) : (
+                    <span className="bill-indicator bill-indicator--pay">
+                      <i className="fa-solid fa-arrow-up"></i> Customer Pays
+                    </span>
+                  )
                 ) : (
                   <span className="bill-indicator bill-indicator--return"><i className="fa-solid fa-arrow-down"></i> Return {fmt(Math.abs(calc.finalAmt))} to Customer</span>
                 )}
               </div>
             )}
 
-            {/* Design Images Count */}
+            {parseFloat(advance || 0) > 0 && (
+              <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', border: '1px solid var(--border-primary)' }}>
+                <div className="flex justify-between" style={{ marginBottom: 4 }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Advance Paid ({paymentMode})</span>
+                  <span style={{ fontWeight: 600, color: 'var(--color-accent)' }}>{fmtInt(parseFloat(advance || 0))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-tertiary)' }}>Balance Due at Delivery</span>
+                  <span style={{ fontWeight: 700, color: Math.max(0, calc.finalAmt - (parseFloat(advance || 0)) - creditAppliedAmount) > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                    {fmtInt(Math.max(0, calc.finalAmt - (parseFloat(advance || 0)) - creditAppliedAmount))}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {designImages.length > 0 && (
               <div style={{ textAlign: 'center', marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
                 <i className="fa-solid fa-image" style={{ marginRight: 4 }}></i>
@@ -1334,7 +1376,6 @@ export default function Orders({ tabId, isActive }) {
             )}
           </div>
 
-          {/* Bottom Actions */}
           <div style={{ padding: 'var(--space-3) var(--space-5) var(--space-4)', borderTop: '1px solid var(--border-primary)', display: 'flex', gap: 'var(--space-3)' }}>
             <button className="btn btn--ghost" onClick={handleCancel} style={{ flex: 1 }}><i className="fa-solid fa-xmark"></i> Cancel</button>
             <button className="btn btn--ghost" onClick={handlePrint} style={{ flex: 1 }}><i className="fa-solid fa-print"></i> Print</button>

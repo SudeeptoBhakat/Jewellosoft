@@ -23,6 +23,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = '__all__'
+        validators = []
 
     def get_old_purchase_voucher_no(self, obj):
         return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None
@@ -82,6 +83,7 @@ class EstimateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Estimate
         fields = '__all__'
+        validators = []
 
     def get_old_purchase_voucher_no(self, obj):
         return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None

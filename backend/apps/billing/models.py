@@ -100,7 +100,7 @@ class BillingItem(BaseModel):
     total = models.DecimalField(max_digits=12, decimal_places=2)
 
 class Estimate(BaseBilling):
-    estimate_no = models.CharField(max_length=50, unique=True)
+    estimate_no = models.CharField(max_length=50)
 
     items = GenericRelation("billing.BillingItem")
 
@@ -115,10 +115,11 @@ class Estimate(BaseBilling):
 
     class Meta:
         ordering = ['-created_at']
+        unique_together = ('shop', 'estimate_no')
 
 
 class Invoice(BaseBilling):
-    invoice_no = models.CharField(max_length=50, unique=True)
+    invoice_no = models.CharField(max_length=50)
 
     items = GenericRelation("billing.BillingItem")
 
@@ -139,6 +140,7 @@ class Invoice(BaseBilling):
 
     class Meta:
         ordering = ['-created_at']
+        unique_together = ('shop', 'invoice_no')
 
 
 class CreditNote(BaseModel):
@@ -155,7 +157,7 @@ class CreditNote(BaseModel):
         'customers.Customer', on_delete=models.CASCADE,
         related_name='credit_notes'
     )
-    credit_note_no = models.CharField(max_length=50, unique=True)
+    credit_note_no = models.CharField(max_length=50)
 
     source_invoice = models.ForeignKey(
         Invoice, on_delete=models.SET_NULL,
@@ -191,6 +193,7 @@ class CreditNote(BaseModel):
 
     class Meta:
         ordering = ['-created_at']
+        unique_together = ('shop', 'credit_note_no')
 
 
 class CreditNoteUsage(BaseModel):

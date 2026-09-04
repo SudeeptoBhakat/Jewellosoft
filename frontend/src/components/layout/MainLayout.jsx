@@ -20,6 +20,7 @@ import DuesCreditsList from '../../features/dashboard/DuesCreditsList';
 import OldPurchaseVoucher from '../../features/old-purchases/OldPurchaseVoucher';
 import OldPurchaseVoucherList from '../../features/old-purchases/OldPurchaseVoucherList';
 import CreditNotesList from '../../features/credit-notes/CreditNotesList';
+import DueRecords from '../../features/dues/DueRecords';
 
 function MainLayoutContent() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTabId } = useTabs();
@@ -43,6 +44,7 @@ function MainLayoutContent() {
       case '/old-purchases': return 'fa-solid fa-ticket';
       case '/old-purchases/list': return 'fa-solid fa-file-invoice';
       case '/credit-notes': return 'fa-solid fa-wallet';
+      case '/due-records': return 'fa-solid fa-hand-holding-hand';
       default: return 'fa-solid fa-file';
     }
   };
@@ -66,6 +68,7 @@ function MainLayoutContent() {
       case '/old-purchases': return <OldPurchaseVoucher {...props} />;
       case '/old-purchases/list': return <OldPurchaseVoucherList {...props} />;
       case '/credit-notes': return <CreditNotesList {...props} />;
+      case '/due-records': return <DueRecords {...props} />;
       default: return <div>Page not found: {path}</div>;
     }
   };

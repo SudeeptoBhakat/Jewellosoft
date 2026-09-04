@@ -81,9 +81,8 @@ class Command(BaseCommand):
         with transaction.atomic():
             for shop in shops:
                 for seq_key, model, field_name, prefix in SEQUENCES:
-                    # Gather all values that start with this prefix (global — not shop-scoped
-                    # so that cross-shop pollution is caught too)
                     qs = model.objects.filter(
+                        shop=shop,
                         **{f'{field_name}__istartswith': prefix}
                     ).values_list(field_name, flat=True)
 

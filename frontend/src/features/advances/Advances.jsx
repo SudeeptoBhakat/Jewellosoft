@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/axios';
 import { toast } from '../../utils/toast';
+import ExportButton from '../../components/elements/ExportButton';
 import useTabRefresh from '../../hooks/useTabRefresh';
+import { shortNo } from '../../utils/formatters';
 import FallbackWatermarkSVG from "../../assets/media/svg.svg";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -365,7 +367,7 @@ function ReceiptsTab({ shopInfo, isActive = true }) {
                     <td style={{ fontWeight: 600, color: isCancelled ? 'var(--text-muted)' : 'var(--color-primary)', textDecoration: isCancelled ? 'line-through' : 'none' }}>
                       {adv.receipt_no}
                     </td>
-                    <td style={{ fontWeight: 500 }}>{adv.order_detail?.order_no || '—'}</td>
+                    <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }} title={adv.order_detail?.order_no || ''}>{adv.order_detail?.order_no ? shortNo(adv.order_detail.order_no) : '—'}</td>
                     <td>{cust.name || 'Walk-in'}</td>
                     <td style={{ fontWeight: 600, textAlign:'right', color: adv.is_refund ? '#dc2626' : 'inherit' }}>
                       {adv.is_refund ? '-' : ''}₹{fmt(adv.amount)}
@@ -786,8 +788,21 @@ function CashBookTab({ shopInfo }) {
 
           {/* Transaction List */}
           <div className="billing-form">
-            <div className="billing-form__header">
+            <div className="billing-form__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="billing-form__header-title"><i className="fa-solid fa-list" style={{ marginRight:8, opacity:0.6 }} />Transactions ({data.entries?.length || 0})</span>
+              <ExportButton
+                data={data.entries || []}
+                columns={[
+                  { label: 'Time', key: 'created_at', transform: (val) => fmtDateTime(val) },
+                  { label: 'Type', key: 'entry_type', transform: (val) => val === 'in' ? 'IN' : 'OUT' },
+                  { label: 'Mode', key: 'payment_mode', transform: (val) => String(val || '').toUpperCase() },
+                  { label: 'Reference', key: 'reference_number' },
+                  { label: 'Notes', key: 'notes' },
+                  { label: 'Amount (₹)', key: 'amount', transform: (val, row) => (row.entry_type === 'in' ? '' : '-') + fmt(val) }
+                ]}
+                filename={`CashBook_${date}`}
+                sheetName="CashBook"
+              />
             </div>
             <div className="billing-form__body" style={{ padding:0 }}>
               {data.entries?.length === 0 ? (
@@ -921,8 +936,21 @@ function LedgerTab({ shopInfo, customers }) {
 
           {/* Ledger Table */}
           <div className="billing-form">
-            <div className="billing-form__header">
+            <div className="billing-form__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="billing-form__header-title"><i className="fa-solid fa-table-list" style={{ marginRight:8, opacity:0.6 }} />Account Statement ({data.statement?.length || 0} entries)</span>
+              <ExportButton
+                data={data.statement || []}
+                columns={[
+                  { label: 'Date', key: 'created_at', transform: (val) => fmtDateTime(val) },
+                  { label: 'Reference Type', key: 'reference_type', transform: (val) => String(val || '').toUpperCase() },
+                  { label: 'Description', key: 'description' },
+                  { label: 'Debit (₹)', key: 'amount', transform: (val, row) => row.entry_type === 'debit' ? fmt(val) : '0.00' },
+                  { label: 'Credit (₹)', key: 'amount', transform: (val, row) => row.entry_type === 'credit' ? fmt(val) : '0.00' },
+                  { label: 'Balance (₹)', key: 'running_balance', transform: (val) => `${fmt(Math.abs(val))} ${val > 0 ? 'Dr' : 'Cr'}` }
+                ]}
+                filename={`Customer_Ledger_${selectedCustomer}`}
+                sheetName="Ledger"
+              />
             </div>
             <div className="billing-form__body" style={{ padding:0 }}>
               {data.statement?.length === 0 ? (
@@ -1008,9 +1036,9 @@ function ReceiptPreview({ receipt, shopInfo }) {
 
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', height:'80px' }}>
         <div style={{ display:'flex', flexDirection:'column' }}>
-          <span style={{ fontSize:'13px', fontWeight:'bold' }}>Sl. No.</span>
-          <span style={{ color: isCancelled ? '#dc2626' : '#dc2626', fontFamily:'"Courier New", Courier, monospace', fontSize:'28px', fontWeight:'bold', marginTop:'2px', letterSpacing:'1px' }}>
-            {stampNo || receipt.receipt_no || '—'}
+          <span style={{ fontSize:'13px', fontWeight:'bold' }}>Receipt No.</span>
+          <span style={{ color: isCancelled ? '#dc2626' : '#dc2626', fontFamily:'"Courier New", Courier, monospace', fontSize:'20px', fontWeight:'bold', marginTop:'2px', letterSpacing:'0.5px' }}>
+            {receipt.receipt_no || '—'}
           </span>
         </div>
         <div style={{ textAlign:'center', flex:1, padding:'0 10px' }}>
@@ -1113,7 +1141,7 @@ function PrintLayout({ receipt, shopInfo }) {
           <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%) rotate(-35deg)', fontSize:'72px', fontWeight:900, color:'rgba(220,38,38,0.12)', letterSpacing:'0.1em', whiteSpace:'nowrap', pointerEvents:'none', zIndex:1, userSelect:'none' }}>CANCELLED</div>
         )}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
-          <div><span style={{ fontSize:13, fontWeight:'bold', display:'block' }}>Sl. No.</span><span style={{ color:'#dc2626', fontFamily:'"Courier New",monospace', fontSize:28, fontWeight:'bold', letterSpacing:1 }}>{stampNo}</span></div>
+          <div><span style={{ fontSize:13, fontWeight:'bold', display:'block' }}>Receipt No.</span><span style={{ color:'#dc2626', fontFamily:'"Courier New",monospace', fontSize:20, fontWeight:'bold', letterSpacing:0.5 }}>{receipt.receipt_no || '—'}</span></div>
           <div style={{ textAlign:'center', flex:1, padding:'0 10px' }}>
             <div style={{ textTransform:'uppercase', fontSize:13, fontWeight:'bold', textDecoration:'underline', letterSpacing:1, marginBottom:2 }}>{receipt.is_refund ? 'REFUND VOUCHER' : 'RECEIPT VOUCHER'}</div>
             <div style={{ fontSize:20, fontWeight:900, textTransform:'uppercase' }}>{shopName}</div>

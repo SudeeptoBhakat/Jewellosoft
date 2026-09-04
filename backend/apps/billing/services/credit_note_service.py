@@ -21,8 +21,13 @@ def _generate_credit_note_no(shop, max_retries=100):
     seq_key = f'credit_note_{year}'
     prefix = f"CN-{year}-"
 
-    # Find highest numeric suffix among existing credit notes for this year
-    existing_nos = CreditNote.objects.filter(credit_note_no__istartswith=prefix).values_list('credit_note_no', flat=True)
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"CN-{year}-{next_num:03d}"
+        if not CreditNote.objects.filter(shop=shop, credit_note_no__iexact=candidate).exists():
+            return candidate
+
+    existing_nos = CreditNote.objects.filter(shop=shop, credit_note_no__istartswith=prefix).values_list('credit_note_no', flat=True)
     max_num = 0
     for no in existing_nos:
         try:
@@ -32,32 +37,13 @@ def _generate_credit_note_no(shop, max_retries=100):
         except Exception:
             pass
 
-    # Ensure sequence last_number is at least max_num so get_next_number starts above existing numbers
-    try:
-        seq, _ = NumberingSequence.objects.get_or_create(
-            shop=shop,
-            sequence_type=seq_key,
-            defaults={'last_number': max_num}
-        )
-        if seq.last_number < max_num:
-            seq.last_number = max_num
-            seq.save(update_fields=['last_number'])
-    except Exception:
-        pass
-
-    for _ in range(max_retries):
-        next_num = NumberingSequence.get_next_number(shop, seq_key)
-        candidate = f"CN-{year}-{next_num:03d}"
-        if not CreditNote.objects.filter(credit_note_no__iexact=candidate).exists():
-            return candidate
-
-    # Fallback if candidates are still occupied
     max_num += 1
     candidate = f"CN-{year}-{max_num:03d}"
-    while CreditNote.objects.filter(credit_note_no__iexact=candidate).exists():
+    while CreditNote.objects.filter(shop=shop, credit_note_no__iexact=candidate).exists():
         max_num += 1
         candidate = f"CN-{year}-{max_num:03d}"
 
+    NumberingSequence.set_next_number(shop, seq_key, max_num + 1)
     return candidate
 
 
@@ -87,7 +73,7 @@ def create_credit_note(payload):
         expires_at = date.today() + timedelta(days=validity_days)
 
     credit_note_no = (payload.get('credit_note_no') or '').strip()
-    if not credit_note_no or CreditNote.objects.filter(credit_note_no__iexact=credit_note_no).exists():
+    if not credit_note_no or CreditNote.objects.filter(shop=shop, credit_note_no__iexact=credit_note_no).exists():
         credit_note_no = _generate_credit_note_no(shop)
 
     cn = None

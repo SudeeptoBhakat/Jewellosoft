@@ -9,18 +9,19 @@ from .payment_service import process_payments
 from apps.billing.models import Invoice, BillingItem, Estimate
 
 def generate_invoice_no(shop, max_retries=100):
-    """
-    Generates a unique Invoice number.
-    Uses a per-year sequence key so rolling over to a new year auto-resets.
-    Checks global table uniqueness and auto-syncs if sequence falls behind existing records.
-    """
     from apps.accounts.models import NumberingSequence
     from apps.billing.models import Invoice
     year = date.today().year
     seq_key = f'invoice_{year}'
     prefix = f"INV-{year}-"
 
-    existing_nos = Invoice.objects.filter(invoice_no__istartswith=prefix).values_list('invoice_no', flat=True)
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"INV-{year}-{next_num:03d}"
+        if not Invoice.objects.filter(shop=shop, invoice_no__iexact=candidate).exists():
+            return candidate
+
+    existing_nos = Invoice.objects.filter(shop=shop, invoice_no__istartswith=prefix).values_list('invoice_no', flat=True)
     max_num = 0
     for no in existing_nos:
         try:
@@ -30,43 +31,29 @@ def generate_invoice_no(shop, max_retries=100):
         except Exception:
             pass
 
-    try:
-        seq, _ = NumberingSequence.objects.get_or_create(
-            shop=shop,
-            sequence_type=seq_key,
-            defaults={'last_number': max_num}
-        )
-        if seq.last_number < max_num:
-            seq.last_number = max_num
-            seq.save(update_fields=['last_number'])
-    except Exception:
-        pass
-
-    for _ in range(max_retries):
-        next_num = NumberingSequence.get_next_number(shop, seq_key)
-        candidate = f"INV-{year}-{next_num:03d}"
-        if not Invoice.objects.filter(invoice_no__iexact=candidate).exists():
-            return candidate
-
     max_num += 1
     candidate = f"INV-{year}-{max_num:03d}"
-    while Invoice.objects.filter(invoice_no__iexact=candidate).exists():
+    while Invoice.objects.filter(shop=shop, invoice_no__iexact=candidate).exists():
         max_num += 1
         candidate = f"INV-{year}-{max_num:03d}"
 
+    NumberingSequence.set_next_number(shop, seq_key, max_num + 1)
     return candidate
 
 def generate_estimate_no(shop, max_retries=100):
-    """
-    Generates a unique Estimate number with collision-safe logic.
-    """
     from apps.accounts.models import NumberingSequence
     from apps.billing.models import Estimate
     year = date.today().year
     seq_key = f'estimate_{year}'
     prefix = f"EST-{year}-"
 
-    existing_nos = Estimate.objects.filter(estimate_no__istartswith=prefix).values_list('estimate_no', flat=True)
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"EST-{year}-{next_num:03d}"
+        if not Estimate.objects.filter(shop=shop, estimate_no__iexact=candidate).exists():
+            return candidate
+
+    existing_nos = Estimate.objects.filter(shop=shop, estimate_no__istartswith=prefix).values_list('estimate_no', flat=True)
     max_num = 0
     for no in existing_nos:
         try:
@@ -76,41 +63,18 @@ def generate_estimate_no(shop, max_retries=100):
         except Exception:
             pass
 
-    try:
-        seq, _ = NumberingSequence.objects.get_or_create(
-            shop=shop,
-            sequence_type=seq_key,
-            defaults={'last_number': max_num}
-        )
-        if seq.last_number < max_num:
-            seq.last_number = max_num
-            seq.save(update_fields=['last_number'])
-    except Exception:
-        pass
-
-    for _ in range(max_retries):
-        next_num = NumberingSequence.get_next_number(shop, seq_key)
-        candidate = f"EST-{year}-{next_num:03d}"
-        if not Estimate.objects.filter(estimate_no__iexact=candidate).exists():
-            return candidate
-
     max_num += 1
     candidate = f"EST-{year}-{max_num:03d}"
-    while Estimate.objects.filter(estimate_no__iexact=candidate).exists():
+    while Estimate.objects.filter(shop=shop, estimate_no__iexact=candidate).exists():
         max_num += 1
         candidate = f"EST-{year}-{max_num:03d}"
 
+    NumberingSequence.set_next_number(shop, seq_key, max_num + 1)
     return candidate
 
 
 @transaction.atomic
 def create_invoice(payload):
-    """
-    Core implementation to securely lock down an invoice transaction.
-    Links the invoice to a pending order (if order_id is supplied), posts
-    Customer Ledger credit entries for payments received, updates Cash Book,
-    and recalculates the order's payment_status.
-    """
     items_data = payload.get("items", [])
     payment_splits = payload.get("payments", [])
     totals = payload.get("totals", {})
@@ -118,10 +82,9 @@ def create_invoice(payload):
     rate_10gm = payload.get("rate_10gm") or 0
     making_rate_val = Decimal(str(payload.get("making_rate") or 0))
 
-    # 1. Extract relationships
     shop_id = payload.get("shop_id")
     customer_id = payload.get("customer_id")
-    order_id = payload.get("order_id")  # Optional: link to a pending order
+    order_id = payload.get("order_id")
     
     if not customer_id:
         from apps.customers.models import Customer
@@ -140,7 +103,7 @@ def create_invoice(payload):
     from apps.accounts.models import Shop
     shop = Shop.objects.get(id=shop_id)
     invoice_no = payload.get("invoice_no")
-    if not invoice_no or Invoice.objects.filter(invoice_no=invoice_no).exists():
+    if not invoice_no or Invoice.objects.filter(shop=shop, invoice_no=invoice_no).exists():
         invoice_no = generate_invoice_no(shop)
 
     # Resolve linked order + optional delivery block
@@ -150,22 +113,34 @@ def create_invoice(payload):
             from apps.orders.models import Order
             linked_order = Order.objects.select_for_update().get(id=order_id)
 
-            # Delivery block: if shop requires full payment and order balance is unpaid
-            if shop.require_full_payment_for_delivery and linked_order.payment_status != 'paid':
-                balance = linked_order.grand_total - (linked_order.advance or 0)
+            try:
+                existing_inv = linked_order.final_invoice
                 raise ValueError(
-                    f"Invoice blocked: order {linked_order.order_no} has an outstanding balance of "
-                    f"₹{balance:,.2f}. Collect full payment before finalising the invoice."
+                    f"A bill ({existing_inv.invoice_no}) already exists for order {linked_order.order_no}."
                 )
+            except Invoice.DoesNotExist:
+                pass
+
+            if shop.require_full_payment_for_delivery and linked_order.payment_status != 'paid':
+                receipts = linked_order.advance_payments.filter(status='active', is_refund=False)
+                refunds = linked_order.advance_payments.filter(status='active', is_refund=True)
+                receipt_total = sum((r.amount for r in receipts), Decimal('0')) - sum((r.amount for r in refunds), Decimal('0'))
+                order_advance = linked_order.advance or Decimal('0')
+                credit_val = getattr(linked_order, 'credit_applied', Decimal('0')) or Decimal('0')
+                balance = linked_order.grand_total - order_advance - receipt_total - credit_val
+                if balance > Decimal('0'):
+                    raise ValueError(
+                        f"Invoice blocked: order {linked_order.order_no} has an outstanding balance of "
+                        f"₹{balance:,.2f}. Collect full payment before finalising the invoice."
+                    )
         except ValueError:
             raise
         except Exception:
             linked_order = None
 
-    # Check and apply Old Purchase Voucher if mode is voucher
     old_purchase_voucher_val = None
     old_voucher_rate_used_val = totals.get("old_voucher_rate_used", "saved")
-    if totals.get("old_settlement_mode") == "voucher":
+    if totals.get("old_settlement_mode") == "voucher" or (linked_order and linked_order.old_settlement_mode == "voucher"):
         from apps.old_purchases.models import OldPurchaseVoucher
         voucher_id = (
             payload.get("old_purchase_voucher_id")
@@ -180,8 +155,10 @@ def create_invoice(payload):
             old_purchase_voucher_val = OldPurchaseVoucher.objects.get(
                 voucher_no__iexact=voucher_no_lookup.strip(), shop_id=shop_id
             )
+        elif linked_order and linked_order.old_purchase_voucher:
+            old_purchase_voucher_val = linked_order.old_purchase_voucher
+            old_voucher_rate_used_val = linked_order.old_voucher_rate_used or old_voucher_rate_used_val
 
-    # Create Invoice Header from exact frontend totals
     invoice = Invoice.objects.create(
         shop_id=shop_id,
         customer_id=customer_id,
@@ -215,24 +192,40 @@ def create_invoice(payload):
         payment_method=payment_splits[0].get("mode") if payment_splits else "cash"
     )
 
-    # Apply Old Purchase Voucher AFTER invoice row is committed — prevents
-    # the voucher being marked adjusted if invoice creation itself fails.
     if old_purchase_voucher_val:
         from apps.old_purchases.services import apply_voucher
-        apply_voucher(old_purchase_voucher_val, invoice_no=invoice_no)
+        apply_voucher(
+            old_purchase_voucher_val,
+            invoice_no=invoice_no,
+            order_no=linked_order.order_no if linked_order else None
+        )
 
-    # Apply credit notes if provided in the payload
     credit_applications = payload.get("credit_note_applications", []) or totals.get("credit_note_applications", [])
+    existing_order_usages = {}
+    if linked_order:
+        for usage in linked_order.credit_note_usages.all():
+            usage.applied_to_invoice = invoice
+            usage.save(update_fields=['applied_to_invoice'])
+            existing_order_usages[str(usage.credit_note_id)] = usage.amount_used
+            invoice.credit_applied += usage.amount_used
+        if not existing_order_usages and getattr(linked_order, 'credit_applied', 0):
+            invoice.credit_applied += linked_order.credit_applied
+        invoice.save(update_fields=['credit_applied'])
+
     if credit_applications:
         from apps.billing.services.credit_note_service import apply_credit_note
         for app in credit_applications:
             cn_id = app.get("credit_note_id") or app.get("id")
+            if not cn_id or str(cn_id).startswith('order-'):
+                continue
             cn_amt = Decimal(str(app.get("amount", 0)))
-            if cn_id and cn_amt > 0:
+            already_applied = existing_order_usages.get(str(cn_id), Decimal('0'))
+            additional_amt = cn_amt - already_applied
+            if additional_amt > 0:
                 apply_credit_note(
                     credit_note_id=cn_id,
                     invoice_id=invoice.id,
-                    amount_to_apply=cn_amt,
+                    amount_to_apply=additional_amt,
                     note=f"Applied to Invoice {invoice.invoice_no}"
                 )
         invoice.refresh_from_db()
@@ -262,11 +255,18 @@ def create_invoice(payload):
     # 4. Deduct inventory
     deduct_inventory(inventory_ids_to_deduct)
 
-    # 5. Process payments (existing payment_service)
     if payment_splits:
         process_payments(invoice, payment_splits)
+    else:
+        net_due = (
+            invoice.grand_total
+            - (invoice.advance or Decimal('0'))
+            - (getattr(invoice, 'credit_applied', Decimal('0')) or Decimal('0'))
+        )
+        if net_due <= Decimal('0.01'):
+            invoice.is_paid = True
+            invoice.save(update_fields=['is_paid'])
 
-    # 6. Post Customer Ledger + Cash Book entries for invoice payments
     from apps.payments.models import LedgerEntry, CashBookEntry
     total_paid_now = sum(
         Decimal(str(p.get("amount", 0)))
@@ -275,7 +275,6 @@ def create_invoice(payload):
     )
 
     if total_paid_now > 0:
-        # Determine customer for ledger
         from apps.customers.models import Customer as CustomerModel
         try:
             customer_obj = CustomerModel.objects.get(id=customer_id)
@@ -293,7 +292,6 @@ def create_invoice(payload):
                 reference_id=str(invoice.id)
             )
 
-        # Cash book entries per mode
         for p in payment_splits:
             split_amt = Decimal(str(p.get("amount", 0)))
             if split_amt > 0:
@@ -306,9 +304,8 @@ def create_invoice(payload):
                     notes=f"Invoice {invoice_no} payment"
                 )
 
-        # Recalculate linked order's payment status
-        if linked_order:
-            linked_order.recalculate_payment_state()
+    if linked_order:
+        linked_order.recalculate_payment_state()
 
     return invoice
 
@@ -342,13 +339,21 @@ def create_estimate(payload):
     from apps.accounts.models import Shop
     shop = Shop.objects.get(id=shop_id)
     estimate_no = payload.get("estimate_no") or payload.get("invoice_no")
-    if not estimate_no or Estimate.objects.filter(estimate_no=estimate_no).exists():
+    if not estimate_no or Estimate.objects.filter(shop=shop, estimate_no=estimate_no).exists():
         estimate_no = generate_estimate_no(shop)
 
-    # Check and apply Old Purchase Voucher if mode is voucher
+    order_id = payload.get("order_id")
+    linked_order = None
+    if order_id:
+        try:
+            from apps.orders.models import Order
+            linked_order = Order.objects.get(id=order_id)
+        except Exception:
+            linked_order = None
+
     old_purchase_voucher_val = None
     old_voucher_rate_used_val = totals.get("old_voucher_rate_used", "saved")
-    if totals.get("old_settlement_mode") == "voucher":
+    if totals.get("old_settlement_mode") == "voucher" or (linked_order and linked_order.old_settlement_mode == "voucher"):
         from apps.old_purchases.models import OldPurchaseVoucher
         voucher_id = (
             payload.get("old_purchase_voucher_id")
@@ -363,10 +368,14 @@ def create_estimate(payload):
             old_purchase_voucher_val = OldPurchaseVoucher.objects.get(
                 voucher_no__iexact=voucher_no_lookup.strip(), shop_id=shop_id
             )
+        elif linked_order and linked_order.old_purchase_voucher:
+            old_purchase_voucher_val = linked_order.old_purchase_voucher
+            old_voucher_rate_used_val = linked_order.old_voucher_rate_used or old_voucher_rate_used_val
 
     estimate = Estimate.objects.create(
         shop_id=shop_id,
         customer_id=customer_id,
+        order=linked_order,
         estimate_no=estimate_no,
         metal_type=payload.get("metal_type", "gold"),
         metal_rate=rate_10gm,
@@ -387,7 +396,7 @@ def create_estimate(payload):
         discount=totals.get("discount", 0),
         hallmark=totals.get("hallmark", 0),
         others=totals.get("others", 0),
-        cgst=0,  # Estimates typically avoid GST
+        cgst=0,
         sgst=0,
         igst=0,
         round_off=totals.get("round_off", 0),
@@ -396,10 +405,18 @@ def create_estimate(payload):
         payment_method="cash"
     )
 
-    # Apply voucher AFTER estimate row is safely committed
     if old_purchase_voucher_val:
         from apps.old_purchases.services import apply_voucher
-        apply_voucher(old_purchase_voucher_val, estimate_no=estimate_no)
+        apply_voucher(
+            old_purchase_voucher_val,
+            estimate_no=estimate_no,
+            order_no=linked_order.order_no if linked_order else None
+        )
+
+    if linked_order:
+        for usage in linked_order.credit_note_usages.all():
+            usage.applied_to_estimate = estimate
+            usage.save(update_fields=['applied_to_estimate'])
 
     estimate_ctype = ContentType.objects.get_for_model(Estimate)
 

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api, { extractList } from '../../lib/axios';
+import ExportButton from '../../components/elements/ExportButton';
 import useTabRefresh from '../../hooks/useTabRefresh';
 
 export default function RateChart({ isActive = true }) {
@@ -214,7 +215,18 @@ export default function RateChart({ isActive = true }) {
       <div className="data-table-wrapper animate-fade-in-up" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
         <div className="data-table-toolbar">
           <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>Rate History</h3>
-          <button className="btn btn--ghost btn--sm"><i className="fa-solid fa-download"></i> Export</button>
+          <ExportButton
+            data={rateHistory}
+            columns={[
+              { label: 'Date', key: 'created_at', transform: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '' },
+              { label: 'Metal Type', key: 'metal_type', transform: (val) => String(val || '').toUpperCase() },
+              { label: 'Rate / g (₹)', key: 'rate_per_10gm', transform: (val) => (Number(val || 0) / 10).toFixed(2) },
+              { label: 'Rate / 10g (₹)', key: 'rate_per_10gm' },
+              { label: 'Making / g (₹)', key: 'making_per_10gm', transform: (val) => (Number(val || 0) / 10).toFixed(2) }
+            ]}
+            filename="Rate_History"
+            sheetName="Rates"
+          />
         </div>
         <table className="data-table">
           <thead>

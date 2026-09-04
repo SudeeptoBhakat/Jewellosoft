@@ -150,6 +150,226 @@ function BillSetupModal({ onStart, onClose }) {
   );
 }
 
+function FetchOrderModal({ order, onClose, onConfirm }) {
+  const isItemBillable = useCallback((item) => {
+    return item.status === 'complete' && Boolean(item.inventory_item);
+  }, []);
+
+  const billableItems = useMemo(() => {
+    return (order.items || []).filter(isItemBillable);
+  }, [order.items, isItemBillable]);
+
+  const [selectedIds, setSelectedIds] = useState(() => {
+    return new Set(billableItems.map(i => i.id));
+  });
+
+  const toggleItem = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllBillable = () => {
+    if (selectedIds.size === billableItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(billableItems.map(i => i.id)));
+    }
+  };
+
+  const handleImport = () => {
+    if (selectedIds.size === 0) return;
+    onConfirm(order, selectedIds);
+  };
+
+  const orderDateStr = order.created_at
+    ? new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+
+  return (
+    <>
+      <div className="overlay" style={{ zIndex: 10000 }} onClick={onClose} />
+      <div className="modal" style={{ maxWidth: 780, maxHeight: '90vh', zIndex: 10001, display: 'flex', flexDirection: 'column' }}>
+        <div className="modal__header">
+          <h2 className="modal__title">
+            <i className="fa-solid fa-file-invoice" style={{ marginRight: 8, color: 'var(--color-primary)' }}></i>
+            Order Details — {order.order_no}
+          </h2>
+          <button className="btn btn--ghost btn--icon" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div className="modal__body" style={{ padding: 'var(--space-4)', overflowY: 'auto' }}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 'var(--space-3)', fontSize: 'var(--text-xs)' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Customer</span>
+                <strong style={{ fontSize: 'var(--text-sm)' }}>{order.customer_detail?.name || 'Walk-in Customer'}</strong>
+                {order.customer_detail?.phone && <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{order.customer_detail.phone}</div>}
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Order Type & Metal</span>
+                <strong style={{ fontSize: 'var(--text-sm)', textTransform: 'capitalize' }}>
+                  {order.order_type || 'Invoice'} • {order.metal_type || 'Gold'}
+                </strong>
+                <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{orderDateStr}</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Order Rate</span>
+                <strong style={{ fontSize: 'var(--text-sm)' }}>
+                  ₹{(order.metal_type?.toLowerCase() === 'silver'
+                    ? (parseFloat(order.metal_rate || 0) > 300 ? parseFloat(order.metal_rate || 0) / 10 : parseFloat(order.metal_rate || 0))
+                    : (parseFloat(order.metal_rate || 0) > 2000 ? parseFloat(order.metal_rate || 0) / 10 : parseFloat(order.metal_rate || 0))
+                  ).toLocaleString('en-IN')}/g
+                </strong>
+                <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>Making: ₹{parseFloat(order.making_rate || 0).toLocaleString('en-IN')}/g</div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Financial Summary</span>
+                <div>Total: <strong>₹{fmtInt(order.grand_total || 0)}</strong></div>
+                <div style={{ color: 'var(--color-accent)' }}>Advance: ₹{fmtInt(order.advance || 0)}</div>
+                {parseFloat(order.credit_applied || 0) > 0 && (
+                  <div style={{ color: 'var(--color-primary, #d97706)' }}>Credit: ₹{fmtInt(order.credit_applied || 0)}</div>
+                )}
+                {(order.old_purchase_voucher_no || order.old_purchase_voucher_detail?.voucher_no) && (
+                  <div style={{ color: 'var(--color-info)' }}>Voucher: {order.old_purchase_voucher_no || order.old_purchase_voucher_detail?.voucher_no}</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {billableItems.length === 0 ? (
+            <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-warning-muted)', border: '1px solid var(--color-warning)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--text-sm)' }}>
+              <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--color-warning)', fontSize: '1.1rem' }}></i>
+              <div>
+                <strong>No products in this order are eligible for billing yet.</strong>
+                <div style={{ fontSize: 'var(--text-xs)', marginTop: 2 }}>
+                  Products must be both <strong>Completed</strong> and <strong>Added to Stock Inventory</strong> before generating a bill.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-info-muted)', border: '1px solid var(--color-info)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--text-sm)' }}>
+              <i className="fa-solid fa-circle-info" style={{ color: 'var(--color-info)', fontSize: '1.1rem' }}></i>
+              <div>
+                <strong>{billableItems.length} of {(order.items || []).length} product(s)</strong> are completed and in stock inventory, ready for billing. Select the items to import.
+              </div>
+            </div>
+          )}
+
+          <div style={{ border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <table className="billing-items-table" style={{ margin: 0 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={billableItems.length > 0 && selectedIds.size === billableItems.length}
+                      disabled={billableItems.length === 0}
+                      onChange={toggleAllBillable}
+                    />
+                  </th>
+                  <th style={{ width: 36 }}>#</th>
+                  <th>Product Name</th>
+                  <th style={{ width: 100 }}>Weight (g)</th>
+                  <th style={{ width: 120 }}>Status</th>
+                  <th style={{ width: 140 }}>Stock Status</th>
+                  <th style={{ width: 140 }}>Eligibility</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(order.items || []).map((item, idx) => {
+                  const isComplete = item.status === 'complete';
+                  const hasInventory = Boolean(item.inventory_item);
+                  const isBillable = isComplete && hasInventory;
+                  const isSelected = selectedIds.has(item.id);
+
+                  return (
+                    <tr
+                      key={item.id || idx}
+                      style={{
+                        background: isBillable ? (isSelected ? 'var(--bg-surface)' : 'transparent') : 'var(--bg-muted, rgba(0,0,0,0.02))',
+                        opacity: isBillable ? 1 : 0.65
+                      }}
+                    >
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isBillable}
+                          onChange={() => toggleItem(item.id)}
+                        />
+                      </td>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{item.product_name}</div>
+                        {(item.size || item.design_remarks) && (
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                            {item.size ? `Size: ${item.size} ` : ''}{item.design_remarks ? `• ${item.design_remarks}` : ''}
+                          </div>
+                        )}
+                      </td>
+                      <td>{parseFloat(item.expected_weight || 0).toFixed(3)}g</td>
+                      <td>
+                        <span className={`badge badge--${isComplete ? 'success' : 'info'}`} style={{ textTransform: 'capitalize' }}>
+                          {isComplete ? <i className="fa-solid fa-check" style={{ marginRight: 4 }}></i> : null}
+                          {item.status?.replace('_', ' ') || 'Created'}
+                        </span>
+                      </td>
+                      <td>
+                        {hasInventory ? (
+                          <span className="badge badge--accent" style={{ fontSize: '0.65rem' }}>
+                            <i className="fa-solid fa-boxes-stacked" style={{ marginRight: 4 }}></i>
+                            In Inventory {item.inventory_item_detail?.barcode ? `(${item.inventory_item_detail.barcode})` : ''}
+                          </span>
+                        ) : (
+                          <span className="badge badge--neutral" style={{ fontSize: '0.65rem' }}>
+                            Not in Stock
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {isBillable ? (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)', fontWeight: 600 }}>
+                            <i className="fa-solid fa-circle-check" style={{ marginRight: 4 }}></i> Ready
+                          </span>
+                        ) : isComplete && !hasInventory ? (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', fontWeight: 500 }}>
+                            Add to stock first
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                            Incomplete item
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="modal__footer">
+          <button type="button" className="btn btn--ghost" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={selectedIds.size === 0}
+            onClick={handleImport}
+          >
+            <i className="fa-solid fa-arrow-down-to-bracket"></i>
+            Import {selectedIds.size} Completed Product{selectedIds.size === 1 ? '' : 's'} to Bill
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function Billing({ tabId, isActive }) {
   const navigate = useNavigate();
   const { shop } = useAuth();
@@ -178,6 +398,7 @@ export default function Billing({ tabId, isActive }) {
   const [loadedOrderTotal, setLoadedOrderTotal] = useState(0);
   const [orderTimeAdvance, setOrderTimeAdvance] = useState(0);
   const [billNumber, setBillNumber] = useState('');  // populated from API response after save
+  const [fetchOrderData, setFetchOrderData] = useState(null);
 
   /* ─── Customer ─── */
   const [customerId, setCustomerId] = useState(null);
@@ -188,13 +409,22 @@ export default function Billing({ tabId, isActive }) {
   const [showCustSuggestions, setShowCustSuggestions] = useState(false);
   const custWrapRef = useRef(null);
 
-  // Credit Note states
   const [appliedCreditNotes, setAppliedCreditNotes] = useState([]);
   const creditAppliedAmount = appliedCreditNotes.reduce((sum, n) => sum + parseFloat(n.amount || 0), 0);
+  const prevCustIdRef = useRef(customerId);
+  const skipCreditResetRef = useRef(false);
 
   useEffect(() => {
-    setAppliedCreditNotes([]);
-  }, [customerId]);
+    if (skipCreditResetRef.current) {
+      skipCreditResetRef.current = false;
+      prevCustIdRef.current = customerId;
+      return;
+    }
+    if (prevCustIdRef.current !== customerId) {
+      prevCustIdRef.current = customerId;
+      setAppliedCreditNotes(prev => linkedOrderId ? prev.filter(n => n.from_order) : []);
+    }
+  }, [customerId, linkedOrderId]);
 
   // Debounced Customer Search
   useEffect(() => {
@@ -505,16 +735,18 @@ export default function Billing({ tabId, isActive }) {
       otherCharges,
       advance: orderTimeAdvance + prevAdvanceTotal + (parseFloat(advance) || 0),
       discount,
+      creditApplied: creditAppliedAmount,
       cashAmt,
       onlineAmt,
       isIgst,
       gstRate: parseFloat(shop?.default_gst_rate) || 3.0,
       igstRate: parseFloat(shop?.default_igst_rate) || 3.0,
     });
-  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, oldVoucherRateMode, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, cashAmt, onlineAmt, isIgst, shop]);
+  }, [items, metalRate, oldSettlementMode, oldWeight, oldDeductPct, oldValueDirect, oldVoucherRateMode, hallmarkCount, hallmarkValue, billType, otherCharges, advance, orderTimeAdvance, prevAdvanceTotal, discount, creditAppliedAmount, cashAmt, onlineAmt, isIgst, shop]);
 
   /* ─── Order Integration ─── */
   const [orderLoading, setOrderLoading] = useState(false);
+
   const handleLoadOrder = async () => {
     if (!orderNumber.trim()) return;
     setOrderLoading(true);
@@ -532,139 +764,161 @@ export default function Billing({ tabId, isActive }) {
         return;
       }
 
-      console.log('[OrderLoad] Loaded order:', ord);
-
-      // Allow billing for completed, delivered, pending, or in_progress orders (any non-cancelled status)
-      const BILLABLE_STATUSES = ['completed', 'delivered', 'complete', 'pending', 'in_progress'];
-      if (!BILLABLE_STATUSES.includes(ord.order_status)) {
-        toast.error(`Billing not allowed for orders with status: "${ord.order_status}". Must be Completed, Delivered, Pending or In-Progress.`);
-        return;
-      }
-
-      // ── 1. Customer Details ──────────────────────────────────────────────
-      if (ord.customer) setCustomerId(ord.customer);
-      if (ord.customer_detail?.name)    setCustName(ord.customer_detail.name);
-      if (ord.customer_detail?.phone)   setCustMobile(ord.customer_detail.phone);
-      if (ord.customer_detail?.address) setCustAddress(ord.customer_detail.address);
-
-      // ── 2. Order Meta ────────────────────────────────────────────────────
-      setOrderDate(ord.created_at?.split('T')[0] || '');
-      setLinkedOrderId(ord.id);
-      setLoadedOrderTotal(parseFloat(ord.grand_total || 0));
-
-      // ── 3. Metal Type & Bill Type ────────────────────────────────────────
-      // metal_type: 'Gold' | 'Silver' — if it matches the current metalType, skip; else warn user
-      const orderMetal = ord.metal_type
-        ? ord.metal_type.charAt(0).toUpperCase() + ord.metal_type.slice(1).toLowerCase()
-        : '';
-      if (orderMetal && ['Gold', 'Silver'].includes(orderMetal)) {
-        setMetalType(orderMetal);
-      }
-
-      // order_type: 'invoice' | 'estimate' → maps to billType 'Invoice' | 'Estimate'
-      const orderBillType = ord.order_type === 'estimate' ? 'Estimate' : 'Invoice';
-      setBillType(orderBillType);
-
-      // ── 4. Metal Rate & Making Rate ──────────────────────────────────────
-      const orderMetalRate = parseFloat(ord.metal_rate || 0);
-      const orderMakingRate = parseFloat(ord.making_rate || 0);
-      if (orderMetalRate > 0) setMetalRate(orderMetalRate);
-      if (orderMakingRate > 0) setMakingRate(orderMakingRate);
-
-      // ── 5. Charges & Deductions ──────────────────────────────────────────
-      // Other charges
-      const orderOtherCharges = parseFloat(ord.others || 0);
-      if (orderOtherCharges > 0) setOtherCharges(String(orderOtherCharges));
-
-      // Discount
-      const orderDiscount = parseFloat(ord.discount || 0);
-      if (orderDiscount > 0) setDiscount(String(orderDiscount));
-
-      // Hallmark — derive count from hallmark amount ÷ hallmark unit value
-      const orderHallmarkAmt = parseFloat(ord.hallmark || 0);
-      if (orderHallmarkAmt > 0) {
-        const derivedCount = Math.round(orderHallmarkAmt / (hallmarkValue || 53));
-        if (derivedCount > 0) setHallmarkCount(String(derivedCount));
-      }
-
-      // ── 6. Old Metal Exchange ────────────────────────────────────────────
-      const ordOldMode = ord.old_settlement_mode || 'none';
-      const ordOldWt   = parseFloat(ord.old_weight || 0);
-      const ordOldDirect = parseFloat(ord.old_value_direct || 0);
-      const ordOldDeductPct = parseFloat(ord.old_deduct_percent || 0);
-
-      if (ordOldMode && ordOldMode !== 'none') {
-        setOldSettlementMode(ordOldMode);
-        if (ordOldWt > 0)      setOldWeight(String(ordOldWt));
-        if (ordOldDirect > 0)  setOldValueDirect(String(ordOldDirect));
-        if (ordOldDeductPct > 0) setOldDeductPct(String(ordOldDeductPct));
-      }
-
-      // ── 7. Advance & Payment History ────────────────────────────────────
-      const orderAdv = parseFloat(ord.advance || 0);
-      setOrderTimeAdvance(orderAdv);
-
-      // Explicit advance receipts (AdvancePayment records created after order booking)
-      let receiptsList = ord.advance_payments || [];
-      if (!receiptsList.length) {
-        try {
-          const advRes = await api.get(`/payments/advances/?order=${ord.id}`);
-          receiptsList = extractList(advRes.data);
-        } catch (advErr) {
-          console.error('Error fetching advance receipts:', advErr);
-        }
-      }
-      setOrderAdvances(receiptsList.filter(p => p.status === 'active'));
-
-      // Additional payment today — blank; user fills if needed
-      setAdvance('');
-
-      // ── 8. Items — full field mapping with validation ────────────────────
-      const currentRate  = parseFloat(ord.metal_rate || 0) || metalRate;
-      const currentMRate = parseFloat(ord.making_rate || 0) || makingRate;
-
-      if (ord.items && ord.items.length > 0) {
-        const mappedItems = ord.items
-          .filter(i => i.product_name && i.product_name.trim() !== '') // skip invalid items
-          .map(i => {
-            const weight = String(parseFloat(i.expected_weight || i.weight || 0) || '');
-            const makingCharges = String(parseFloat(i.making_charge || 0) || '');
-
-            // Build base item then run recalcItem so metalValue and total are live
-            const baseItem = {
-              id: Date.now() + Math.random(),
-              inventory_id: i.inventory_item || null,
-              name: i.product_name || '',
-              huid: '',               // OrderItem has no HUID field
-              weight,
-              makingCharges,
-              metalValue: parseFloat(i.metal_value || 0) || 0,
-              total:      parseFloat(i.total || 0) || 0,
-              _fromOrder: true,
-            };
-
-            // Recalc at current rate so values are always consistent
-            return recalcItem(baseItem, currentRate, currentMRate);
-          });
-
-        if (mappedItems.length > 0) {
-          setItems(mappedItems);
-        } else {
-          setItems([createEmptyItem()]);
-        }
-      } else {
-        // No items on order — start with one empty row
-        setItems([createEmptyItem()]);
-      }
-
-      toast.success(`Order ${ord.order_no} loaded successfully! All details auto-filled.`);
-
+      setFetchOrderData(ord);
     } catch (err) {
-      console.error('[OrderLoad] Error:', err);
-      toast.error('Error fetching order. Please check the order number and try again.');
+      console.error(err);
+      toast.error('Error fetching order.');
     } finally {
       setOrderLoading(false);
     }
+  };
+
+  const handleConfirmImportOrder = (ord, selectedItemIds) => {
+    skipCreditResetRef.current = true;
+    if (ord.customer) setCustomerId(ord.customer);
+    if (ord.customer_detail?.name)    setCustName(ord.customer_detail.name);
+    if (ord.customer_detail?.phone)   setCustMobile(ord.customer_detail.phone);
+    if (ord.customer_detail?.address) setCustAddress(ord.customer_detail.address);
+
+    setOrderDate(ord.created_at?.split('T')[0] || '');
+    setLinkedOrderId(ord.id);
+    setLoadedOrderTotal(parseFloat(ord.grand_total || 0));
+
+    const orderMetal = ord.metal_type
+      ? ord.metal_type.charAt(0).toUpperCase() + ord.metal_type.slice(1).toLowerCase()
+      : '';
+    if (orderMetal && ['Gold', 'Silver'].includes(orderMetal)) {
+      setMetalType(orderMetal);
+    }
+
+    const orderBillType = ord.order_type === 'estimate' ? 'Estimate' : 'Invoice';
+    setBillType(orderBillType);
+
+    let orderMetalRate = parseFloat(ord.metal_rate || 0);
+    if (orderMetalRate > 0) {
+      if (ord.metal_type?.toLowerCase() === 'silver') {
+        if (orderMetalRate > 300) orderMetalRate = orderMetalRate / 10;
+      } else {
+        if (orderMetalRate > 2000) orderMetalRate = orderMetalRate / 10;
+      }
+      setMetalRate(orderMetalRate);
+    }
+    const orderMakingRate = parseFloat(ord.making_rate || 0);
+    if (orderMakingRate > 0) setMakingRate(orderMakingRate);
+
+    const orderOtherCharges = parseFloat(ord.others || 0);
+    if (orderOtherCharges > 0) setOtherCharges(String(orderOtherCharges));
+
+    const orderDiscount = parseFloat(ord.discount || 0);
+    if (orderDiscount > 0) setDiscount(String(orderDiscount));
+
+    const orderHallmarkAmt = parseFloat(ord.hallmark || 0);
+    if (orderHallmarkAmt > 0) {
+      const derivedCount = Math.round(orderHallmarkAmt / (hallmarkValue || 53));
+      if (derivedCount > 0) setHallmarkCount(String(derivedCount));
+    }
+
+    const ordOldMode = ord.old_settlement_mode || 'none';
+    const ordOldWt   = parseFloat(ord.old_weight || 0);
+    const ordOldDirect = parseFloat(ord.old_value_direct || 0);
+    const ordOldDeductPct = parseFloat(ord.old_deduct_percent || 0);
+
+    if (ordOldMode && ordOldMode !== 'none') {
+      setOldSettlementMode(ordOldMode);
+      if (ordOldWt > 0)      setOldWeight(String(ordOldWt));
+      if (ordOldDirect > 0)  setOldValueDirect(String(ordOldDirect));
+      if (ordOldDeductPct > 0) setOldDeductPct(String(ordOldDeductPct));
+
+      if (ordOldMode === 'voucher') {
+        const vNo = ord.old_purchase_voucher_no || ord.old_purchase_voucher_detail?.voucher_no || '';
+        const vData = ord.old_purchase_voucher_detail || null;
+        const rateMode = ord.old_voucher_rate_used || 'saved';
+        setOldVoucherNo(vNo);
+        setOldVoucherRateMode(rateMode);
+        if (vData) {
+          setOldVoucherData(vData);
+          if (rateMode === 'saved') {
+            setOldValueDirect(String(vData.amount || ordOldDirect || 0));
+            setOldWeight(String(vData.net_weight || ordOldWt || 0));
+          } else {
+            setOldWeight(String(vData.net_weight || ordOldWt || 0));
+          }
+        } else if (vNo) {
+          api.get(`/old-purchases/vouchers/lookup/?no=${encodeURIComponent(vNo)}&order_no=${encodeURIComponent(ord.order_no)}`)
+            .then(res => {
+              if (res.data?.voucher) {
+                setOldVoucherData(res.data.voucher);
+                if (rateMode === 'saved') {
+                  setOldValueDirect(String(res.data.voucher.amount || ordOldDirect || 0));
+                  setOldWeight(String(res.data.voucher.net_weight || ordOldWt || 0));
+                } else {
+                  setOldWeight(String(res.data.voucher.net_weight || ordOldWt || 0));
+                }
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    }
+
+    const orderAdv = parseFloat(ord.advance || 0);
+    setOrderTimeAdvance(orderAdv);
+
+    let receiptsList = ord.advance_payments || [];
+    setOrderAdvances(receiptsList.filter(p => p.status === 'active'));
+    setAdvance('');
+
+    if (ord.credit_note_usages && ord.credit_note_usages.length > 0) {
+      const orderCNs = ord.credit_note_usages.map(u => ({
+        credit_note_id: u.credit_note_id,
+        credit_note_no: u.credit_note_no,
+        amount: parseFloat(u.amount_used || 0),
+        reason: u.reason || 'Applied to Order',
+        from_order: true,
+      }));
+      setAppliedCreditNotes(orderCNs);
+    } else if (parseFloat(ord.credit_applied || 0) > 0) {
+      setAppliedCreditNotes([{
+        credit_note_id: 'order-credit',
+        credit_note_no: `Order #${ord.order_no} Credit`,
+        amount: parseFloat(ord.credit_applied || 0),
+        reason: 'Applied to Order',
+        from_order: true,
+      }]);
+    } else {
+      setAppliedCreditNotes([]);
+    }
+
+    const currentRate  = orderMetalRate || metalRate;
+    const currentMRate = parseFloat(ord.making_rate || 0) || makingRate;
+
+    const selectedItems = (ord.items || []).filter(i => selectedItemIds.has(i.id));
+
+    if (selectedItems.length > 0) {
+      const mappedItems = selectedItems.map(i => {
+        const weight = String(parseFloat(i.inventory_item_detail?.net_weight || i.expected_weight || i.weight || 0) || '');
+        const makingCharges = String(parseFloat(i.making_charge || 0) || '');
+
+        const baseItem = {
+          id: Date.now() + Math.random(),
+          inventory_id: i.inventory_item || i.inventory_item_detail?.id || null,
+          name: i.inventory_item_detail?.name || i.product_name || '',
+          huid: i.inventory_item_detail?.huid || '',
+          weight,
+          makingCharges,
+          metalValue: parseFloat(i.metal_value || 0) || 0,
+          total:      parseFloat(i.total || 0) || 0,
+          _fromOrder: true,
+        };
+
+        return recalcItem(baseItem, currentRate, currentMRate);
+      });
+
+      setItems(mappedItems);
+      toast.success(`Imported ${mappedItems.length} completed item(s) from order ${ord.order_no}.`);
+    }
+
+    setFetchOrderData(null);
   };
 
   const handleFetchVoucher = async () => {
@@ -673,7 +927,8 @@ export default function Billing({ tabId, isActive }) {
     setOldVoucherError(null);
     setOldVoucherData(null);
     try {
-      const res = await api.get(`/old-purchases/vouchers/lookup/?no=${encodeURIComponent(oldVoucherNo.trim())}`);
+      const orderParam = orderNumber.trim() ? `&order_no=${encodeURIComponent(orderNumber.trim())}` : '';
+      const res = await api.get(`/old-purchases/vouchers/lookup/?no=${encodeURIComponent(oldVoucherNo.trim())}${orderParam}`);
       const data = res.data;
       if (!data.found) {
         setOldVoucherError(data.error_message || 'Voucher not found.');
@@ -1056,13 +1311,27 @@ export default function Billing({ tabId, isActive }) {
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Order Number</label>
               <div className="flex gap-2">
-                <input className="form-input" type="text" placeholder="Order #" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} id="bill-order-num" />
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Order #"
+                  value={orderNumber}
+                  onChange={e => setOrderNumber(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleLoadOrder();
+                    }
+                  }}
+                  id="bill-order-num"
+                />
                 <button
+                  type="button"
                   className="btn btn--secondary btn--sm"
                   style={{ padding: '0 10px' }}
                   onClick={handleLoadOrder}
                   disabled={orderLoading || !orderNumber.trim()}
-                  title="Load Complete Order"
+                  title="Fetch Order Details"
                 >
                   {orderLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-cloud-arrow-down"></i>}
                 </button>
@@ -1460,7 +1729,7 @@ export default function Billing({ tabId, isActive }) {
               <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
                   {/* Advance breakdown — auto-populated when order is loaded */}
-                  {(orderTimeAdvance > 0 || prevAdvanceTotal > 0) && (
+                  {(orderTimeAdvance > 0 || prevAdvanceTotal > 0 || creditAppliedAmount > 0) && (
                     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: 8, fontSize: 'var(--text-xs)' }}>
                       <div style={{ fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Already Collected</div>
                       {orderTimeAdvance > 0 && (
@@ -1475,10 +1744,16 @@ export default function Billing({ tabId, isActive }) {
                           <span style={{ fontWeight: 600 }}>₹{prevAdvanceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
+                      {creditAppliedAmount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--text-secondary)' }}>
+                          <span><i className="fa-solid fa-ticket" style={{ marginRight: 5, opacity: 0.6 }} />Credit Note(s) Applied</span>
+                          <span style={{ fontWeight: 600 }}>₹{creditAppliedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
                       <div style={{ borderTop: '1px dashed var(--border-secondary)', paddingTop: 5, marginTop: 3, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
                         <span style={{ color: 'var(--color-primary)' }}>Balance Due</span>
                         <span style={{ color: 'var(--color-primary)', fontSize: '0.85rem' }}>
-                          ₹{Math.max(loadedOrderTotal - orderTimeAdvance - prevAdvanceTotal, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          ₹{Math.max(loadedOrderTotal - orderTimeAdvance - prevAdvanceTotal - creditAppliedAmount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -1613,13 +1888,25 @@ export default function Billing({ tabId, isActive }) {
                 </>
               ) : (
                 <>
-                  {/* ── Normal / Old≤New Scenario ── */}
                   <div className="bill-sline"><span>New Product Value <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({calc.totalWeight.toFixed(3)}g × ₹{metalRate.toLocaleString('en-IN')} + Making)</span></span><span>{fmt(calc.newProductValue)}</span></div>
                   {calc.hasOld && (
-                    <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
-                      <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
-                      <span>{fmt(calc.effectiveOldValue)}</span>
-                    </div>
+                    oldSettlementMode === 'voucher' && oldVoucherData ? (
+                      <div style={{ padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', margin: '6px 0', fontSize: 'var(--text-xs)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 3 }}>
+                          <span><i className="fa-solid fa-ticket" style={{ marginRight: 5 }} />Voucher #{oldVoucherData.voucher_no}</span>
+                          <span style={{ color: 'var(--color-danger)' }}>−{fmt(calc.effectiveOldValue)}</span>
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{oldVoucherData.metal_type?.toUpperCase()} {oldVoucherData.purity} • {Number(oldVoucherData.net_weight || 0).toFixed(3)}g</span>
+                          <span>{oldVoucherRateMode === 'saved' ? `Saved: ₹${Number(oldVoucherData.rate_per_10gm || 0).toLocaleString('en-IN')}/10g` : `Current: ₹${(metalRate * 10).toLocaleString('en-IN')}/10g`}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bill-sline" style={{ color: 'var(--color-danger)' }}>
+                        <span>(−) Old {metalType} {calc.oldMode === 'value' ? '(Direct)' : `(${calc.oldWt.toFixed(3)}g)`}</span>
+                        <span>{fmt(calc.effectiveOldValue)}</span>
+                      </div>
+                    )
                   )}
                   <div className="bill-sline" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '4px' }}>
                     <span style={{ fontWeight: 600 }}>Subtotal</span>
@@ -1654,11 +1941,28 @@ export default function Billing({ tabId, isActive }) {
                       <span>{fmt(orderTimeAdvance)}</span>
                     </div>
                   )}
-                  {prevAdvanceTotal > 0 && (
-                    <div className="bill-sline bill-sline--deduct" style={{ color: '#059669' }}>
-                      <span>(−) Advance Receipts</span>
-                      <span>{fmt(prevAdvanceTotal)}</span>
-                    </div>
+                  {orderAdvances && orderAdvances.length > 0 ? (
+                    <>
+                      {orderAdvances.filter(p => p.status === 'active' && !p.is_refund).map((adv, idx) => (
+                        <div key={adv.id || idx} className="bill-sline bill-sline--deduct" style={{ color: '#059669' }}>
+                          <span>(−) Advance {adv.receipt_no || `#${idx + 1}`} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({(adv.payment_mode || 'cash').toUpperCase()})</span></span>
+                          <span>{fmt(adv.amount)}</span>
+                        </div>
+                      ))}
+                      {orderAdvances.filter(p => p.status === 'active' && p.is_refund).map((adv, idx) => (
+                        <div key={adv.id || idx} className="bill-sline" style={{ color: 'var(--color-danger)' }}>
+                          <span>(+) Refund {adv.receipt_no || `#${idx + 1}`} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({(adv.payment_mode || 'cash').toUpperCase()})</span></span>
+                          <span>+{fmt(adv.amount)}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    prevAdvanceTotal > 0 && (
+                      <div className="bill-sline bill-sline--deduct" style={{ color: '#059669' }}>
+                        <span>(−) Advance Receipts</span>
+                        <span>{fmt(prevAdvanceTotal)}</span>
+                      </div>
+                    )
                   )}
                   {(parseFloat(advance) || 0) > 0 && (
                     <div className="bill-sline bill-sline--deduct" style={{ color: 'var(--color-info, #3b82f6)' }}>
@@ -1699,13 +2003,22 @@ export default function Billing({ tabId, isActive }) {
               </div>
             )}
 
-            {/* Indicator */}
             {calc.finalAmt !== 0 && (
               <div style={{ textAlign: 'center', marginTop: 'var(--space-3)' }}>
                 {calc.transactionType === 'payable' ? (
-                  <span className="bill-indicator bill-indicator--pay">
-                    <i className="fa-solid fa-arrow-up"></i> Customer Pays
-                  </span>
+                  creditAppliedAmount > 0 && calc.finalAmt - creditAppliedAmount <= 0 ? (
+                    <span className="bill-indicator" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--color-success, #16a34a)', border: '1px solid rgba(34,197,94,0.3)', padding: '6px 14px', borderRadius: 999, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fa-solid fa-circle-check"></i> Fully Paid (Credit Note)
+                    </span>
+                  ) : creditAppliedAmount > 0 ? (
+                    <span className="bill-indicator bill-indicator--pay">
+                      <i className="fa-solid fa-arrow-up"></i> Customer Pays {fmt(calc.finalAmt - creditAppliedAmount)}
+                    </span>
+                  ) : (
+                    <span className="bill-indicator bill-indicator--pay">
+                      <i className="fa-solid fa-arrow-up"></i> Customer Pays
+                    </span>
+                  )
                 ) : (
                   <span className="bill-indicator bill-indicator--return">
                     <i className="fa-solid fa-arrow-down"></i> Return {fmt(Math.abs(calc.finalAmt))} to Customer
@@ -1770,6 +2083,13 @@ export default function Billing({ tabId, isActive }) {
             </div>
           </div>
         </>
+      )}
+      {fetchOrderData && (
+        <FetchOrderModal
+          order={fetchOrderData}
+          onClose={() => setFetchOrderData(null)}
+          onConfirm={handleConfirmImportOrder}
+        />
       )}
     </div>
   );

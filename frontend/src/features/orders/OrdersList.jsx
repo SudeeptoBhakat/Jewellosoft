@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
+import ExportButton from '../../components/elements/ExportButton';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from '../../utils/toast';
+import { shortNo } from '../../utils/formatters';
 
 /* ─── Item Status Pipeline ─── */
 const ITEM_STATUSES = [
@@ -47,9 +50,128 @@ function deriveOrderStatus(items, originalStatus) {
   return 'pending';
 }
 
-/* ═══════════════════════════════════════════
-   ORDER DETAIL / TRACKING MODAL
-   ═══════════════════════════════════════════ */
+function AdvanceHoverCell({ order }) {
+  const [open, setOpen] = useState(false);
+  const bookingAdv = parseFloat(order.advance || 0);
+  const receipts = order.advance_payments || [];
+  const activeReceipts = receipts.filter(r => r.status === 'active' && !r.is_refund);
+  const refundReceipts = receipts.filter(r => r.status === 'active' && r.is_refund);
+  const sumReceipts = activeReceipts.reduce((s, r) => s + parseFloat(r.amount || 0), 0) - refundReceipts.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  const totalAdv = bookingAdv + sumReceipts;
+  const grandTotal = parseFloat(order.grand_total || 0);
+  const balanceDue = Math.max(0, grandTotal - totalAdv);
+  const totalCount = (bookingAdv > 0 ? 1 : 0) + receipts.length;
+
+  if (totalAdv <= 0 && totalCount === 0) {
+    return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+  }
+
+  return (
+    <div
+      className="advance-hover-cell"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+    >
+      <span style={{ fontWeight: 600, color: 'var(--color-accent)' }}>
+        {fmtInt(totalAdv)}
+      </span>
+      {totalCount > 1 && (
+        <span className="advance-badge">
+          {totalCount} adv
+        </span>
+      )}
+      {totalCount === 1 && (
+        <i className="fa-solid fa-circle-info" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.7 }} />
+      )}
+      {open && (
+        <div className="advance-popover" onClick={e => e.stopPropagation()}>
+          <div className="advance-popover__header">
+            <div className="advance-popover__title">
+              <i className="fa-solid fa-receipt" style={{ color: 'var(--color-primary)' }} />
+              Advance Breakdown ({totalCount})
+            </div>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+              Total: {fmtInt(totalAdv)}
+            </span>
+          </div>
+
+          <div className="advance-popover__list">
+            {bookingAdv > 0 && (
+              <div className="advance-popover__item">
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Booking Advance</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : 'Order Date'} • Booking
+                  </div>
+                </div>
+                <div style={{ fontWeight: 700, color: 'var(--color-success)' }}>
+                  +{fmt(bookingAdv)}
+                </div>
+              </div>
+            )}
+            {receipts.map((adv, idx) => {
+              const isCancelled = adv.status === 'cancelled';
+              const isRefund = adv.is_refund;
+              return (
+                <div
+                  key={adv.id || idx}
+                  className="advance-popover__item"
+                  style={{ opacity: isCancelled ? 0.5 : 1 }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: isCancelled ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                      {adv.receipt_no || `Advance #${idx + 1}`}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                      {adv.payment_date ? new Date(adv.payment_date).toLocaleDateString('en-IN') : '—'} • <span style={{ textTransform: 'uppercase' }}>{adv.payment_mode || 'Cash'}</span>
+                    </div>
+                    {adv.notes && (
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                        {adv.notes}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{
+                      fontWeight: 700,
+                      color: isCancelled ? 'var(--text-muted)' : isRefund ? 'var(--color-danger)' : 'var(--color-success)',
+                      textDecoration: isCancelled ? 'line-through' : 'none'
+                    }}>
+                      {isRefund ? '−' : '+'}{fmt(adv.amount)}
+                    </div>
+                    {isCancelled && (
+                      <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)' }}>Cancelled</span>
+                    )}
+                    {isRefund && !isCancelled && (
+                      <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)' }}>Refund</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="advance-popover__footer">
+            <div className="flex justify-between" style={{ color: 'var(--text-secondary)' }}>
+              <span>Total Advance</span>
+              <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{fmt(totalAdv)}</span>
+            </div>
+            {grandTotal > 0 && (
+              <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}>
+                <span>Balance Due</span>
+                <span style={{ fontWeight: 600, color: balanceDue > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                  {balanceDue > 0 ? fmt(balanceDue) : 'Settled'}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddToInventory }) {
   if (!order) return null;
   const totalWeight = order.items?.reduce((s, i) => s + parseFloat(i.expected_weight || 0), 0) || 0;
@@ -57,11 +179,24 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
   const orderProg = order.items && order.items.length > 0 ? Math.round(order.items.reduce((s, i) => s + getProgress(i.status), 0) / order.items.length) : 0;
   const orderSt = deriveOrderStatus(order.items, order.order_status);
 
+  const bookingAdv = parseFloat(order.advance || 0);
+  const receipts = order.advance_payments || [];
+  const activeReceipts = receipts.filter(r => r.status === 'active' && !r.is_refund);
+  const refundReceipts = receipts.filter(r => r.status === 'active' && r.is_refund);
+  const sumReceipts = activeReceipts.reduce((s, r) => s + parseFloat(r.amount || 0), 0) - refundReceipts.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  const totalAdv = bookingAdv + sumReceipts;
+  const grandTotal = parseFloat(order.grand_total || 0);
+  const balanceDue = Math.max(0, grandTotal - totalAdv);
+
+  const hasAdvances = totalAdv > 0 || receipts.length > 0;
+  const hasVoucher = order.old_settlement_mode === 'voucher' && order.old_purchase_voucher_no;
+  const hasOldMetal = order.old_settlement_mode && order.old_settlement_mode !== 'none' && (parseFloat(order.old_amount || 0) > 0 || parseFloat(order.old_weight || 0) > 0 || parseFloat(order.old_value_direct || 0) > 0);
+  const hasCreditNotes = (order.credit_note_usages && order.credit_note_usages.length > 0) || parseFloat(order.credit_applied || 0) > 0;
+
   return (
     <>
       <div className="overlay" onClick={onClose} />
-      <div className="modal" style={{ maxWidth: 840, maxHeight: '94vh', overflow: 'auto' }}>
-        {/* Header */}
+      <div className="modal" style={{ maxWidth: 860, maxHeight: '94vh', overflow: 'auto' }}>
         <div className="modal__header" style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
           <div>
             <h2 className="modal__title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -80,7 +215,6 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
         </div>
 
         <div style={{ padding: 'var(--space-5)' }}>
-          {/* Progress Bar */}
           <div style={{ marginBottom: 'var(--space-5)' }}>
             <div className="flex justify-between" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>
               <span>Overall Progress</span>
@@ -91,15 +225,14 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
             </div>
           </div>
 
-          {/* Customer & Order Info */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>Customer</div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-md)', marginBottom: 4 }}>{order.customer_detail?.name || 'Walk-in'}</div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}><i className="fa-solid fa-phone" style={{ marginRight: 6, opacity: 0.5 }}></i>{order.customer_detail?.phone || '—'}</div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', marginTop: 2 }}><i className="fa-solid fa-location-dot" style={{ marginRight: 6, opacity: 0.5 }}></i>{order.customer_detail?.address || '—'}</div>
             </div>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>Details</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: 'var(--text-sm)' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Worker</span><span style={{ textAlign: 'right', fontWeight: 500 }}>{order.worker?.split('—')[0]?.trim() || '—'}</span>
@@ -110,9 +243,8 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
             </div>
           </div>
 
-          {/* Design Notes & Images */}
           {(order.design_notes || (order.images && order.images.length > 0)) && (
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-5)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-5)', border: '1px solid var(--border-primary)' }}>
               {order.design_notes && (
                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: (order.images && order.images.length > 0) ? 'var(--space-3)' : 0 }}>
                   <i className="fa-solid fa-palette" style={{ marginRight: 6, opacity: 0.5 }}></i>
@@ -134,7 +266,6 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
             </div>
           )}
 
-          {/* ─── Items with Status Tracking ─── */}
           <div style={{ marginBottom: 'var(--space-4)' }}>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>
               Item Status Tracking
@@ -150,7 +281,6 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
 
                 return (
                   <div key={item.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', transition: 'all 150ms ease' }}>
-                    {/* Item Header */}
                     <div className="flex justify-between" style={{ marginBottom: 'var(--space-2)' }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 'var(--text-base)' }}>{idx + 1}. {item.product_name}</div>
@@ -166,12 +296,10 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
                       </div>
                     </div>
 
-                    {/* Progress Bar */}
                     <div style={{ height: 6, background: 'var(--bg-deep)', borderRadius: 'var(--radius-full)', overflow: 'hidden', marginBottom: 'var(--space-3)' }}>
                       <div style={{ height: '100%', width: `${prog}%`, background: isComplete ? 'var(--color-accent)' : `var(--color-${si.color})`, borderRadius: 'var(--radius-full)', transition: 'width 0.4s ease' }} />
                     </div>
 
-                    {/* Status Pipeline */}
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {mainStatuses.map((st, si2) => {
                         const currentIdx = getStatusIdx(item.status);
@@ -200,7 +328,6 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
                       {mainStatuses.map(st => <span key={st.key} style={{ width: `${100 / mainStatuses.length}%`, textAlign: 'center' }}>{st.label.replace(' ', '\n')}</span>)}
                     </div>
 
-                    {/* Advance / Add to Inventory Buttons */}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
                       {isComplete && !hasInventory && (
                         <button className="btn btn--accent btn--sm" onClick={() => onAddToInventory(item)}>
@@ -225,31 +352,148 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
             </div>
           </div>
 
-          {/* Financial Summary */}
+          {hasAdvances && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fa-solid fa-receipt" style={{ color: 'var(--color-primary)' }} />
+                  Advance Payments History
+                </div>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-accent)' }}>
+                  Total Collected: {fmt(totalAdv)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {bookingAdv > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontSize: 'var(--text-sm)' }}>
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Booking Advance</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginLeft: 8 }}>
+                        {order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : 'Order Date'} • Booking
+                      </span>
+                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-success)' }}>
+                      +{fmt(bookingAdv)}
+                    </div>
+                  </div>
+                )}
+                {receipts.map((adv, idx) => (
+                  <div key={adv.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontSize: 'var(--text-sm)', opacity: adv.status === 'cancelled' ? 0.6 : 1 }}>
+                    <div>
+                      <span style={{ fontWeight: 600, color: adv.status === 'cancelled' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: adv.status === 'cancelled' ? 'line-through' : 'none' }}>
+                        {adv.receipt_no || `Advance #${idx + 1}`}
+                      </span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginLeft: 8 }}>
+                        {adv.payment_date ? new Date(adv.payment_date).toLocaleDateString('en-IN') : '—'} • <span style={{ textTransform: 'uppercase' }}>{adv.payment_mode || 'Cash'}</span>
+                      </span>
+                      {adv.notes && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginLeft: 8 }}>({adv.notes})</span>}
+                    </div>
+                    <div style={{ fontWeight: 700, color: adv.status === 'cancelled' ? 'var(--text-muted)' : adv.is_refund ? 'var(--color-danger)' : 'var(--color-success)', textDecoration: adv.status === 'cancelled' ? 'line-through' : 'none' }}>
+                      {adv.is_refund ? '−' : '+'}{fmt(adv.amount)}
+                      {adv.status === 'cancelled' && <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)', marginLeft: 6 }}>[Cancelled]</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hasOldMetal && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="fa-solid fa-scale-balanced" style={{ color: 'var(--color-warning)' }} />
+                Old Metal Exchange Details
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)', fontSize: 'var(--text-sm)' }}>
+                {hasVoucher && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Purchase Voucher</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>#{order.old_purchase_voucher_no}</span>
+                  </div>
+                )}
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Settlement Mode</span>
+                  <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{order.old_settlement_mode} {order.old_voucher_rate_used ? `(${order.old_voucher_rate_used} rate)` : ''}</span>
+                </div>
+                {parseFloat(order.old_weight || 0) > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Old Weight</span>
+                    <span style={{ fontWeight: 600 }}>{parseFloat(order.old_weight).toFixed(3)}g</span>
+                  </div>
+                )}
+                {parseFloat(order.old_deduct_percent || 0) > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Deduction</span>
+                    <span style={{ fontWeight: 600, color: 'var(--color-danger)' }}>{order.old_deduct_percent}% (−{fmt(order.old_deduct_amount)})</span>
+                  </div>
+                )}
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Old Metal Credit</span>
+                  <span style={{ fontWeight: 700, color: 'var(--color-danger)' }}>−{fmt(order.old_value_direct || order.old_amount)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hasCreditNotes && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fa-solid fa-wallet" style={{ color: 'var(--color-info)' }} />
+                  Credit Notes Applied
+                </div>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-danger)' }}>
+                  Total Credit: −{fmt(order.credit_applied)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(order.credit_note_usages || []).map((cn, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontSize: 'var(--text-sm)' }}>
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cn.credit_note_no}</span>
+                      {cn.reason && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginLeft: 8 }}>({cn.reason})</span>}
+                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-danger)' }}>
+                      −{fmt(cn.amount_used)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>Cost Breakdown</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 'var(--text-sm)' }}>
                 <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Total Weight</span><span style={{ fontWeight: 600 }}>{totalWeight.toFixed(3)}g</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Metal Value Base</span><span style={{ fontWeight: 600 }}>{fmt(order.subtotal - order.making_total)}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Making</span><span style={{ fontWeight: 600 }}>{fmt(order.making_total)}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Metal Value Base</span><span style={{ fontWeight: 600 }}>{fmt(parseFloat(order.subtotal || 0) - parseFloat(order.making_total || 0))}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Making Charges</span><span style={{ fontWeight: 600 }}>{fmt(order.making_total)}</span></div>
+                {parseFloat(order.hallmark || 0) > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) Hallmark</span><span>{fmt(order.hallmark)}</span></div>}
+                {parseFloat(order.others || 0) > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) Other Charges</span><span>{fmt(order.others)}</span></div>}
               </div>
             </div>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>Financial</div>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>Financial Summary</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 'var(--text-sm)' }}>
-                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Grand Total</span><span style={{ fontWeight: 700 }}>{fmtInt(order.grand_total)}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Advance</span><span style={{ fontWeight: 600, color: 'var(--color-accent)' }}>{fmtInt(order.advance)}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Grand Total</span><span style={{ fontWeight: 700 }}>{fmtInt(grandTotal)}</span></div>
+                {totalAdv > 0 && (
+                  <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Total Advance</span><span style={{ fontWeight: 600, color: 'var(--color-accent)' }}>−{fmt(totalAdv)}</span></div>
+                )}
+                {parseFloat(order.discount || 0) > 0 && (
+                  <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(−) Discount</span><span style={{ color: 'var(--color-danger)' }}>−{fmt(order.discount)}</span></div>
+                )}
                 <div className="flex justify-between" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: 6 }}>
-                  <span style={{ fontWeight: 600 }}>Balance</span>
-                  <span style={{ fontWeight: 700, color: 'var(--color-danger)' }}>{fmtInt(order.grand_total - order.advance)}</span>
+                  <span style={{ fontWeight: 600 }}>Balance Due</span>
+                  <span style={{ fontWeight: 700, color: balanceDue > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                    {balanceDue > 0 ? fmtInt(balanceDue) : 'Settled'}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <div style={{ padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', position: 'sticky', bottom: 0, background: 'var(--bg-card)' }}>
           <button className="btn btn--ghost" onClick={onClose}>Close</button>
           <button className="btn btn--primary" onClick={onPrint}><i className="fa-solid fa-print"></i> Print Order</button>
@@ -259,33 +503,72 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
   );
 }
 
+
 /* ═══════════════════════════════════════════
    INVENTORY MODAL
    ═══════════════════════════════════════════ */
-function InventoryModal({ item, onClose, onSuccess }) {
+function InventoryModal({ item, orderId, onClose, onSuccess }) {
+  const [name, setName] = useState(item?.product_name || '');
+  const [weight, setWeight] = useState(item?.expected_weight ? String(item.expected_weight) : '');
   const [huid, setHuid] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (ev) => setImagePreview(ev.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!name.trim() || !weight || parseFloat(weight) <= 0) return;
     setLoading(true);
     try {
       const pMetal = (item.metal_type || 'gold').toLowerCase();
-      const payload = {
-        name: item.product_name,
-        barcode: '',
-        metal_type: pMetal,
-        purity: pMetal === 'silver' ? '925' : '22K',
-        huid: huid,
-        net_weight: item.expected_weight,
-        status: 'available',
-        shop: 1
-      };
-      const res = await api.post('/inventory/', payload);
-      onSuccess(item.id, res.data.id);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to add to inventory.');
+      const purity = pMetal === 'silver' ? '925' : '22K';
+      const parsedWeight = parseFloat(weight);
+
+      const formData = new FormData();
+      formData.append('name', name.trim());
+      formData.append('barcode', '');
+      formData.append('metal_type', pMetal);
+      formData.append('purity', purity);
+      formData.append('huid', huid.trim().toUpperCase());
+      formData.append('net_weight', parsedWeight);
+      formData.append('status', 'available');
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      const res = await api.post('/inventory/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (orderId) {
+        await api.post(`/orders/${orderId}/link-inventory-item/`, {
+          item_id: item.id,
+          inventory_id: res.data.id,
+          product_name: name.trim(),
+          net_weight: parsedWeight
+        });
+      }
+
+      toast.success(`"${name.trim()}" added to inventory.`);
+      onSuccess(item.id, res.data.id, name.trim(), parsedWeight, res.data);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to add to inventory.');
     } finally {
       setLoading(false);
     }
@@ -294,30 +577,98 @@ function InventoryModal({ item, onClose, onSuccess }) {
   return (
     <>
       <div className="overlay" style={{ zIndex: 10000 }} onClick={onClose} />
-      <div className="modal" style={{ maxWidth: 450, zIndex: 10001 }}>
+      <div className="modal" style={{ maxWidth: 480, zIndex: 10001 }}>
         <div className="modal__header">
-          <h2 className="modal__title"><i className="fa-solid fa-boxes-stacked" style={{ color: 'var(--color-secondary)', marginRight: 10 }}></i>Add to Inventory</h2>
+          <h2 className="modal__title">
+            <i className="fa-solid fa-boxes-stacked" style={{ color: 'var(--color-secondary)', marginRight: 10 }}></i>
+            Add to Inventory
+          </h2>
           <button className="btn btn--ghost btn--icon" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal__body" style={{ padding: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
-              Provide the HUID for <strong>{item.product_name}</strong> ({item.expected_weight}g) to add it to physical stock.
-            </p>
-            <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
-              <label className="form-label">HUID (Optional)</label>
-              <input className="form-input" type="text" maxLength={6} placeholder="e.g. A1B2C3" value={huid} onChange={e => setHuid(e.target.value.toUpperCase())} style={{ fontFamily: 'monospace', fontSize: 'var(--text-md)', letterSpacing: '0.1em' }} />
+            <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-4)', alignItems: 'center' }}>
+              <div
+                onClick={() => document.getElementById('inventory-modal-img')?.click()}
+                style={{
+                  width: 84,
+                  height: 84,
+                  borderRadius: 'var(--radius-md)',
+                  border: '2px dashed var(--border-hover)',
+                  background: 'var(--bg-surface)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                  flexShrink: 0
+                }}
+              >
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <i className="fa-solid fa-camera" style={{ fontSize: '1.2rem', display: 'block', marginBottom: 2 }}></i>
+                    <span style={{ fontSize: '0.65rem' }}>Upload</span>
+                  </div>
+                )}
+              </div>
+              <input id="inventory-modal-img" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 4 }}>
+                  {item.metal_type ? item.metal_type.toUpperCase() : 'GOLD'} {item.size ? `• Size: ${item.size}` : ''}
+                </div>
+                {imagePreview && (
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={handleRemoveImage} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-danger)', padding: '2px 6px' }}>
+                    <i className="fa-solid fa-trash-can" style={{ marginRight: 4 }}></i> Remove Image
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Availability Status</label>
-              <select className="form-input form-select" disabled>
-                <option>Available</option>
-              </select>
+
+            <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
+              <label className="form-label">Product Name *</label>
+              <input
+                className="form-input"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                required
+                placeholder="Product name"
+              />
+            </div>
+
+            <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 0 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Net Weight (g) *</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={weight}
+                  onChange={e => setWeight(e.target.value)}
+                  required
+                  placeholder="0.000"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">HUID (Optional)</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  maxLength={6}
+                  placeholder="e.g. A1B2C3"
+                  value={huid}
+                  onChange={e => setHuid(e.target.value.toUpperCase())}
+                  style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}
+                />
+              </div>
             </div>
           </div>
           <div className="modal__footer">
             <button type="button" className="btn btn--ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn--secondary" disabled={loading}>
+            <button type="submit" className="btn btn--secondary" disabled={loading || !name.trim() || !weight}>
               {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-check"></i>}
               Save to Stock
             </button>
@@ -493,18 +844,28 @@ export default function OrdersList({ isActive = true }) {
     }
   };
 
-  const handleInventorySuccess = (itemId, invId) => {
-    setOrders(prev => prev.map(o => {
-      return {
-        ...o,
-        items: o.items.map(i => i.id === itemId ? { ...i, inventory_item: invId } : i)
-      };
-    }));
+  const handleInventorySuccess = (itemId, invId, updatedName, updatedWeight, invData) => {
+    setOrders(prev => prev.map(o => ({
+      ...o,
+      items: o.items.map(i => i.id === itemId ? {
+        ...i,
+        inventory_item: invId,
+        product_name: updatedName || i.product_name,
+        expected_weight: updatedWeight !== undefined ? updatedWeight : i.expected_weight,
+        inventory_item_detail: invData || i.inventory_item_detail
+      } : i)
+    })));
     setViewOrder(prev => {
       if (!prev) return prev;
       return {
         ...prev,
-        items: prev.items.map(i => i.id === itemId ? { ...i, inventory_item: invId } : i)
+        items: prev.items.map(i => i.id === itemId ? {
+          ...i,
+          inventory_item: invId,
+          product_name: updatedName || i.product_name,
+          expected_weight: updatedWeight !== undefined ? updatedWeight : i.expected_weight,
+          inventory_item_detail: invData || i.inventory_item_detail
+        } : i)
       };
     });
     setInventoryItem(null);
@@ -536,8 +897,22 @@ export default function OrdersList({ isActive = true }) {
     return { total: orders.length, pending, inProgress, completed };
   }, [orders]);
 
-  const hasFilters = search || statusFilter !== 'All' || priorityFilter !== 'All' || dateFrom || dateTo;
+    const hasFilters = search || statusFilter !== 'All' || priorityFilter !== 'All' || dateFrom || dateTo;
   const clearFilters = () => { setSearch(''); setStatusFilter('All'); setPriorityFilter('All'); setDateFrom(''); setDateTo(''); };
+
+  const orderColumns = useMemo(() => [
+    { label: 'Order No', key: 'order_no' },
+    { label: 'Order Date', key: 'created_at', transform: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '' },
+    { label: 'Customer Name', key: 'customer_detail.name' },
+    { label: 'Customer Phone', key: 'customer_detail.phone' },
+    { label: 'Status', key: 'order_status', transform: (val, row) => deriveOrderStatus(row.items, val) },
+    { label: 'Priority', key: 'priority', transform: (val) => String(val || '').toUpperCase() },
+    { label: 'Delivery Date', key: 'delivery_date', transform: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '—' },
+    { label: 'Estimated Total (₹)', key: 'est_total' },
+    { label: 'Advance Paid (₹)', key: 'total_advance' },
+    { label: 'Balance Due (₹)', key: 'balance_due', transform: (val, row) => (Number(row.est_total || 0) - Number(row.total_advance || 0)).toFixed(2) },
+    { label: 'Notes', key: 'notes' }
+  ], []);
 
   return (
     <div className="animate-fade-in">
@@ -545,6 +920,12 @@ export default function OrdersList({ isActive = true }) {
         <div className="page-header__top">
           <h1 className="page-header__title">Orders List</h1>
           <div className="page-header__actions">
+            <ExportButton
+              data={filtered}
+              columns={orderColumns}
+              filename="Orders"
+              sheetName="Orders"
+            />
             <button className="btn btn--primary" onClick={() => navigate('/orders')}><i className="fa-solid fa-plus"></i> New Order</button>
           </div>
         </div>
@@ -617,14 +998,16 @@ export default function OrdersList({ isActive = true }) {
               const orderSt = deriveOrderStatus(order.items, order.order_status);
               return (
                 <tr key={order.id} style={{ cursor: 'pointer' }} onClick={() => setViewOrder(order)}>
-                  <td style={{ fontWeight: 600, color: 'var(--color-warning)' }}>{order.order_no}</td>
+                  <td style={{ fontWeight: 600, color: 'var(--color-warning)', whiteSpace: 'nowrap' }} title={order.order_no}>{shortNo(order.order_no)}</td>
                   <td>
                     <div style={{ fontWeight: 500 }}>{order.customer_detail?.name || 'Walk-in'}</div>
                   </td>
                   <td style={{ fontSize: 'var(--text-sm)' }}><span style={{ textTransform: 'capitalize' }}>{order.metal_type}</span></td>
                   <td style={{ fontWeight: 500 }}>{order.items?.length || 0}</td>
                   <td style={{ fontWeight: 700 }}>{fmtInt(order.grand_total)}</td>
-                  <td style={{ color: 'var(--color-accent)' }}>{fmtInt(order.advance)}</td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <AdvanceHoverCell order={order} />
+                  </td>
                   <td><span className={`badge badge--${order.priority === 'urgent' ? 'danger' : order.priority === 'high' ? 'warning' : 'primary'}`} style={{ fontSize: '0.6rem', textTransform: 'capitalize' }}>{order.priority}</span></td>
                   <td><span className={`badge badge--${orderStatusMap[orderSt] || 'info'}`} style={{ textTransform: 'capitalize' }}>{orderSt.replace('_', ' ')}</span></td>
                   <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{new Date(order.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
@@ -641,8 +1024,8 @@ export default function OrdersList({ isActive = true }) {
         </table>
       </div>
 
-      {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} onPrint={() => { setViewOrder(null); handlePrint(viewOrder); }} onUpdateItemStatus={handleUpdateItemStatus} onAddToInventory={(item) => setInventoryItem(item)} />}
-      {inventoryItem && <InventoryModal item={inventoryItem} onClose={() => setInventoryItem(null)} onSuccess={handleInventorySuccess} />}
+      {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} onPrint={() => { setViewOrder(null); handlePrint(viewOrder); }} onUpdateItemStatus={handleUpdateItemStatus} onAddToInventory={(item) => setInventoryItem({ item, orderId: viewOrder.id })} />}
+      {inventoryItem && <InventoryModal item={inventoryItem.item} orderId={inventoryItem.orderId} onClose={() => setInventoryItem(null)} onSuccess={handleInventorySuccess} />}
       <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
     </div>
   );

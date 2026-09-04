@@ -48,10 +48,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 return Response({"detail": "Shop not configured for this user."}, status=status.HTTP_400_BAD_REQUEST)
             payload = request.data.copy()
             payload["shop_id"] = request.shop.id
-                
             invoice_obj = create_invoice(payload)
             serializer = self.get_serializer(invoice_obj)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            logger.warning("Invoice creation rejected: %s", str(e))
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error("Error creating invoice: %s", str(e), exc_info=True)
             return Response({"detail": "An error occurred while creating the invoice."}, status=status.HTTP_400_BAD_REQUEST)
@@ -160,7 +162,25 @@ class CreditNoteViewSet(viewsets.ModelViewSet):
         shop = self.request.shop
         if not shop:
             return CreditNote.objects.none()
-        return CreditNote.objects.filter(shop=shop)
+        return (
+            CreditNote.objects
+            .filter(shop=shop)
+            .select_related(
+                'customer',
+                'source_invoice',
+                'source_invoice__order',
+                'source_invoice__old_purchase_voucher',
+            )
+            .prefetch_related(
+                'usages',
+                'usages__applied_to_invoice',
+                'usages__applied_to_estimate',
+                'source_invoice__items',
+                'source_invoice__order__advance_payments',
+                'source_invoice__credit_note_usages',
+                'source_invoice__credit_note_usages__credit_note',
+            )
+        )
 
     def create(self, request, *args, **kwargs):
         try:

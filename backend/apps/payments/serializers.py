@@ -6,8 +6,12 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = '__all__'
 
+from apps.accounts.models import Shop
+
+
 class AdvancePaymentSerializer(serializers.ModelSerializer):
     receipt_no = serializers.CharField(required=False, read_only=True)
+    shop = serializers.PrimaryKeyRelatedField(required=False, queryset=Shop.objects.all())
     order_detail = serializers.SerializerMethodField(read_only=True)
     received_by_username = serializers.SerializerMethodField(read_only=True)
     cancelled_by_username = serializers.SerializerMethodField(read_only=True)
@@ -15,6 +19,7 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdvancePayment
         fields = '__all__'
+        validators = []
 
     def get_order_detail(self, obj):
         if obj.order:
@@ -44,6 +49,8 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         shop = validated_data.get('shop')
+        if not shop and 'request' in self.context:
+            shop = getattr(self.context['request'], 'shop', None)
         order = validated_data.get('order')
         is_refund = validated_data.get('is_refund', False)
         

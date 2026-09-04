@@ -54,6 +54,7 @@ export function calculateBill(p) {
   const otherCharges   = safe(p.otherCharges);
   const advance        = safe(p.advance);
   const discount       = safe(p.discount);
+  const creditApplied  = safe(p.creditApplied || p.creditNoteAmount || 0);
   const cashP          = safe(p.cashAmt);
   const onlineP        = safe(p.onlineAmt);
   const isInvoice      = !!p.isInvoice;
@@ -243,19 +244,16 @@ export function calculateBill(p) {
   const roundOffVal = r2(roundOff - preRound);
   const finalAmt = roundOff;
 
-  // ── 8. Payment balance (for billing UI) ──
+  const netPayable = Math.max(0, r2(Math.abs(finalAmt) - creditApplied));
   const totalPaid = r2(cashP + onlineP);
-  const balance   = r2(Math.abs(finalAmt) - totalPaid);
+  const balance   = r2(netPayable - totalPaid);
 
-  // ── 9. Build result ──
   return {
-    // Item aggregates
     totalWeight,
     totalMaking,
     totalMetalValue,
     newProductValue,
 
-    // Old settlement
     hasOld,
     oldMode,
     oldWt:          oldMode === 'weight' ? oldWt : 0,
@@ -265,7 +263,6 @@ export function calculateBill(p) {
     effectiveOldValue,
     oldValueDirect: oldMode === 'value' ? oldValueDirect : 0,
 
-    // Charges
     hallmarkAmt,
     gstBase,
     cgst,
@@ -273,7 +270,6 @@ export function calculateBill(p) {
     igst,
     isIgst,
 
-    // Totals
     subtotal,
     netTotal,
     otherChargesVal: otherCharges,
@@ -282,18 +278,16 @@ export function calculateBill(p) {
     preRound,
     roundOffVal,
     finalAmt,
+    creditApplied,
+    netPayable,
 
-    // Transaction type
     transactionType,
 
-    // Return waterfall (Scenario 3 only — null otherwise)
     returnBreakdown,
 
-    // Payment
     totalPaid,
     balance,
 
-    // Display helpers
     amountInWords: amountWords(finalAmt),
   };
 }

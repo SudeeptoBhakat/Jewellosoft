@@ -15,7 +15,13 @@ def generate_order_no(shop, order_type='invoice', max_retries=100):
     seq_key = f"order_{order_type}_{year}"
     full_prefix = f"{prefix}-{year}-"
 
-    existing_nos = Order.objects.filter(order_no__istartswith=full_prefix).values_list('order_no', flat=True)
+    for _ in range(max_retries):
+        next_num = NumberingSequence.get_next_number(shop, seq_key)
+        candidate = f"{full_prefix}{next_num:03d}"
+        if not Order.objects.filter(shop=shop, order_no__iexact=candidate).exists():
+            return candidate
+
+    existing_nos = Order.objects.filter(shop=shop, order_no__istartswith=full_prefix).values_list('order_no', flat=True)
     max_num = 0
     for no in existing_nos:
         try:
@@ -25,30 +31,13 @@ def generate_order_no(shop, order_type='invoice', max_retries=100):
         except Exception:
             pass
 
-    try:
-        seq, _ = NumberingSequence.objects.get_or_create(
-            shop=shop,
-            sequence_type=seq_key,
-            defaults={'last_number': max_num}
-        )
-        if seq.last_number < max_num:
-            seq.last_number = max_num
-            seq.save(update_fields=['last_number'])
-    except Exception:
-        pass
-
-    for _ in range(max_retries):
-        next_num = NumberingSequence.get_next_number(shop, seq_key)
-        candidate = f"{full_prefix}{next_num:03d}"
-        if not Order.objects.filter(order_no__iexact=candidate).exists():
-            return candidate
-
     max_num += 1
     candidate = f"{full_prefix}{max_num:03d}"
-    while Order.objects.filter(order_no__iexact=candidate).exists():
+    while Order.objects.filter(shop=shop, order_no__iexact=candidate).exists():
         max_num += 1
         candidate = f"{full_prefix}{max_num:03d}"
 
+    NumberingSequence.set_next_number(shop, seq_key, max_num + 1)
     return candidate
 
 
@@ -59,10 +48,27 @@ class OrderImageSerializer(serializers.ModelSerializer):
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    inventory_item_detail = serializers.SerializerMethodField()
+
     class Meta:
         model = OrderItem
         fields = '__all__'
         read_only_fields = ('order',)
+
+    def get_inventory_item_detail(self, obj):
+        if obj.inventory_item:
+            return {
+                "id": obj.inventory_item.id,
+                "barcode": obj.inventory_item.barcode,
+                "huid": obj.inventory_item.huid or '',
+                "name": obj.inventory_item.name,
+                "net_weight": str(obj.inventory_item.net_weight),
+                "status": obj.inventory_item.status,
+            }
+        return None
+
+
+from apps.accounts.models import Shop
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -73,18 +79,28 @@ class OrderSerializer(serializers.ModelSerializer):
     )
     customer_detail = serializers.SerializerMethodField()
     order_no = serializers.CharField(required=False, allow_blank=True)
+    shop = serializers.PrimaryKeyRelatedField(required=False, queryset=Shop.objects.all())
     advance_payments = serializers.SerializerMethodField()
     due_amount = serializers.SerializerMethodField()
     credit_note_usages = serializers.SerializerMethodField()
 
     old_purchase_voucher_no = serializers.SerializerMethodField()
+    old_purchase_voucher_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = '__all__'
+        validators = []
+        read_only_fields = ('created_at', 'updated_at')
 
     def get_old_purchase_voucher_no(self, obj):
         return obj.old_purchase_voucher.voucher_no if obj.old_purchase_voucher else None
+
+    def get_old_purchase_voucher_detail(self, obj):
+        if obj.old_purchase_voucher:
+            from apps.old_purchases.serializers import OldPurchaseVoucherSerializer
+            return OldPurchaseVoucherSerializer(obj.old_purchase_voucher).data
+        return None
 
     def get_advance_payments(self, obj):
         return [
@@ -160,12 +176,16 @@ class OrderSerializer(serializers.ModelSerializer):
 
         advance_amount = validated_data.get('advance', 0) or 0
 
+        shop = validated_data.get('shop')
+        if not shop and 'request' in self.context:
+            shop = getattr(self.context['request'], 'shop', None)
+            validated_data['shop'] = shop
+
         order_no = (validated_data.get('order_no') or '').strip()
         from apps.orders.models import Order
-        shop = validated_data.get('shop')
         order_type = validated_data.get('order_type', 'invoice')
 
-        if not order_no or Order.objects.filter(order_no__iexact=order_no).exists():
+        if not order_no or Order.objects.filter(shop=shop, order_no__iexact=order_no).exists():
             order_no = generate_order_no(shop, order_type)
             validated_data['order_no'] = order_no
 
@@ -252,7 +272,7 @@ class OrderSerializer(serializers.ModelSerializer):
         if new_status in BLOCKED_STATUSES and instance.order_status not in BLOCKED_STATUSES:
             shop = instance.shop
             if shop.require_full_payment_for_delivery and instance.payment_status != 'paid':
-                balance = instance.grand_total - (instance.advance or 0)
+                balance = instance.grand_total - (instance.advance or 0) - (getattr(instance, 'credit_applied', 0) or 0)
                 raise serializers.ValidationError(
                     f"Delivery blocked: outstanding balance ₹{balance:,.2f}. "
                     f"Collect full payment before marking as '{new_status}'."

@@ -618,7 +618,7 @@ export default function Settings() {
   const { syncShop } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
   const [tab, setTab] = useState('General');
-  const tabs = ['General', 'Business', 'Suggestions', 'Security'];
+  const tabs = ['General', 'Business', 'Numbering', 'Suggestions', 'Security'];
 
   const [formData, setFormData] = useState({
     theme: 'default',
@@ -654,8 +654,67 @@ export default function Settings() {
   const [editingIdx, setEditingIdx] = useState(-1);
   const [editingValue, setEditingValue] = useState('');
 
+  const [numberingData, setNumberingData] = useState([]);
+  const [numberingYear, setNumberingYear] = useState(new Date().getFullYear());
+  const [numberingInputs, setNumberingInputs] = useState({});
+  const [loadingNumbering, setLoadingNumbering] = useState(true);
+  const [savingNumbering, setSavingNumbering] = useState(false);
+
+  const fetchNumbering = async () => {
+    try {
+      setLoadingNumbering(true);
+      const res = await api.get('/accounts/shop/numbering/');
+      if (res.data?.sequences) {
+        setNumberingData(res.data.sequences);
+        setNumberingYear(res.data.year || new Date().getFullYear());
+        const initialInputs = {};
+        res.data.sequences.forEach((seq) => {
+          initialInputs[seq.key] = seq.next_number;
+        });
+        setNumberingInputs(initialInputs);
+      }
+    } catch (err) {
+      console.error('Failed to fetch numbering sequences', err);
+    } finally {
+      setLoadingNumbering(false);
+    }
+  };
+
+  const handleNumberingChange = (key, value) => {
+    const parsed = parseInt(value, 10);
+    setNumberingInputs((prev) => ({
+      ...prev,
+      [key]: isNaN(parsed) ? '' : Math.max(1, parsed)
+    }));
+  };
+
+  const handleSaveNumbering = async () => {
+    try {
+      setSavingNumbering(true);
+      const res = await api.post('/accounts/shop/numbering/', {
+        year: numberingYear,
+        sequences: numberingInputs
+      });
+      if (res.data?.sequences) {
+        setNumberingData(res.data.sequences);
+        const updatedInputs = {};
+        res.data.sequences.forEach((seq) => {
+          updatedInputs[seq.key] = seq.next_number;
+        });
+        setNumberingInputs(updatedInputs);
+      }
+      toast.success(res.data?.message || 'Document numbering updated successfully!');
+    } catch (err) {
+      console.error('Failed to save numbering sequences', err);
+      toast.error(err.response?.data?.detail || 'Failed to update numbering sequences.');
+    } finally {
+      setSavingNumbering(false);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
+    fetchNumbering();
     setSuggestions(getSuggestions());
   }, []);
 
@@ -829,7 +888,14 @@ export default function Settings() {
 
       <div className="tabs">
         {tabs.map((t) => (
-          <button key={t} className={`tabs__tab${tab === t ? ' tabs__tab--active' : ''}`} onClick={() => setTab(t)}>
+          <button
+            key={t}
+            className={`tabs__tab${tab === t ? ' tabs__tab--active' : ''}`}
+            onClick={() => {
+              setTab(t);
+              if (t === 'Numbering') fetchNumbering();
+            }}
+          >
             {t}
           </button>
         ))}
@@ -1070,6 +1136,178 @@ export default function Settings() {
                   }} />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Numbering Tab  */}
+      {tab === 'Numbering' && (
+        <div className="animate-fade-in-up">
+          <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="billing-form__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <span className="billing-form__header-title">
+                  <i className="fa-solid fa-list-ol" style={{ marginRight: 8, opacity: 0.6 }}></i>
+                  Custom Document Starting Numbers
+                </span>
+              </div>
+              <button
+                className="btn btn--primary"
+                onClick={handleSaveNumbering}
+                disabled={savingNumbering || loadingNumbering || numberingData.length === 0}
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                <i className={`fa-solid ${savingNumbering ? 'fa-spinner fa-spin' : 'fa-floppy-disk'}`}></i>
+                {savingNumbering ? ' Saving...' : ' Save Starting Numbers'}
+              </button>
+            </div>
+
+            <div className="billing-form__body">
+              {loadingNumbering ? (
+                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '1.4rem', display: 'block', marginBottom: 12, opacity: 0.5 }}></i>
+                  Loading numbering configuration...
+                </div>
+              ) : numberingData.length === 0 ? (
+                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <i className="fa-solid fa-list-ol" style={{ fontSize: '2rem', display: 'block', marginBottom: 12, opacity: 0.3 }}></i>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>Could not load numbering configuration</div>
+                  <div style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>Check your connection or try reloading.</div>
+                  <button className="btn btn--outline btn--sm" onClick={fetchNumbering}>
+                    <i className="fa-solid fa-rotate-right"></i> Reload
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 'var(--space-4)' }}>
+                  {numberingData.map((seq) => {
+                    const currentVal = numberingInputs[seq.key] !== undefined ? numberingInputs[seq.key] : seq.next_number;
+                    const numVal = parseInt(currentVal, 10) || 1;
+                    const paddedNum = numVal < 1000 ? String(numVal).padStart(3, '0') : String(numVal);
+                    const previewStr = `${seq.prefix}${paddedNum}`;
+                    const nextPreviewStr = `${seq.prefix}${numVal < 999 ? String(numVal + 1).padStart(3, '0') : String(numVal + 1)}`;
+                    const icons = {
+                      invoice: 'fa-file-invoice-dollar',
+                      estimate: 'fa-file-lines',
+                      order_invoice: 'fa-box',
+                      order_estimate: 'fa-boxes-stacked',
+                      purchase_voucher: 'fa-coins',
+                      credit_note: 'fa-receipt',
+                      advance_receipt: 'fa-hand-holding-dollar',
+                      refund_receipt: 'fa-arrow-rotate-left',
+                    };
+                    const iconClass = icons[seq.key] || 'fa-hashtag';
+
+                    return (
+                      <div
+                        key={seq.key}
+                        style={{
+                          border: '1px solid var(--border-primary)',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'var(--bg-card)',
+                          padding: '16px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '12px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--color-primary-muted)',
+                            color: 'var(--color-primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.95rem',
+                            flexShrink: 0
+                          }}>
+                            <i className={`fa-solid ${iconClass}`} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--text-primary)' }}>
+                              {seq.label}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                              {seq.prefix}<span style={{ opacity: 0.5 }}>NNN</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'var(--bg-elevated)', padding: '5px 10px', borderRadius: 4 }}>
+                          <span>Last issued: <strong>{seq.last_number || '—'}</strong></span>
+                          <span style={{ color: seq.last_number > 0 ? 'var(--color-primary)' : 'var(--text-muted)' }}>
+                            {seq.last_number > 0 ? `${seq.prefix}${seq.last_number < 1000 ? String(seq.last_number).padStart(3, '0') : seq.last_number}` : 'Not started yet'}
+                          </span>
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>
+                            My next document should start from number:
+                          </label>
+                          <input
+                            className="form-input"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={currentVal}
+                            onChange={(e) => handleNumberingChange(seq.key, e.target.value)}
+                            placeholder="e.g. 256"
+                            style={{ fontSize: '1rem', fontWeight: 600 }}
+                          />
+                        </div>
+
+                        <div style={{
+                          borderTop: '1px solid var(--border-primary)',
+                          paddingTop: 10,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>1st document after save:</span>
+                            <span style={{
+                              fontFamily: 'monospace',
+                              fontWeight: 700,
+                              fontSize: '0.88rem',
+                              color: 'var(--color-primary)',
+                              background: 'var(--color-primary-muted)',
+                              padding: '3px 10px',
+                              borderRadius: 4,
+                              letterSpacing: '0.5px',
+                            }}>
+                              {previewStr}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>2nd document:</span>
+                            <span style={{
+                              fontFamily: 'monospace',
+                              fontWeight: 600,
+                              fontSize: '0.8rem',
+                              color: 'var(--text-secondary)',
+                              padding: '3px 10px',
+                            }}>
+                              {nextPreviewStr}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {numberingData.length > 0 && (
+                <div style={{ marginTop: 'var(--space-5)', padding: '12px 16px', borderRadius: 'var(--radius-md)', background: 'var(--bg-elevated)', border: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <i className="fa-solid fa-circle-info" style={{ color: 'var(--color-primary)', opacity: 0.7, flexShrink: 0 }}></i>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Numbers you set here are the <strong>starting points</strong> for each series. After saving, every new document automatically increments from there. You can update these at any time — only future documents are affected, existing ones stay unchanged.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

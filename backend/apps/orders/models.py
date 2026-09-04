@@ -28,7 +28,7 @@ ORDER_STATUS_CHOICES = [
 
 class Order(BaseModel):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
-    order_no = models.CharField(max_length=50, unique=True)
+    order_no = models.CharField(max_length=50)
     customer = models.ForeignKey("customers.Customer", on_delete=models.CASCADE)
 
     order_status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default="pending")
@@ -133,6 +133,7 @@ class Order(BaseModel):
 
     class Meta:
         ordering = ['-created_at']
+        unique_together = ('shop', 'order_no')
 
 class OrderItem(BaseModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")

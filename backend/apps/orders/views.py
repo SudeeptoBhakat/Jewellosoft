@@ -68,7 +68,44 @@ class OrderViewSet(viewsets.ModelViewSet):
             item = order.items.get(id=item_id)
             item.status = new_status
             item.save()
+
+            if new_status == 'complete' and not order.items.exclude(status='complete').exists():
+                order.order_status = 'completed'
+                order.save(update_fields=['order_status'])
+
             return Response({'status': 'status updated', 'item_id': item_id, 'new_status': new_status})
         except OrderItem.DoesNotExist:
             return Response({'error': 'Item not found in this order'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post', 'patch'], url_path='link-inventory-item')
+    def link_inventory_item(self, request, pk=None):
+        order = self.get_object()
+        item_id = request.data.get('item_id')
+        inventory_id = request.data.get('inventory_id')
+        product_name = request.data.get('product_name')
+        net_weight = request.data.get('net_weight')
+
+        try:
+            item = order.items.get(id=item_id)
+            if inventory_id:
+                from apps.inventory.models import ProductInventory
+                inv = ProductInventory.objects.get(id=inventory_id, shop=request.shop)
+                item.inventory_item = inv
+            if product_name:
+                item.product_name = product_name
+            if net_weight is not None:
+                item.expected_weight = net_weight
+            item.status = 'complete'
+            item.save()
+
+            if not order.items.exclude(status='complete').exists():
+                order.order_status = 'completed'
+                order.save(update_fields=['order_status'])
+
+            serializer = self.get_serializer(order)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except OrderItem.DoesNotExist:
+            return Response({'error': 'Item not found in this order'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

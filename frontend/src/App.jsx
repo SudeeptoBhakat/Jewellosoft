@@ -22,6 +22,7 @@ import DuesCreditsList from './features/dashboard/DuesCreditsList';
 import OldPurchaseVoucher from './features/old-purchases/OldPurchaseVoucher';
 import OldPurchaseVoucherList from './features/old-purchases/OldPurchaseVoucherList';
 import CreditNotesList from './features/credit-notes/CreditNotesList';
+import DueRecords from './features/dues/DueRecords';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -63,6 +64,7 @@ export default function App() {
               <Route path="/advances" element={<Advances />} />
               <Route path="/credit-notes" element={<CreditNotesList />} />
               <Route path="/dues-credits" element={<DuesCreditsList />} />
+              <Route path="/due-records" element={<DueRecords />} />
               <Route path="/old-purchases" element={<OldPurchaseVoucher />} />
               <Route path="/old-purchases/list" element={<OldPurchaseVoucherList />} />
             </Route>

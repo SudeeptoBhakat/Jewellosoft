@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import api, { extractList } from '../../lib/axios';
 import ProductNameInput from '../../components/elements/ProductNameInput';
+import ExportButton from '../../components/elements/ExportButton';
+import DataImportModal from '../../components/elements/DataImportModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from '../../utils/toast';
 import { printBarcodeLabel, getPrinterSettings } from '../../utils/labelPrinter';
@@ -294,8 +296,101 @@ export default function Inventory({ isActive = true }) {
   const [locationFilter, setLocationFilter] = useState('All');
 
   const [addModal, setAddModal] = useState(false);
+  const [importModal, setImportModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [deleteProduct, setDeleteProduct] = useState(null);
+
+  const inventoryColumns = useMemo(() => [
+    { label: 'Barcode', key: 'barcode', aliases: ['sku', 'code', 'item code'] },
+    { label: 'Product Name', key: 'name', required: true, aliases: ['item name', 'title', 'product'] },
+    {
+      label: 'Metal Type',
+      key: 'metal_type',
+      required: true,
+      aliases: ['metal', 'type'],
+      transform: (val) => {
+        const v = String(val || '').toLowerCase().trim();
+        if (v.includes('silver')) return 'silver';
+        if (v.includes('plat')) return 'platinum';
+        return 'gold';
+      }
+    },
+    {
+      label: 'Purity',
+      key: 'purity',
+      aliases: ['karat', 'purity/karat'],
+      transform: (val, row) => {
+        if (val) return String(val).toUpperCase().trim();
+        const metal = String(row?.metal_type || '').toLowerCase();
+        return metal === 'silver' ? '925' : '22K';
+      }
+    },
+    { label: 'HUID', key: 'huid', aliases: ['hallmark', 'huid no', 'huid code'] },
+    {
+      label: 'Net Weight (g)',
+      key: 'net_weight',
+      required: true,
+      aliases: ['weight', 'net weight', 'wt', 'weight (g)', 'net wt'],
+      validate: (val) => {
+        const n = parseFloat(val);
+        if (isNaN(n) || n <= 0) return 'Net Weight must be a positive number';
+        return null;
+      },
+      transform: (val) => parseFloat(val) || 0
+    },
+    { label: 'Location', key: 'location', aliases: ['tray', 'shelf', 'rack', 'counter'] },
+    {
+      label: 'Status',
+      key: 'status',
+      aliases: ['stock status', 'availability'],
+      transform: (val) => {
+        const v = String(val || '').toLowerCase();
+        return v.includes('sold') ? 'sold' : 'available';
+      }
+    }
+  ], []);
+
+  const sampleInventoryRows = useMemo(() => [
+    {
+      barcode: 'GLD-RN-001',
+      name: 'Gold Ring 22K Floral Design',
+      metal_type: 'Gold',
+      purity: '22K',
+      huid: 'AB1234',
+      net_weight: 4.85,
+      location: 'Tray 1',
+      status: 'Available'
+    },
+    {
+      barcode: 'SLV-CH-002',
+      name: 'Silver Chain 925 Italian',
+      metal_type: 'Silver',
+      purity: '925',
+      huid: '',
+      net_weight: 18.20,
+      location: 'Counter B',
+      status: 'Available'
+    }
+  ], []);
+
+  const handleImportProducts = async (items) => {
+    let createdCount = 0;
+    for (const item of items) {
+      const payload = {
+        barcode: item.barcode || '',
+        name: item.name,
+        metal_type: item.metal_type,
+        purity: item.purity,
+        huid: item.huid || '',
+        net_weight: item.net_weight,
+        location: item.location || '',
+        status: item.status || 'available'
+      };
+      await api.post('/inventory/', payload);
+      createdCount++;
+    }
+    return { success: true, count: createdCount };
+  };
 
   const fetchProducts = async () => {
     try {
@@ -433,7 +528,15 @@ export default function Inventory({ isActive = true }) {
         <div className="page-header__top">
           <h1 className="page-header__title">Inventory Management</h1>
           <div className="page-header__actions">
-            <button className="btn btn--ghost btn--sm"><i className="fa-solid fa-download"></i> Export</button>
+            <ExportButton
+              data={filtered}
+              columns={inventoryColumns}
+              filename="Inventory"
+              sheetName="Inventory"
+            />
+            <button className="btn btn--outline btn--sm" onClick={() => setImportModal(true)}>
+              <i className="fa-solid fa-file-import"></i> Import Data
+            </button>
             <button className="btn btn--primary" onClick={() => setAddModal(true)}>
               <i className="fa-solid fa-plus"></i> Add Product
             </button>
@@ -647,6 +750,18 @@ export default function Inventory({ isActive = true }) {
       {addModal && <ProductModal product={null} onClose={() => setAddModal(false)} onSave={handleSaveProduct} />}
       {editProduct && <ProductModal product={editProduct} onClose={() => setEditProduct(null)} onSave={handleSaveProduct} />}
       {deleteProduct && <DeleteModal product={deleteProduct} onClose={() => setDeleteProduct(null)} onConfirm={handleDelete} />}
+      {importModal && (
+        <DataImportModal
+          isOpen={importModal}
+          onClose={() => setImportModal(false)}
+          title="Import Inventory Data"
+          moduleName="Inventory"
+          columns={inventoryColumns}
+          sampleRows={sampleInventoryRows}
+          onImport={handleImportProducts}
+          onSuccess={fetchProducts}
+        />
+      )}
     </div>
   );
 }

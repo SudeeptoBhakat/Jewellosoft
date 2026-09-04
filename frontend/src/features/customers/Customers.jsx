@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api, { extractList } from '../../lib/axios';
+import ExportButton from '../../components/elements/ExportButton';
+import DataImportModal from '../../components/elements/DataImportModal';
 import useTabRefresh from '../../hooks/useTabRefresh';
 import { verifyAdminPassword } from '../../services/authService';
 import '../auth/auth.css';
@@ -228,8 +230,69 @@ export default function Customers({ isActive = true }) {
 
   // Modals
   const [addModal, setAddModal] = useState(false);
+  const [importModal, setImportModal] = useState(false);
   const [editCustomer, setEditCustomer] = useState(null);
   const [deleteCustomer, setDeleteCustomer] = useState(null);
+
+  const customerColumns = useMemo(() => [
+    { label: 'Customer Code', key: 'customer_code', aliases: ['code', 'id', 'cust code'] },
+    { label: 'Name', key: 'name', required: true, aliases: ['customer name', 'full name'] },
+    {
+      label: 'Phone',
+      key: 'phone',
+      required: true,
+      aliases: ['mobile', 'phone number', 'contact'],
+      validate: (val) => {
+        const clean = String(val || '').replace(/[^0-9+]/g, '');
+        if (clean.length < 7) return 'Phone must have at least 7 digits';
+        return null;
+      }
+    },
+    { label: 'Email', key: 'email', aliases: ['email address', 'e-mail'] },
+    { label: 'Address', key: 'address', aliases: ['city', 'location', 'full address'] },
+    { label: 'GST Number', key: 'gst_number', aliases: ['gstin', 'gst'] },
+    { label: 'Notes', key: 'notes', aliases: ['remark', 'remarks'] }
+  ], []);
+
+  const sampleCustomerRows = useMemo(() => [
+    {
+      customer_code: 'CUST-1001',
+      name: 'Rahul Sharma',
+      phone: '9876543210',
+      email: 'rahul.sharma@example.com',
+      address: '123 MG Road, Kolkata',
+      gst_number: '19AAAAA0000A1Z5',
+      notes: 'Regular gold jewelry customer'
+    },
+    {
+      customer_code: 'CUST-1002',
+      name: 'Pooja Verma',
+      phone: '9123456780',
+      email: '',
+      address: 'Salt Lake Sector 5',
+      gst_number: '',
+      notes: 'Prefers silver ornaments'
+    }
+  ], []);
+
+  const handleImportCustomers = async (items) => {
+    let createdCount = 0;
+    for (const item of items) {
+      const payload = {
+        name: item.name,
+        phone: item.phone,
+        email: item.email || null,
+        address: item.address || null,
+        gst_number: item.gst_number || null,
+        customer_code: item.customer_code || `CUST-${Date.now().toString().slice(-6)}${createdCount}`,
+        notes: item.notes || null,
+        shop: 1
+      };
+      await api.post('/customers/', payload);
+      createdCount++;
+    }
+    return { success: true, count: createdCount };
+  };
 
   const tabs = ['All', 'VIP', 'Regular', 'Walk-in'];
 
@@ -281,7 +344,15 @@ export default function Customers({ isActive = true }) {
         <div className="page-header__top">
           <h1 className="page-header__title">Customers</h1>
           <div className="page-header__actions">
-            <button className="btn btn--ghost btn--sm"><i className="fa-solid fa-download"></i> Export</button>
+            <ExportButton
+              data={filtered}
+              columns={customerColumns}
+              filename="Customers"
+              sheetName="Customers"
+            />
+            <button className="btn btn--outline btn--sm" onClick={() => setImportModal(true)}>
+              <i className="fa-solid fa-file-import"></i> Import Data
+            </button>
             <button className="btn btn--primary" onClick={() => setAddModal(true)}>
               <i className="fa-solid fa-user-plus"></i> Add Customer
             </button>
@@ -420,6 +491,18 @@ export default function Customers({ isActive = true }) {
       {addModal && <CustomerModal customer={null} onClose={() => setAddModal(false)} onSaved={fetchCustomers} />}
       {editCustomer && <CustomerModal customer={editCustomer} onClose={() => setEditCustomer(null)} onSaved={fetchCustomers} />}
       {deleteCustomer && <DeleteCustomerModal customer={deleteCustomer} onClose={() => setDeleteCustomer(null)} onConfirm={handleDeleteCustomer} />}
+      {importModal && (
+        <DataImportModal
+          isOpen={importModal}
+          onClose={() => setImportModal(false)}
+          title="Import Customers Data"
+          moduleName="Customers"
+          columns={customerColumns}
+          sampleRows={sampleCustomerRows}
+          onImport={handleImportCustomers}
+          onSuccess={fetchCustomers}
+        />
+      )}
     </div>
   );
 }

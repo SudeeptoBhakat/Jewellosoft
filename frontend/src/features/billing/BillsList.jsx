@@ -2,8 +2,10 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
+import ExportButton from '../../components/elements/ExportButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { fmtCurrency as fmt, fmtInt, amountWords } from '../../utils/billingCalcEngine';
+import { shortNo } from '../../utils/formatters';
 import useTabRefresh from '../../hooks/useTabRefresh';
 import { verifyAdminPassword } from '../../services/authService';
 import '../auth/auth.css';
@@ -11,6 +13,125 @@ import '../auth/auth.css';
 const statusMap = { Paid: 'success', Pending: 'warning', Partial: 'info', Cancelled: 'danger' };
 const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'primary'}`}>{s}</span>;
 
+
+function AdvanceHoverCell({ advance, advanceHistory = [], grandTotal = 0 }) {
+  const [open, setOpen] = useState(false);
+  const activeHistory = (advanceHistory || []).filter(a => a.status !== 'cancelled' && !a.isRefund);
+  const refundHistory = (advanceHistory || []).filter(a => a.status !== 'cancelled' && a.isRefund);
+  const historySum = activeHistory.reduce((s, a) => s + (a.amount || 0), 0) - refundHistory.reduce((s, a) => s + (a.amount || 0), 0);
+  const totalAdv = Math.max(advance || 0, historySum || 0);
+  const count = (advanceHistory || []).length;
+
+  if (totalAdv <= 0 && count === 0) {
+    return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+  }
+
+  const balanceDue = Math.max(0, grandTotal - totalAdv);
+
+  return (
+    <div
+      className="advance-hover-cell"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+    >
+      <span style={{ fontWeight: 600, color: 'var(--color-accent)' }}>
+        {fmtInt(totalAdv)}
+      </span>
+      {count > 1 && (
+        <span className="advance-badge">
+          {count} adv
+        </span>
+      )}
+      {count === 1 && (
+        <i className="fa-solid fa-circle-info" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.7 }} />
+      )}
+      {open && (
+        <div className="advance-popover" onClick={e => e.stopPropagation()}>
+          <div className="advance-popover__header">
+            <div className="advance-popover__title">
+              <i className="fa-solid fa-receipt" style={{ color: 'var(--color-primary)' }} />
+              Advance Breakdown ({count || 1})
+            </div>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+              Total: {fmtInt(totalAdv)}
+            </span>
+          </div>
+
+          <div className="advance-popover__list">
+            {advanceHistory && advanceHistory.length > 0 ? (
+              advanceHistory.map((adv, idx) => {
+                const isCancelled = adv.status === 'cancelled';
+                const isRefund = adv.isRefund;
+                return (
+                  <div
+                    key={idx}
+                    className="advance-popover__item"
+                    style={{ opacity: isCancelled ? 0.5 : 1 }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, color: isCancelled ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                        {adv.receiptNo || `Advance #${idx + 1}`}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                        {adv.date || '—'} • <span style={{ textTransform: 'uppercase' }}>{adv.paymentMode || 'Cash'}</span>
+                      </div>
+                      {adv.notes && (
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                          {adv.notes}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{
+                        fontWeight: 700,
+                        color: isCancelled ? 'var(--text-muted)' : isRefund ? 'var(--color-danger)' : 'var(--color-success)',
+                        textDecoration: isCancelled ? 'line-through' : 'none'
+                      }}>
+                        {isRefund ? '−' : '+'}{fmt(adv.amount)}
+                      </div>
+                      {isCancelled && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)' }}>Cancelled</span>
+                      )}
+                      {isRefund && !isCancelled && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)' }}>Refund</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="advance-popover__item">
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Bill Advance</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>Settled at Billing</div>
+                </div>
+                <div style={{ fontWeight: 700, color: 'var(--color-success)' }}>
+                  +{fmt(totalAdv)}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="advance-popover__footer">
+            <div className="flex justify-between" style={{ color: 'var(--text-secondary)' }}>
+              <span>Total Advance</span>
+              <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{fmt(totalAdv)}</span>
+            </div>
+            {grandTotal > 0 && (
+              <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}>
+                <span>Balance Remaining</span>
+                <span style={{ fontWeight: 600, color: balanceDue > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                  {balanceDue > 0 ? fmt(balanceDue) : 'Settled'}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function BillDetailModal({ bill, onClose, onPrint }) {
   const navigate = useNavigate();
@@ -21,11 +142,15 @@ function BillDetailModal({ bill, onClose, onPrint }) {
   const totalMaking = (bill.items || []).reduce((s, i) => s + (i.making || 0), 0);
   const isInvoice = bill.billType === 'Invoice';
 
+  const hasAdvances = (bill.advanceHistory && bill.advanceHistory.length > 0) || bill.advance > 0;
+  const hasVoucher = bill.oldSettlementMode === 'voucher' && bill.oldPurchaseVoucherNo;
+  const hasOldMetal = bill.oldSettlementMode && bill.oldSettlementMode !== 'none' && (bill.oldValue > 0 || bill.oldWt > 0 || bill.oldValueDirect > 0);
+  const hasCreditNotes = (bill.creditNoteUsages && bill.creditNoteUsages.length > 0) || bill.creditApplied > 0;
+
   return (
     <>
       <div className="overlay" onClick={onClose} />
-      <div className="modal" style={{ maxWidth: 780, maxHeight: '92vh', overflow: 'auto' }}>
-        {/* Header */}
+      <div className="modal" style={{ maxWidth: 840, maxHeight: '92vh', overflow: 'auto' }}>
         <div className="modal__header" style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
           <div>
             <h2 className="modal__title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -43,15 +168,14 @@ function BillDetailModal({ bill, onClose, onPrint }) {
         </div>
 
         <div style={{ padding: 'var(--space-5)' }}>
-          {/* Customer & Bill Info */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>Customer</div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-md)', marginBottom: 4 }}>{bill.customer}</div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}><i className="fa-solid fa-phone" style={{ marginRight: 6, opacity: 0.5 }}></i>{bill.phone || '—'}</div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', marginTop: 2 }}><i className="fa-solid fa-location-dot" style={{ marginRight: 6, opacity: 0.5 }}></i>{bill.address || '—'}</div>
             </div>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>Bill Info</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: 'var(--text-sm)' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Status</span><span style={{ textAlign: 'right' }}>{statusBadge(bill.status)}</span>
@@ -62,7 +186,6 @@ function BillDetailModal({ bill, onClose, onPrint }) {
             </div>
           </div>
 
-          {/* Items Table */}
           <div style={{ marginBottom: 'var(--space-4)' }}>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-2)' }}>Items</div>
             <div style={{ border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -104,9 +227,109 @@ function BillDetailModal({ bill, onClose, onPrint }) {
             </div>
           </div>
 
-          {/* Summary */}
+          {hasAdvances && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fa-solid fa-receipt" style={{ color: 'var(--color-primary)' }} />
+                  Advance Payments Applied
+                </div>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-accent)' }}>
+                  Total Advance: {fmt(bill.advance || (bill.advanceHistory || []).reduce((s, a) => s + (a.amount || 0), 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {bill.advanceHistory && bill.advanceHistory.length > 0 ? (
+                  bill.advanceHistory.map((adv, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontSize: 'var(--text-sm)' }}>
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{adv.receiptNo || `Advance #${idx + 1}`}</span>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginLeft: 8 }}>
+                          {adv.date} • <span style={{ textTransform: 'uppercase' }}>{adv.paymentMode}</span>
+                        </span>
+                        {adv.notes && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginLeft: 8 }}>({adv.notes})</span>}
+                      </div>
+                      <div style={{ fontWeight: 700, color: adv.isRefund ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                        {adv.isRefund ? '−' : '+'}{fmt(adv.amount)}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontSize: 'var(--text-sm)' }}>
+                    <span>Advance Settlement</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>−{fmt(bill.advance)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {hasOldMetal && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="fa-solid fa-scale-balanced" style={{ color: 'var(--color-warning)' }} />
+                Old Metal Exchange Details
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)', fontSize: 'var(--text-sm)' }}>
+                {hasVoucher && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Purchase Voucher</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>#{bill.oldPurchaseVoucherNo}</span>
+                  </div>
+                )}
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Settlement Mode</span>
+                  <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{bill.oldSettlementMode} {bill.oldVoucherRateUsed ? `(${bill.oldVoucherRateUsed} rate)` : ''}</span>
+                </div>
+                {bill.oldWt > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Old Weight</span>
+                    <span style={{ fontWeight: 600 }}>{bill.oldWt.toFixed(3)}g</span>
+                  </div>
+                )}
+                {bill.oldDeductPercent > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Deduction</span>
+                    <span style={{ fontWeight: 600, color: 'var(--color-danger)' }}>{bill.oldDeductPercent}% (−{fmt(bill.oldDeductAmount)})</span>
+                  </div>
+                )}
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 'var(--text-xs)' }}>Old Metal Credit</span>
+                  <span style={{ fontWeight: 700, color: 'var(--color-danger)' }}>−{fmt(bill.oldValueDirect || bill.oldValue)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hasCreditNotes && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fa-solid fa-wallet" style={{ color: 'var(--color-info)' }} />
+                  Credit Notes Applied
+                </div>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-danger)' }}>
+                  Total Credit: −{fmt(bill.creditApplied)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(bill.creditNoteUsages || []).map((cn, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontSize: 'var(--text-sm)' }}>
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cn.credit_note_no}</span>
+                      {cn.reason && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginLeft: 8 }}>({cn.reason})</span>}
+                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-danger)' }}>
+                      −{fmt(cn.amount_used)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>Payment Details</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 'var(--text-sm)' }}>
                 <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Cash</span><span style={{ fontWeight: 600 }}>{fmtInt(bill.paidCash)}</span></div>
@@ -117,7 +340,7 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                 </div>
               </div>
             </div>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 'var(--space-3)' }}>Bill Summary</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 'var(--text-sm)' }}>
                 <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>Subtotal</span><span>{fmt(bill.subtotal)}</span></div>
@@ -129,7 +352,6 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                   {bill.cgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) CGST</span><span>{fmt(bill.cgst)}</span></div>}
                   {bill.sgst > 0 && <div className="flex justify-between"><span style={{ color: 'var(--text-tertiary)' }}>(+) SGST</span><span>{fmt(bill.sgst)}</span></div>}
                 </>)}
-                {/* Old Metal — show by settlement mode */}
                 {(bill.oldSettlementMode === 'weight' && bill.oldWt > 0) && (
                   <div className="flex justify-between">
                     <span style={{ color: 'var(--text-tertiary)' }}>(−) Old Metal ({bill.oldWt.toFixed(3)}g)</span>
@@ -148,7 +370,6 @@ function BillDetailModal({ bill, onClose, onPrint }) {
                     <span style={{ color: 'var(--color-danger)' }}>−{fmt(bill.oldVoucherRateUsed === 'current' ? bill.oldValue : bill.oldValueDirect || bill.oldValue)}</span>
                   </div>
                 )}
-                {/* Fallback for legacy bills without mode */}
                 {(!bill.oldSettlementMode || bill.oldSettlementMode === 'none') && bill.oldValue > 0 && (
                   <div className="flex justify-between">
                     <span style={{ color: 'var(--text-tertiary)' }}>(−) Old Value</span>
@@ -162,14 +383,12 @@ function BillDetailModal({ bill, onClose, onPrint }) {
             </div>
           </div>
 
-          {/* Final Amount */}
           <div className="bill-final-block" style={{ marginTop: 'var(--space-4)' }}>
             <div className="bill-final-label">FINAL AMOUNT</div>
             <div className="bill-final-value">{fmtInt(bill.finalAmount)}</div>
           </div>
         </div>
 
-        {/* Footer Actions */}
         <div style={{ padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', position: 'sticky', bottom: 0, background: 'var(--bg-card)' }}>
           {isInvoice && (
             <button
@@ -190,6 +409,7 @@ function BillDetailModal({ bill, onClose, onPrint }) {
     </>
   );
 }
+
 
 
 function DeleteModal({ bill, onClose, onConfirm }) {
@@ -549,23 +769,43 @@ export default function BillsList({ isActive = true }) {
     setSearch(''); setStatusFilter('All'); setTypeFilter('All'); setDateFrom(''); setDateTo('');
   };
 
+  const billColumns = useMemo(() => [
+    { label: 'Bill / Invoice No', key: 'id' },
+    { label: 'Date', key: 'date' },
+    { label: 'Customer Name', key: 'customer' },
+    { label: 'Customer Phone', key: 'phone' },
+    { label: 'Bill Type', key: 'billType' },
+    { label: 'Metal Type', key: 'metal' },
+    { label: 'Total Weight (g)', key: 'weightTotal' },
+    { label: 'Subtotal (₹)', key: 'subtotal' },
+    { label: 'Advance (₹)', key: 'advance' },
+    { label: 'Discount (₹)', key: 'discount' },
+    { label: 'Grand Total (₹)', key: 'finalAmount' },
+    { label: 'Payment Method', key: 'payment' },
+    { label: 'Status', key: 'status' },
+    { label: 'Due Balance (₹)', key: 'balanceDue' }
+  ], []);
+
   const hasActiveFilters = search || statusFilter !== 'All' || typeFilter !== 'All' || dateFrom || dateTo;
 
   return (
     <div className="animate-fade-in">
-      {/* Page Header */}
       <div className="page-header">
         <div className="page-header__top">
           <h1 className="page-header__title">Bills List</h1>
           <div className="page-header__actions">
-            <button className="btn btn--ghost btn--sm"><i className="fa-solid fa-download"></i> Export</button>
+            <ExportButton
+              data={filtered}
+              columns={billColumns}
+              filename="Bills"
+              sheetName="Bills"
+            />
             <button className="btn btn--primary" onClick={() => navigate('/billing')}><i className="fa-solid fa-plus"></i> New Bill</button>
           </div>
         </div>
         <p className="page-header__subtitle">View, search, and manage all invoices & estimates.</p>
       </div>
 
-      {/* Quick Stats */}
       <div className="stats-grid stagger" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 'var(--space-4)' }}>
         {[
           { label: 'Total Bills', value: stats.total, icon: 'fa-file-invoice', color: 'primary' },
@@ -585,7 +825,6 @@ export default function BillsList({ isActive = true }) {
         ))}
       </div>
 
-      {/* Filters Bar */}
       <div className="data-table-wrapper animate-fade-in-up">
         <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--border-primary)' }}>
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -628,7 +867,6 @@ export default function BillsList({ isActive = true }) {
           </div>
         </div>
 
-        {/* Table */}
         <table className="data-table">
           <thead>
             <tr>
@@ -638,6 +876,7 @@ export default function BillsList({ isActive = true }) {
               <th>Metal</th>
               <th>Items</th>
               <th>Amount</th>
+              <th>Advance</th>
               <th>Payment</th>
               <th>Status</th>
               <th>Date</th>
@@ -647,7 +886,7 @@ export default function BillsList({ isActive = true }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={11}>
                   <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
                     <div className="spinner"></div>
                     <div style={{ marginTop: 'var(--space-2)', color: 'var(--text-secondary)' }}>Loading bills...</div>
@@ -656,7 +895,7 @@ export default function BillsList({ isActive = true }) {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={11}>
                   <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
                     <i className="empty-state__icon fa-solid fa-file-circle-xmark"></i>
                     <div className="empty-state__title">No bills found</div>
@@ -669,7 +908,7 @@ export default function BillsList({ isActive = true }) {
               </tr>
             ) : filtered.map(bill => (
               <tr key={bill.id} style={{ cursor: 'pointer' }} onClick={() => setViewBill(bill)}>
-                <td style={{ fontWeight: 600, color: 'var(--color-primary-hover)' }}>{bill.id}</td>
+                <td style={{ fontWeight: 600, color: 'var(--color-primary-hover)', whiteSpace: 'nowrap' }} title={bill.id}>{shortNo(bill.id)}</td>
                 <td>
                   <div style={{ fontWeight: 500 }}>{bill.customer}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{bill.phone}</div>
@@ -678,6 +917,9 @@ export default function BillsList({ isActive = true }) {
                 <td style={{ fontSize: 'var(--text-sm)' }}>{bill.metal}</td>
                 <td style={{ fontWeight: 500 }}>{(bill.items || []).length}</td>
                 <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(bill.finalAmount)}</td>
+                <td onClick={e => e.stopPropagation()}>
+                  <AdvanceHoverCell advance={bill.advance} advanceHistory={bill.advanceHistory} grandTotal={bill.finalAmount} />
+                </td>
                 <td style={{ fontSize: 'var(--text-sm)' }}>{bill.payment}</td>
                 <td>{statusBadge(bill.status)}</td>
                 <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{new Date(bill.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
@@ -693,7 +935,6 @@ export default function BillsList({ isActive = true }) {
           </tbody>
         </table>
 
-        {/* Pagination Controls */}
         {totalPages > 1 && (
           <div className="flex justify-center" style={{ padding: 'var(--space-4)', borderTop: '1px solid var(--border-soft)' }}>
             <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
@@ -711,10 +952,10 @@ export default function BillsList({ isActive = true }) {
         )}
       </div>
 
-      {/* Modals */}
       {viewBill && <BillDetailModal bill={viewBill} onClose={() => setViewBill(null)} onPrint={() => { setViewBill(null); handlePrint(viewBill); }} />}
       {deleteBill && <DeleteModal bill={deleteBill} onClose={() => setDeleteBill(null)} onConfirm={handleDelete} />}
       <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
     </div>
   );
 }
+

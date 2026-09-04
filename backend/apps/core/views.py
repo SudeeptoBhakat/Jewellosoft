@@ -1,7 +1,3 @@
-"""
-Core views — Dashboard Stats & Global Search endpoints.
-These are app-agnostic aggregations that span multiple modules.
-"""
 import logging
 from datetime import datetime, timedelta
 from django.utils import timezone
@@ -13,11 +9,6 @@ logger = logging.getLogger("jewellosoft.api")
 
 
 class DashboardStatsView(APIView):
-    """
-    GET /api/dashboard/stats/
-    Returns aggregated statistics for the Dashboard page.
-    """
-
     def get(self, request):
         from apps.billing.models import Invoice, Estimate
         from apps.orders.models import Order
@@ -156,9 +147,11 @@ class GlobalSearchView(APIView):
             return Response({'results': []})
 
         from apps.customers.models import Customer
-        from apps.billing.models import Invoice, Estimate
+        from apps.billing.models import Invoice, Estimate, CreditNote
         from apps.orders.models import Order
         from apps.inventory.models import ProductInventory
+        from apps.old_purchases.models import OldPurchaseVoucher
+        from apps.payments.models import AdvancePayment
 
         shop = request.shop
         if not shop:
@@ -218,6 +211,45 @@ class GlobalSearchView(APIView):
                 'url': '/orders/list',
             })
 
+        # Credit Notes
+        credit_notes = CreditNote.objects.filter(shop=shop).filter(
+            Q(credit_note_no__icontains=q) | Q(customer__name__icontains=q)
+        ).select_related('customer')[:5]
+        for cn in credit_notes:
+            results.append({
+                'type': 'credit_note',
+                'icon': 'fa-receipt',
+                'title': cn.credit_note_no,
+                'subtitle': f"{cn.customer.name if cn.customer else 'Customer'} • ₹{cn.credit_amount} ({cn.status})",
+                'url': '/credit-notes',
+            })
+
+        # Purchase Vouchers
+        vouchers = OldPurchaseVoucher.objects.filter(shop=shop).filter(
+            Q(voucher_no__icontains=q) | Q(customer__name__icontains=q)
+        ).select_related('customer')[:5]
+        for v in vouchers:
+            results.append({
+                'type': 'voucher',
+                'icon': 'fa-coins',
+                'title': v.voucher_no,
+                'subtitle': f"{v.customer.name if v.customer else 'Walk-in'} • {v.metal_type} • ₹{v.amount}",
+                'url': '/old-purchases',
+            })
+
+        # Advance & Refund Receipts
+        advances = AdvancePayment.objects.filter(shop=shop).filter(
+            Q(receipt_no__icontains=q) | Q(order__order_no__icontains=q)
+        ).select_related('order__customer')[:5]
+        for a in advances:
+            results.append({
+                'type': 'receipt',
+                'icon': 'fa-file-invoice',
+                'title': a.receipt_no,
+                'subtitle': f"{'Refund' if a.is_refund else 'Advance'} • ₹{a.amount} • {a.payment_mode.upper()}",
+                'url': '/advances',
+            })
+
         # Inventory
         inventory = ProductInventory.objects.filter(shop=shop).filter(
             Q(name__icontains=q) | Q(barcode__icontains=q) | Q(huid__icontains=q)
@@ -231,7 +263,7 @@ class GlobalSearchView(APIView):
                 'url': '/inventory',
             })
 
-        return Response({'results': results[:15]})
+        return Response({'results': results[:20]})
 
 
 class LatestRatesView(APIView):

@@ -27,6 +27,7 @@ const navSections = [
       { path: '/old-purchases/list', icon: 'fa-solid fa-file-invoice', label: 'Vouchers List' },
       { path: '/credit-notes', icon: 'fa-solid fa-wallet', label: 'Credit Notes' },
       { path: '/advances', icon: 'fa-solid fa-hand-holding-dollar', label: 'Advance' },
+      { path: '/due-records', icon: 'fa-solid fa-hand-holding-hand', label: 'Due Records' },
     ],
   },
   {

@@ -73,6 +73,7 @@ frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
 component_styles.css.tmp
+frontend/src/assets/media/PDF templates
 
 # Desktop / Electron
 desktop/node_modules/

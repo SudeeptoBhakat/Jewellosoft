@@ -12,6 +12,7 @@ import { useTabs } from '../../contexts/TabContext';
 import { fetchVouchers, deleteVoucher } from './services';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
 import OldPurchaseVoucherPDF from './OldPurchaseVoucherPDF';
+import ExportButton from '../../components/elements/ExportButton';
 import useTabRefresh from '../../hooks/useTabRefresh';
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -118,6 +119,22 @@ export default function OldPurchaseVoucherList({ isActive = true }) {
     setPrintData(docData);
   };
 
+  const voucherColumns = useMemo(() => [
+    { label: 'Voucher No', key: 'voucher_no' },
+    { label: 'Date', key: 'voucher_date', transform: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '' },
+    { label: 'Customer Name', key: 'customer_detail.name' },
+    { label: 'Customer Phone', key: 'customer_detail.phone' },
+    { label: 'Metal Type', key: 'metal_type', transform: (val) => String(val || '').toUpperCase() },
+    { label: 'Purity', key: 'purity' },
+    { label: 'Gross Weight (g)', key: 'gross_weight' },
+    { label: 'Deduction (%)', key: 'deduction_percent' },
+    { label: 'Net Weight (g)', key: 'net_weight' },
+    { label: 'Rate / g (₹)', key: 'rate_per_gram' },
+    { label: 'Total Amount (₹)', key: 'amount' },
+    { label: 'Status', key: 'status', transform: (val) => val === 'not_adjusted' ? 'Not Adjusted' : 'Adjusted' },
+    { label: 'Notes', key: 'notes' }
+  ], []);
+
   return (
     <div className="animate-fade-in">
       {/* Header */}
@@ -125,6 +142,12 @@ export default function OldPurchaseVoucherList({ isActive = true }) {
         <div className="page-header__top">
           <h1 className="page-header__title">Purchase Vouchers</h1>
           <div className="page-header__actions">
+            <ExportButton
+              data={vouchers}
+              columns={voucherColumns}
+              filename="Purchase_Vouchers"
+              sheetName="Vouchers"
+            />
             <button className="btn btn--primary" onClick={() => openTab('/old-purchases', 'New Voucher')}>
               <i className="fa-solid fa-plus"></i> New Voucher
             </button>

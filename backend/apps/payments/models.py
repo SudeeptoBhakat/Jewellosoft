@@ -51,7 +51,7 @@ class AdvancePayment(BaseModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODE_CHOICES, default="cash")
     payment_splits = models.JSONField(default=list, blank=True)
-    receipt_no = models.CharField(max_length=50, unique=True)
+    receipt_no = models.CharField(max_length=50)
     payment_date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True, null=True)
     reference_number = models.CharField(max_length=100, blank=True, null=True)
@@ -79,7 +79,13 @@ class AdvancePayment(BaseModel):
         seq_type = "refund_receipt" if is_refund else "advance_receipt"
         seq_key = f"{seq_type}_{year}"
 
-        existing_nos = cls.objects.filter(receipt_no__istartswith=prefix).values_list('receipt_no', flat=True)
+        for _ in range(max_retries):
+            next_num = NumberingSequence.get_next_number(shop, seq_key)
+            candidate = f"{prefix}{next_num:03d}"
+            if not cls.objects.filter(shop=shop, receipt_no__iexact=candidate).exists():
+                return candidate
+
+        existing_nos = cls.objects.filter(shop=shop, receipt_no__istartswith=prefix).values_list('receipt_no', flat=True)
         max_num = 0
         for no in existing_nos:
             try:
@@ -89,30 +95,13 @@ class AdvancePayment(BaseModel):
             except Exception:
                 pass
 
-        try:
-            seq, _ = NumberingSequence.objects.get_or_create(
-                shop=shop,
-                sequence_type=seq_key,
-                defaults={'last_number': max_num}
-            )
-            if seq.last_number < max_num:
-                seq.last_number = max_num
-                seq.save(update_fields=['last_number'])
-        except Exception:
-            pass
-
-        for _ in range(max_retries):
-            next_num = NumberingSequence.get_next_number(shop, seq_key)
-            candidate = f"{prefix}{next_num:03d}"
-            if not cls.objects.filter(receipt_no__iexact=candidate).exists():
-                return candidate
-
         max_num += 1
         candidate = f"{prefix}{max_num:03d}"
-        while cls.objects.filter(receipt_no__iexact=candidate).exists():
+        while cls.objects.filter(shop=shop, receipt_no__iexact=candidate).exists():
             max_num += 1
             candidate = f"{prefix}{max_num:03d}"
 
+        NumberingSequence.set_next_number(shop, seq_key, max_num + 1)
         return candidate
 
     @classmethod
@@ -190,6 +179,7 @@ class AdvancePayment(BaseModel):
 
     class Meta:
         ordering = ['-payment_date']
+        unique_together = ('shop', 'receipt_no')
 
 
 class LedgerEntry(BaseModel):

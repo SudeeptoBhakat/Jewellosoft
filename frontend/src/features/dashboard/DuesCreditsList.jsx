@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../lib/axios';
+import ExportButton from '../../components/elements/ExportButton';
 import useTabRefresh from '../../hooks/useTabRefresh';
 
 const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -62,6 +63,16 @@ export default function DuesCreditsList({ isActive = true }) {
 
   const toggleRow = (id) => setExpandedRow(prev => (prev === id ? null : id));
 
+  const duesColumns = useMemo(() => [
+    { label: 'Customer Name', key: 'customer_name' },
+    { label: 'Phone', key: 'customer_phone' },
+    { label: 'Type', key: 'type', transform: (val) => val === 'due' ? 'Customer Owes (Due)' : 'Store Owes (Credit)' },
+    { label: 'Net Balance (₹)', key: 'net_balance', transform: (val) => fmt(Math.abs(val || 0)) },
+    { label: 'Total Invoiced (₹)', key: 'total_invoiced', transform: (val) => fmt(val || 0) },
+    { label: 'Total Paid (₹)', key: 'total_paid', transform: (val) => fmt(val || 0) },
+    { label: 'Last Transaction', key: 'last_activity', transform: (val) => fmtDate(val) }
+  ], []);
+
   return (
     <div className="animate-fade-in">
       {/* ── Page Header ── */}
@@ -81,6 +92,12 @@ export default function DuesCreditsList({ isActive = true }) {
             </h1>
           </div>
           <div className="page-header__actions">
+            <ExportButton
+              data={data?.results || []}
+              columns={duesColumns}
+              filename="Dues_and_Credits"
+              sheetName="DuesCredits"
+            />
             <button className="btn btn--ghost btn--sm" onClick={fetchData}>
               <i className="fa-solid fa-rotate" /> Refresh
             </button>

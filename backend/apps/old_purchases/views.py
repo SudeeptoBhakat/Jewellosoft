@@ -124,20 +124,33 @@ class OldPurchaseVoucherViewSet(viewsets.ModelViewSet):
         serializer = OldPurchaseVoucherSerializer(voucher, context={"request": request})
         data = serializer.data
 
+        order_no = request.query_params.get("order_no", "").strip()
         is_adjusted = voucher.is_adjusted
         if is_adjusted:
-            doc_type = "Invoice" if voucher.adjusted_invoice_no else "Estimate"
-            doc_no = voucher.adjusted_invoice_no or voucher.adjusted_estimate_no
-            error_msg = (
-                f"Voucher {voucher.voucher_no} is already adjusted against "
-                f"{doc_type} {doc_no}. Please select a different voucher."
+            is_order_voucher = (
+                (order_no and (voucher.adjusted_invoice_no == order_no or voucher.adjusted_estimate_no == order_no))
+                or (order_no and voucher.order_settlements.filter(order_no=order_no).exists())
+                or (voucher.adjusted_invoice_no and voucher.adjusted_invoice_no.startswith("ORD-"))
+                or (voucher.adjusted_estimate_no and voucher.adjusted_estimate_no.startswith("ORD-"))
             )
+            if is_order_voucher:
+                can_use = True
+                error_msg = None
+            else:
+                can_use = False
+                doc_type = "Invoice" if voucher.adjusted_invoice_no else "Estimate"
+                doc_no = voucher.adjusted_invoice_no or voucher.adjusted_estimate_no
+                error_msg = (
+                    f"Voucher {voucher.voucher_no} is already adjusted against "
+                    f"{doc_type} {doc_no}. Please select a different voucher."
+                )
         else:
+            can_use = True
             error_msg = None
 
         return Response({
             "found": True,
-            "can_use": not is_adjusted,
+            "can_use": can_use,
             "is_adjusted": is_adjusted,
             "error_message": error_msg,
             "voucher": data,

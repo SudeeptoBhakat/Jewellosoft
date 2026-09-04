@@ -8,6 +8,9 @@ from .models import OldPurchaseVoucher
 from apps.customers.models import Customer
 
 
+from apps.accounts.models import Shop
+
+
 class BasicCustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
@@ -16,6 +19,9 @@ class BasicCustomerSerializer(serializers.ModelSerializer):
 
 class OldPurchaseVoucherSerializer(serializers.ModelSerializer):
     customer_detail = BasicCustomerSerializer(source="customer", read_only=True)
+    voucher_no = serializers.CharField(required=False, allow_blank=True)
+    date = serializers.DateField(required=False)
+    shop = serializers.PrimaryKeyRelatedField(required=False, queryset=Shop.objects.all())
 
     # Expose adjusted bill/estimate number in a unified field
     adjusted_doc_no = serializers.SerializerMethodField()
@@ -23,8 +29,8 @@ class OldPurchaseVoucherSerializer(serializers.ModelSerializer):
     class Meta:
         model = OldPurchaseVoucher
         fields = "__all__"
+        validators = []
         read_only_fields = [
-            "voucher_no",
             "status",
             "adjusted_invoice_no",
             "adjusted_estimate_no",
@@ -44,3 +50,14 @@ class OldPurchaseVoucherSerializer(serializers.ModelSerializer):
         if "amount" not in data or data["amount"] == 0:
             data["amount"] = round(Decimal(str(net_weight)) * Decimal(str(rate)) / Decimal("10"), 2)
         return data
+
+    def create(self, validated_data):
+        shop = validated_data.get("shop")
+        if not shop and "request" in self.context:
+            shop = getattr(self.context["request"], "shop", None)
+            validated_data["shop"] = shop
+        voucher_no = (validated_data.get("voucher_no") or "").strip()
+        if not voucher_no:
+            from .services import generate_voucher_no
+            validated_data["voucher_no"] = generate_voucher_no(shop)
+        return super().create(validated_data)
