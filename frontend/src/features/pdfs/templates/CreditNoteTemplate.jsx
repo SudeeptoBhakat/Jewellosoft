@@ -7,6 +7,7 @@
 import React from "react";
 import "../../../assets/styles/pdf.css";
 import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
+import bgCreditNote from "../../../assets/media/PDF templates/credit_note.png";
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -48,6 +49,23 @@ export default function CreditNoteTemplate({ data }) {
 
     return (
         <div className={`pdf-print-wrapper theme-gold`}>
+            <img
+                src={bgCreditNote}
+                alt=""
+                aria-hidden="true"
+                style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: "center top",
+                    zIndex: 0,
+                    pointerEvents: "none",
+                    userSelect: "none",
+                }}
+            />
+
             {/* Watermark */}
             <img
                 src={watermarkSrc}

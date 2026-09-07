@@ -26,12 +26,13 @@
     left: 50%;
     width: 90%;
     opacity: 0.18;
-    z-index: 0;
+    z-index: 1;
 }
 
 /* CONTAINER */
 .pdf-container {
     position: relative;
+    padding-top: 190px;
     z-index: 2;
     flex: 1;
     display: flex;
@@ -313,11 +314,11 @@
 
 /* FOOTER */
 .pdf-footer {
-    margin-top: auto;
+    /* margin-top: auto; */
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    padding-top: 35px;
+    padding-top: 125px;
     padding-left: 20px;
     padding-right: 20px;
 }

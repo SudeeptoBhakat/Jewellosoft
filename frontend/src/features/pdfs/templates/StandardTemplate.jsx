@@ -1,10 +1,11 @@
 import React from "react";
 import "../../../assets/styles/pdf-standard.css";
-import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
+import bgBillInvoice from "../../../assets/media/PDF templates/bill_invoice.pdf";
+import bgBillEstimate from "../../../assets/media/PDF templates/bill_estimate.jpg";
+import bgOrderInvoice from "../../../assets/media/PDF templates/order_invoice.png";
+import bgOrderEstimate from "../../../assets/media/PDF templates/order_estimate.png";
 
-/* ─── Helpers ─── */
 
-/** Format a numeric value as Indian rupee string. Safe against null/undefined/NaN. */
 const fmt = (n) => {
     const num = Number(n);
     if (!Number.isFinite(num)) return "₹ 0.00";
@@ -67,7 +68,7 @@ export default function StandardTemplate({ data }) {
     } = data;
 
     /* ── Derived flags ── */
-    const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
+    // const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
     const hasHuid = Array.isArray(items) && items.some((i) => i && i.huid && String(i.huid).trim() && i.huid !== "—");
     const hasMetalVal = !hideMetalValue && Array.isArray(items) && items.some((i) => i && has(i.metalValue));
     const hasMaking = !hideMaking && Array.isArray(items) && items.some((i) => i && has(i.making));
@@ -79,14 +80,18 @@ export default function StandardTemplate({ data }) {
     const isReturn = transactionType === "return";
     const hasOldMetal = oldMetal && (has(oldMetal.value) || has(oldMetal.weight));
 
-    /* ── Applied credit notes — support both creation-flow and list-view shapes ── */
-    // Creation flow: totals.appliedCreditNotes = [{ credit_note_no, amount, reason, ... }]
-    // List/view flow: passed as creditNoteUsages = [{ credit_note_no, amount_used, reason, created_at }]
+    const bgImage = (() => {
+        if (isOrderReceipt) {
+            return data.orderType?.toLowerCase() === "invoice" ? bgOrderInvoice : bgOrderEstimate;
+        }
+        return docType.includes("INVOICE") ? bgBillInvoice : bgBillEstimate;
+    })();
+
+    /* ── Applied credit notes*/
     const appliedCreditNotes = (() => {
         const fromTotals = Array.isArray(totals?.appliedCreditNotes) ? totals.appliedCreditNotes : [];
         const fromUsages = Array.isArray(data?.creditNoteUsages) ? data.creditNoteUsages : [];
 
-        // Merge: prefer fromTotals (creation flow), fall back to fromUsages (list reprint)
         if (fromTotals.length > 0) {
             return fromTotals.map((n) => ({
                 creditNoteNo: n.credit_note_no || n.creditNoteNo || "",
@@ -123,7 +128,7 @@ export default function StandardTemplate({ data }) {
         : [];
     const hasAdvances = activeAdvances.length > 0;
 
-    /* ── Summary grid column count (dynamic based on visible columns) ── */
+    /* ── Summary grid column count ── */
     const summaryColCount = (() => {
         // Base cols: GRAND TOTAL | ROUND OFF | HALLMARK | OTHER CHARGES | TOTAL
         let cols = 5;
@@ -144,12 +149,47 @@ export default function StandardTemplate({ data }) {
     return (
         <div className="pdf-root">
 
-            <img
+            {bgImage && String(bgImage).endsWith(".pdf") ? (
+                <embed
+                    src={`${bgImage}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                    type="application/pdf"
+                    aria-hidden="true"
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        zIndex: 0,
+                        pointerEvents: "none",
+                        userSelect: "none",
+                        border: "none",
+                    }}
+                />
+            ) : (
+                <img
+                    src={bgImage}
+                    alt=""
+                    aria-hidden="true"
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center top",
+                        zIndex: 0,
+                        pointerEvents: "none",
+                        userSelect: "none",
+                    }}
+                />
+            )}
+
+            {/* <img
                 src={watermarkSrc}
                 alt="watermark"
                 className="pdf-watermark"
                 onError={(e) => (e.target.style.display = "none")}
-            />
+            /> */}
 
             {/* CANCELLED stamp */}
             {isCancelled && (
@@ -166,7 +206,7 @@ export default function StandardTemplate({ data }) {
             <div className="pdf-container">
 
                 {/* ═══════════════════ HEADER ═══════════════════ */}
-                <div className="pdf-header">
+                {/* <div className="pdf-header">
                     <div className="pdf-top-strip-right" />
                     <div className="pdf-top-strip-left" />
 
@@ -191,7 +231,7 @@ export default function StandardTemplate({ data }) {
                             {shop.pan_number && <span><strong>PAN:</strong> {shop.pan_number}</span>}
                         </div>
                     )}
-                </div>
+                </div> */}
 
                 {/* ═══════════════════ CUSTOMER + META ═══════════════════ */}
                 <div className="pdf-top-row">
