@@ -1,122 +1,110 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react';
+import ThemeSwitcher from './components/ThemeSwitcher';
+import Navbar from './components/Navbar';
+import Hero from './components/Hero';
+import MarqueeStrip from './components/MarqueeStrip';
+import About from './components/About';
+import Features from './components/Features';
+import Why from './components/Why';
+import HowItWorks from './components/HowItWorks';
+import Security from './components/Security';
+import FAQ from './components/FAQ';
+import CTA from './components/CTA';
+import Feedback from './components/Feedback';
+import Footer from './components/Footer';
+import DownloadModal from './components/DownloadModal';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [releaseInfo, setReleaseInfo] = useState({
+    version: 'v1.1.1',
+    size: '~118 MB',
+    downloadUrl: 'https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest',
+    releasePage: 'https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest'
+  });
+
+  useEffect(() => {
+    async function fetchRelease() {
+      try {
+        const res = await fetch('https://api.github.com/repos/SudeeptoBhakat/Jewellosoft/releases/latest', {
+          headers: { Accept: 'application/vnd.github.v3+json' }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const version = data.tag_name || 'v1.1.1';
+        const releasePage = data.html_url || 'https://github.com/SudeeptoBhakat/Jewellosoft/releases/latest';
+        const exeAsset = data.assets?.find(
+          (a) => a.name.endsWith('.exe') && !a.name.endsWith('.blockmap')
+        );
+        const downloadUrl = exeAsset ? exeAsset.browser_download_url : releasePage;
+        const sizeBytes = exeAsset ? exeAsset.size : 0;
+        const size = sizeBytes ? `~${(sizeBytes / (1024 * 1024)).toFixed(0)} MB` : '~118 MB';
+
+        setReleaseInfo({ version, size, downloadUrl, releasePage });
+      } catch {
+        // Fallback already initialised
+      }
+    }
+
+    fetchRelease();
+  }, []);
+
+  useEffect(() => {
+    const targets = document.querySelectorAll(
+      '.animate-fadein, .animate-fadein-delay, .animate-slide-left, .animate-slide-right'
+    );
+
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach((el) => {
+        el.style.opacity = '1';
+        el.style.transform = 'none';
+      });
+      return;
+    }
+
+    targets.forEach((el) => {
+      el.style.opacity = '0';
+      el.style.animationPlayState = 'paused';
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.style.opacity = '';
+            entry.target.style.animationPlayState = 'running';
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    );
+
+    targets.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      <ThemeSwitcher />
+      <Navbar onOpenDownload={() => setDownloadModalOpen(true)} />
+      <Hero onOpenDownload={() => setDownloadModalOpen(true)} releaseInfo={releaseInfo} />
+      <MarqueeStrip />
+      <About />
+      <Features />
+      <Why />
+      <HowItWorks />
+      <Security />
+      <FAQ />
+      <CTA onOpenDownload={() => setDownloadModalOpen(true)} releaseInfo={releaseInfo} />
+      <Feedback />
+      <Footer />
+      <DownloadModal
+        isOpen={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+        releaseInfo={releaseInfo}
+      />
     </>
-  )
+  );
 }
-
-export default App
