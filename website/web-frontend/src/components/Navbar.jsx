@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({ onOpenDownload }) {
   const [scrolled, setScrolled] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const { isAuthenticated, logout, user } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -28,10 +31,10 @@ export default function Navbar({ onOpenDownload }) {
   return (
     <nav className={`navbar navbar-expand-lg fixed-top js-navbar ${scrolled ? 'scrolled' : ''}`} id="mainNavbar">
       <div className="container">
-        <a className="navbar-brand brand-logo" href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+        <Link className="navbar-brand brand-logo" to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
           <img src="/logo.png" alt="JewelloSoft" style={{ width: '32px', height: 'auto' }} />
           <span className="brand-name">JewelloSoft</span>
-        </a>
+        </Link>
 
         <button
           className="navbar-toggler"
@@ -70,10 +73,59 @@ export default function Navbar({ onOpenDownload }) {
                 Feedback
               </a>
             </li>
-            <li className="nav-item ms-lg-3">
+
+            {isAuthenticated ? (
+              <>
+                <li className="nav-item ms-lg-2">
+                  <Link
+                    to="/profile"
+                    className="nav-link d-inline-flex align-items-center gap-1 text-gold fw-medium"
+                    onClick={() => setNavOpen(false)}
+                  >
+                    <i className="bi bi-person-circle"></i>
+                    <span>{user?.shop_name || 'Profile'}</span>
+                  </Link>
+                </li>
+                <li className="nav-item ms-lg-1">
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-sm px-3 rounded-pill"
+                    onClick={() => {
+                      setNavOpen(false);
+                      logout();
+                    }}
+                  >
+                    Logout
+                  </button>
+                </li>
+              </>
+            ) : (
+              <>
+                <li className="nav-item ms-lg-2">
+                  <Link
+                    to="/login"
+                    className="nav-link text-gold fw-medium"
+                    onClick={() => setNavOpen(false)}
+                  >
+                    Sign In
+                  </Link>
+                </li>
+                <li className="nav-item ms-lg-1">
+                  <Link
+                    to="/register"
+                    className="btn btn-gold-outline btn-sm px-3 rounded-pill text-decoration-none"
+                    onClick={() => setNavOpen(false)}
+                  >
+                    Register
+                  </Link>
+                </li>
+              </>
+            )}
+
+            <li className="nav-item ms-lg-2">
               <button
                 type="button"
-                className="btn btn-gold-outline btn-sm"
+                className="btn btn-gold btn-sm px-3 rounded-pill"
                 onClick={() => {
                   setNavOpen(false);
                   onOpenDownload();
