@@ -4,10 +4,10 @@ import json
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, viewsets
 from django.shortcuts import get_object_or_404
-from .models import Shop, SyncQueue
-from .serializers import ShopSerializer
+from .models import Shop, SyncQueue, Karigar
+from .serializers import ShopSerializer, KarigarSerializer
 from .crypto import LicenseManager
 from datetime import timedelta
 from django.contrib.auth import authenticate
@@ -27,14 +27,14 @@ class ShopCurrentView(APIView):
     PATCH: Update Settings/Business info and add to SyncQueue for backup.
     """
     def get(self, request):
-        shop = request.shop
+        shop = request.shop or Shop.objects.first()
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
         serializer = ShopSerializer(shop)
         return Response(serializer.data)
 
     def patch(self, request):
-        shop = request.shop
+        shop = request.shop or Shop.objects.first()
         if not shop:
             return Response({"detail": "Shop not configured."}, status=status.HTTP_404_NOT_FOUND)
             
@@ -66,7 +66,7 @@ class AuthMeView(APIView):
         if request.supabase_user:
             email = request.supabase_user.get("email")
         if not email:
-            shop = request.shop
+            shop = request.shop or Shop.objects.first()
             email = shop.supabase_email if shop else None
         user_data = {
             "email": email,
@@ -1115,4 +1115,22 @@ class VerifyAdminPasswordView(APIView):
             return Response({"valid": True, "message": "Password verified."})
 
         return Response({"valid": False, "detail": "Incorrect admin password."}, status=status.HTTP_403_FORBIDDEN)
+
+
+class KarigarViewSet(viewsets.ModelViewSet):
+    serializer_class = KarigarSerializer
+    filterset_fields = ['is_active']
+    search_fields = ['name', 'phone', 'specialty']
+
+    def get_queryset(self):
+        shop = self.request.shop
+        if not shop:
+            return Karigar.objects.none()
+        return Karigar.objects.filter(shop=shop).order_by('name')
+
+    def perform_create(self, serializer):
+        serializer.save(shop=self.request.shop)
+
+    def perform_update(self, serializer):
+        serializer.save(shop=self.request.shop)
 

@@ -112,3 +112,18 @@ class NumberingSequence(BaseModel):
             return seq.last_number + 1
 
 
+class Karigar(BaseModel):
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name='karigars')
+    name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=20, blank=True)
+    specialty = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = ('shop', 'name')
+
+    def __str__(self):
+        return self.name
+
+

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Shop
+from .models import Shop, Karigar
 
 class ShopSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,3 +13,9 @@ class ShopSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'supabase_email', 'watermark_logo']
 
+
+class KarigarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Karigar
+        fields = ['id', 'name', 'phone', 'specialty', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
