@@ -1,9 +1,6 @@
 import React from "react";
 import "../../../assets/styles/pdf-standard.css";
-import bgBillInvoice from "../../../assets/media/PDF templates/bill_invoice.pdf";
-import bgBillEstimate from "../../../assets/media/PDF templates/bill_estimate.jpg";
-import bgOrderInvoice from "../../../assets/media/PDF templates/order_invoice.png";
-import bgOrderEstimate from "../../../assets/media/PDF templates/order_estimate.png";
+import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
 
 
 const fmt = (n) => {
@@ -68,7 +65,7 @@ export default function StandardTemplate({ data }) {
     } = data;
 
     /* ── Derived flags ── */
-    // const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
+    const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
     const hasHuid = Array.isArray(items) && items.some((i) => i && i.huid && String(i.huid).trim() && i.huid !== "—");
     const hasMetalVal = !hideMetalValue && Array.isArray(items) && items.some((i) => i && has(i.metalValue));
     const hasMaking = !hideMaking && Array.isArray(items) && items.some((i) => i && has(i.making));
@@ -79,13 +76,6 @@ export default function StandardTemplate({ data }) {
     const transactionType = totals?.transactionType || "payable";
     const isReturn = transactionType === "return";
     const hasOldMetal = oldMetal && (has(oldMetal.value) || has(oldMetal.weight));
-
-    const bgImage = (() => {
-        if (isOrderReceipt) {
-            return data.orderType?.toLowerCase() === "invoice" ? bgOrderInvoice : bgOrderEstimate;
-        }
-        return docType.includes("INVOICE") ? bgBillInvoice : bgBillEstimate;
-    })();
 
     /* ── Applied credit notes*/
     const appliedCreditNotes = (() => {
@@ -149,9 +139,9 @@ export default function StandardTemplate({ data }) {
     return (
         <div className="pdf-root">
 
-            {bgImage && String(bgImage).endsWith(".pdf") ? (
+            {watermarkSrc && String(watermarkSrc).endsWith(".pdf") ? (
                 <embed
-                    src={`${bgImage}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                    src={`${watermarkSrc}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                     type="application/pdf"
                     aria-hidden="true"
                     style={{
@@ -167,7 +157,7 @@ export default function StandardTemplate({ data }) {
                 />
             ) : (
                 <img
-                    src={bgImage}
+                    src={watermarkSrc}
                     alt=""
                     aria-hidden="true"
                     style={{

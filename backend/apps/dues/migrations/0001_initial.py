@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('accounts', '0012_shop_credit_note_validity_days'),
-        ('billing', '0011_creditnoteusage_applied_to_order'),
+        ('billing', '0009_invoice_credit_applied_alter_estimate_estimate_no_and_more'),
         ('customers', '0002_alter_customer_customer_code'),
     ]
 
