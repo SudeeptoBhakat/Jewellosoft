@@ -152,6 +152,20 @@ class OrderItem(BaseModel):
 
     status = models.CharField(max_length=20, choices=ITEM_STATUS_CHOICES, default="created")
 
+    karigar = models.ForeignKey(
+        "accounts.Karigar",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="assigned_items"
+    )
+    estimate_date = models.DateField(null=True, blank=True)
+    urgency_note = models.TextField(blank=True)
+    karigar_note_status = models.CharField(
+        max_length=20,
+        choices=[("active", "Active"), ("completed", "Completed")],
+        default="active"
+    )
+
 class OrderImage(BaseModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="products/orders/")

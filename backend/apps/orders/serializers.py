@@ -49,6 +49,7 @@ class OrderImageSerializer(serializers.ModelSerializer):
 
 class OrderItemSerializer(serializers.ModelSerializer):
     inventory_item_detail = serializers.SerializerMethodField()
+    karigar_name = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
@@ -65,6 +66,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
                 "net_weight": str(obj.inventory_item.net_weight),
                 "status": obj.inventory_item.status,
             }
+        return None
+
+    def get_karigar_name(self, obj):
+        if obj.karigar:
+            return obj.karigar.name
         return None
 
 

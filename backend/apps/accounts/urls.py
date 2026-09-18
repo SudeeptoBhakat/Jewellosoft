@@ -1,9 +1,14 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
     ShopCurrentView, AuthMeView, LicenseStatusView, LicenseActivateView,
     OfflineLoginView, WatermarkUploadView, ResetDataView, ResetNumberingView,
-    NumberingSettingsView, LoginView, RegisterView, VerifyAdminPasswordView
+    NumberingSettingsView, LoginView, RegisterView, VerifyAdminPasswordView,
+    KarigarViewSet
 )
+
+router = DefaultRouter()
+router.register(r'karigars', KarigarViewSet, basename='karigar')
 
 urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='auth_login'),
@@ -18,6 +23,7 @@ urlpatterns = [
     path('license/status/', LicenseStatusView.as_view(), name='license_status'),
     path('auth/activate/', LicenseActivateView.as_view(), name='license_activate'),
     path('auth/offline-login/', OfflineLoginView.as_view(), name='offline_login'),
+    path('', include(router.urls)),
 ]
 
 

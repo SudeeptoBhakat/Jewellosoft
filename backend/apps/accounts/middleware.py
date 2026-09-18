@@ -43,16 +43,20 @@ class SupabaseAuthMiddleware:
 
         # 2.5 Resolve active shop context
         request.shop = None
+        from apps.accounts.models import Shop
         if request.supabase_user:
             user_id = request.supabase_user.get('id')
             email = request.supabase_user.get('email')
-            from apps.accounts.models import Shop
             shop = None
             if user_id:
                 shop = Shop.objects.filter(supabase_user_id=user_id).first()
             if not shop and email:
-                shop = Shop.objects.filter(supabase_email=email).first()
+                shop = Shop.objects.filter(supabase_email__iexact=email).first()
+            if not shop:
+                shop = Shop.objects.first()
             request.shop = shop
+        else:
+            request.shop = Shop.objects.first()
 
         # 3. Block access to non-auth/health endpoints if no valid session/license exists
         path = request.path_info
@@ -150,4 +154,3 @@ class SupabaseAuthMiddleware:
         except Exception as exc:
             logger.warning(f'[SupabaseAuth] JWT decode error: {exc}')
             return None
-
