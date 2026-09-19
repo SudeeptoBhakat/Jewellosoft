@@ -4,6 +4,8 @@ import ExportButton from '../../components/elements/ExportButton';
 import DataImportModal from '../../components/elements/DataImportModal';
 import useTabRefresh from '../../hooks/useTabRefresh';
 import { verifyAdminPassword } from '../../services/authService';
+import SingleWhatsAppModal from './SingleWhatsAppModal';
+import WhatsAppBroadcastModal from './WhatsAppBroadcastModal';
 import '../auth/auth.css';
 
 const typeBadge = (t) => {
@@ -234,6 +236,11 @@ export default function Customers({ isActive = true }) {
   const [editCustomer, setEditCustomer] = useState(null);
   const [deleteCustomer, setDeleteCustomer] = useState(null);
 
+  // WhatsApp
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [waCustomer, setWaCustomer] = useState(null);
+  const [broadcastModal, setBroadcastModal] = useState(false);
+
   const customerColumns = useMemo(() => [
     { label: 'Customer Code', key: 'customer_code', aliases: ['code', 'id', 'cust code'] },
     { label: 'Name', key: 'name', required: true, aliases: ['customer name', 'full name'] },
@@ -353,6 +360,14 @@ export default function Customers({ isActive = true }) {
             <button className="btn btn--outline btn--sm" onClick={() => setImportModal(true)}>
               <i className="fa-solid fa-file-import"></i> Import Data
             </button>
+            <button
+              className="btn btn--outline btn--sm"
+              style={{ color: '#25D366', borderColor: '#25D366' }}
+              onClick={() => setBroadcastModal(true)}
+            >
+              <i className="fa-brands fa-whatsapp"></i>
+              {selectedIds.size > 0 ? ` Send to ${selectedIds.size} Selected` : ' Broadcast'}
+            </button>
             <button className="btn btn--primary" onClick={() => setAddModal(true)}>
               <i className="fa-solid fa-user-plus"></i> Add Customer
             </button>
@@ -413,6 +428,16 @@ export default function Customers({ isActive = true }) {
         <table className="data-table">
           <thead>
             <tr>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                  onChange={e => {
+                    if (e.target.checked) setSelectedIds(new Set(filtered.map(c => c.id)));
+                    else setSelectedIds(new Set());
+                  }}
+                />
+              </th>
               <th>ID</th>
               <th>Name</th>
               <th>Phone</th>
@@ -443,12 +468,26 @@ export default function Customers({ isActive = true }) {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--text-secondary)' }}>
+                <td colSpan={11} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--text-secondary)' }}>
                   No customers found.
                 </td>
               </tr>
             ) : filtered.map((c) => (
-              <tr key={c.id}>
+              <tr key={c.id} style={{ background: selectedIds.has(c.id) ? 'var(--color-primary-muted)' : undefined }}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(c.id)}
+                    onChange={e => {
+                      setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(c.id);
+                        else next.delete(c.id);
+                        return next;
+                      });
+                    }}
+                  />
+                </td>
                 <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{c.customer_code}</td>
                 <td style={{ fontWeight: 600 }}>
                   <div className="flex items-center gap-3">
@@ -467,8 +506,16 @@ export default function Customers({ isActive = true }) {
                 <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{c.last_visit || '—'}</td>
                 <td>
                   <div className="flex gap-2">
-                    <button className="btn btn--ghost btn--sm btn--icon" title="Edit" onClick={() => setEditCustomer(c)}><i className="fa-solid fa-pen"></i></button>
-                    <button className="btn btn--ghost btn--sm btn--icon" title="Delete" style={{ color: 'var(--color-danger)' }} onClick={() => setDeleteCustomer(c)}><i className="fa-solid fa-trash-can"></i></button>
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      title="Send WhatsApp"
+                      style={{ color: '#25D366' }}
+                      onClick={() => setWaCustomer(c)}
+                    >
+                      <i className="fa-brands fa-whatsapp" />
+                    </button>
+                    <button className="btn btn--ghost btn--sm btn--icon" title="Edit" onClick={() => setEditCustomer(c)}><i className="fa-solid fa-pen" /></button>
+                    <button className="btn btn--ghost btn--sm btn--icon" title="Delete" style={{ color: 'var(--color-danger)' }} onClick={() => setDeleteCustomer(c)}><i className="fa-solid fa-trash-can" /></button>
                   </div>
                 </td>
               </tr>
@@ -491,8 +538,19 @@ export default function Customers({ isActive = true }) {
       {addModal && <CustomerModal customer={null} onClose={() => setAddModal(false)} onSaved={fetchCustomers} />}
       {editCustomer && <CustomerModal customer={editCustomer} onClose={() => setEditCustomer(null)} onSaved={fetchCustomers} />}
       {deleteCustomer && <DeleteCustomerModal customer={deleteCustomer} onClose={() => setDeleteCustomer(null)} onConfirm={handleDeleteCustomer} />}
+      {waCustomer && (
+        <SingleWhatsAppModal customer={waCustomer} onClose={() => setWaCustomer(null)} />
+      )}
+      {broadcastModal && (
+        <WhatsAppBroadcastModal
+          selectedCustomers={customersData.filter(c => selectedIds.has(c.id))}
+          allCustomers={customersData}
+          onClose={() => setBroadcastModal(false)}
+        />
+      )}
       {importModal && (
         <DataImportModal
+
           isOpen={importModal}
           onClose={() => setImportModal(false)}
           title="Import Customers Data"

@@ -152,6 +152,28 @@ export default function OldPurchaseVoucherPDF({ data }) {
   if (!data) return null;
   const { shop = {}, customer = {}, voucher = {}, hideRate = false } = data;
 
+  let effectiveShop = { ...shop };
+  if (!effectiveShop?.name || effectiveShop.name === "My Jewellery Shop") {
+    try {
+      const cached = localStorage.getItem("jewellosoft_shop_info");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.name) {
+          effectiveShop = {
+            ...parsed,
+            ...effectiveShop,
+            name: parsed.name,
+            address: parsed.address || effectiveShop.address,
+            phone: parsed.phone || effectiveShop.phone,
+            email: parsed.email || effectiveShop.email,
+            gst_number: parsed.gst_number || effectiveShop.gst_number,
+            pan_number: parsed.pan_number || effectiveShop.pan_number,
+          };
+        }
+      }
+    } catch {}
+  }
+
   const isAdjusted = voucher.status && voucher.status.startsWith("adjusted");
   const adjustedRef =
     voucher.status === "adjusted_invoice"
@@ -160,15 +182,21 @@ export default function OldPurchaseVoucherPDF({ data }) {
       ? `Estimate: ${voucher.adjusted_estimate_no || ""}`
       : null;
 
-  const shopLines = [shop.address, shop.phone && `Ph: ${shop.phone}`, shop.email].filter(Boolean);
-  const idLines = [shop.gst_number && `GSTIN: ${shop.gst_number}`, shop.pan_number && `PAN: ${shop.pan_number}`].filter(Boolean);
+  const shopLines = [effectiveShop.address, effectiveShop.phone && `Ph: ${effectiveShop.phone}`, effectiveShop.email].filter(Boolean);
+  const idLines = [effectiveShop.gst_number && `GSTIN: ${effectiveShop.gst_number}`, effectiveShop.pan_number && `PAN: ${effectiveShop.pan_number}`].filter(Boolean);
 
   return (
     <div style={S.wrapper}>
+      <style>{`
+        @page { size: A5 portrait; margin: 5mm; }
+        @media print {
+          html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+        }
+      `}</style>
       {/* Header */}
       <div style={S.header}>
         <div>
-          <h1 style={S.shopName}>{shop.name || "My Jewellery Shop"}</h1>
+          <h1 style={S.shopName}>{effectiveShop.name || "My Jewellery Shop"}</h1>
           <div style={S.shopMeta}>
             {shopLines.join(" | ")}
             {idLines.length > 0 && <><br />{idLines.join(" | ")}</>}

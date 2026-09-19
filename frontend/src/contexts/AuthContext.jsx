@@ -17,25 +17,34 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [shop, setShop] = useState(null);
+  const [shop, setShop] = useState(() => {
+    try {
+      const cached = localStorage.getItem('jewellosoft_shop_info');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
   const syncShop = useCallback(async () => {
     try {
       const res = await api.get('/accounts/shop/current/');
-      setShop(res.data);
-
-      // Sync hallmark_value to localStorage for billing module
-      if (res.data?.hallmark_value) {
-        localStorage.setItem('jewellosoft_hallmark_value', res.data.hallmark_value);
+      if (res.data) {
+        setShop(res.data);
+        localStorage.setItem('jewellosoft_shop_info', JSON.stringify(res.data));
+        // Sync hallmark_value to localStorage for billing module
+        if (res.data.hallmark_value) {
+          localStorage.setItem('jewellosoft_hallmark_value', res.data.hallmark_value);
+        }
       }
     } catch (err) {
       if (err.response?.status === 404) {
-        // No shop yet — user needs onboarding
-        setShop(null);
+        // Only clear if 404 and no cached shop
+        const cached = localStorage.getItem('jewellosoft_shop_info');
+        if (!cached) setShop(null);
       } else {
         console.warn('[AuthContext] Shop sync failed:', err?.message);
-        setShop(null);
       }
     }
   }, []);
@@ -74,7 +83,9 @@ export function AuthProvider({ children }) {
 
       const userData = data.user || { email, is_offline: data.is_offline };
       setUser(userData);
-      setShop(data.shop || null);
+      if (data.shop) {
+        localStorage.setItem('jewellosoft_shop_info', JSON.stringify(data.shop));
+      }
 
       if (data.shop?.hallmark_value) {
         localStorage.setItem('jewellosoft_hallmark_value', data.shop.hallmark_value);
@@ -107,6 +118,10 @@ export function AuthProvider({ children }) {
       const userData = data.user || { email, is_offline: false };
       setUser(userData);
       setShop(data.shop || null);
+
+      if (data.shop) {
+        localStorage.setItem('jewellosoft_shop_info', JSON.stringify(data.shop));
+      }
 
       if (data.shop?.hallmark_value) {
         localStorage.setItem('jewellosoft_hallmark_value', data.shop.hallmark_value);

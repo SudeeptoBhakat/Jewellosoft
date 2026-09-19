@@ -1,6 +1,6 @@
 import React from "react";
 import "../../../assets/styles/pdf.css";
-import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
+import FallbackWatermarkSVG from "../../../assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png";
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

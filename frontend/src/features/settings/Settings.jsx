@@ -1,10 +1,20 @@
 import { useState, useEffect } from 'react';
-import api from '../../lib/axios';
+import api, { extractList } from '../../lib/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme, THEMES } from '../../contexts/ThemeContext';
 import { toast } from '../../utils/toast';
 import { getSuggestions, addSuggestion, updateSuggestion, deleteSuggestion, resetToDefaults } from '../../utils/productSuggestions';
-import { getPrinterSettings, savePrinterSettings, listSystemPrinters, printBarcodeLabel, DEFAULT_PRINTER_SETTINGS } from '../../utils/labelPrinter';
+import {
+  getPrinterSettings,
+  savePrinterSettings,
+  getBillPrinterSettings,
+  saveBillPrinterSettings,
+  listSystemPrinters,
+  printBarcodeLabel,
+  printTestBill,
+  DEFAULT_PRINTER_SETTINGS,
+  DEFAULT_BILL_PRINTER_SETTINGS,
+} from '../../utils/labelPrinter';
 import { verifyAdminPassword } from '../../services/authService';
 import ResetDataModal from './ResetDataModal';
 import '../auth/auth.css';
@@ -363,168 +373,718 @@ function BarcodeTagVisualizer({ settings }) {
   );
 }
 
-function BarcodePrinterPanel() {
-  const [settings, setSettings] = useState(getPrinterSettings());
+function PrintersPanel() {
   const [printers, setPrinters] = useState([]);
-  const [testing, setTesting] = useState(false);
+  const [billSettings, setBillSettings] = useState(getBillPrinterSettings());
+  const [barcodeSettings, setBarcodeSettings] = useState(getPrinterSettings());
+  const [testingBill, setTestingBill] = useState(false);
+  const [testingBarcode, setTestingBarcode] = useState(false);
 
   useEffect(() => {
     listSystemPrinters().then(setPrinters).catch(() => setPrinters([]));
   }, []);
 
-  const update = (patch) => {
-    const next = { ...settings, ...patch };
-    setSettings(next);
+  const updateBill = (patch) => {
+    const next = { ...billSettings, ...patch };
+    setBillSettings(next);
+    saveBillPrinterSettings(next);
+  };
+
+  const updateBarcode = (patch) => {
+    const next = { ...barcodeSettings, ...patch };
+    setBarcodeSettings(next);
     savePrinterSettings(next);
   };
 
-  const handleResetDefaults = () => {
-    setSettings({ ...DEFAULT_PRINTER_SETTINGS });
-    savePrinterSettings({ ...DEFAULT_PRINTER_SETTINGS });
-    toast.success('Printer settings reset to defaults.');
+  const handleResetBillDefaults = () => {
+    setBillSettings({ ...DEFAULT_BILL_PRINTER_SETTINGS });
+    saveBillPrinterSettings({ ...DEFAULT_BILL_PRINTER_SETTINGS });
+    toast.success('Bill printer settings reset to defaults.');
   };
 
-  const handleTestPrint = async () => {
-    setTesting(true);
-    const res = await printBarcodeLabel(
-      { barcode: '10042', name: 'Chik Necklace', purity: '22K', net_weight: 3.694, huid: 'HUID21' },
-      'Maa Sabramangala Jewellers',
-      settings
-    );
-    setTesting(false);
-    if (res.success) toast.success('Test label sent to printer.');
-    else toast.error(res.error || 'Test print failed.');
+  const handleResetBarcodeDefaults = () => {
+    setBarcodeSettings({ ...DEFAULT_PRINTER_SETTINGS });
+    savePrinterSettings({ ...DEFAULT_PRINTER_SETTINGS });
+    toast.success('Barcode printer settings reset to defaults.');
+  };
+
+  const handleTestBillPrint = async () => {
+    setTestingBill(true);
+    try {
+      const res = await printTestBill('JewelloSoft Jewellery', billSettings);
+      if (res?.success) toast.success('Test bill sent to printer successfully.');
+      else if (res?.reason !== 'canceled') toast.error(res?.error || 'Test bill print failed.');
+    } catch (err) {
+      toast.error(err.message || 'Test bill print failed.');
+    } finally {
+      setTestingBill(false);
+    }
+  };
+
+  const handleTestBarcodePrint = async () => {
+    setTestingBarcode(true);
+    try {
+      const res = await printBarcodeLabel(
+        { barcode: '10042', name: 'Chik Necklace', purity: '22K', net_weight: 3.694, huid: 'HUID21' },
+        'JewelloSoft Jewellers',
+        barcodeSettings
+      );
+      if (res?.success) toast.success('Test label sent to printer.');
+      else toast.error(res?.error || 'Test label print failed.');
+    } catch (err) {
+      toast.error(err.message || 'Test label print failed.');
+    } finally {
+      setTestingBarcode(false);
+    }
   };
 
   return (
-    <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
-      <div className="billing-form__header">
-        <span className="billing-form__header-title">
-          <i className="fa-solid fa-barcode" style={{ marginRight: 8, opacity: 0.6 }}></i>Barcode Label Printer Setup
-        </span>
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
-          Calibrated for RP-3160 GOLD, TSC, Zebra, TVS & standard thermal printers
-        </span>
-      </div>
-      <div className="billing-form__body">
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Label Printer</label>
-            <select className="form-input form-select" id="settings-barcode-printer" value={settings.printerName} onChange={e => update({ printerName: e.target.value })}>
-              <option value="">System Default</option>
-              {printers.map(p => (
-                <option key={p.name} value={p.name}>{p.displayName}{p.isDefault ? ' (default)' : ''}</option>
-              ))}
-            </select>
-            {printers.length === 0 && (
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Printer list auto-loaded in Desktop App.
+    <div className="animate-fade-in-up">
+      {/* ── Bill & Document Printer ── */}
+      <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+        <div className="billing-form__header">
+          <span className="billing-form__header-title">
+            <i className="fa-solid fa-receipt" style={{ marginRight: 8, opacity: 0.6 }}></i>Bill & Document Printer
+          </span>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
+            Configures default printer for Sales Invoices, Estimates, Vouchers, Receipts & Credit Notes
+          </span>
+        </div>
+        <div className="billing-form__body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Selected Bill Printer</label>
+              <select
+                className="form-input form-select"
+                id="settings-bill-printer"
+                value={billSettings.printerName || ''}
+                onChange={e => updateBill({ printerName: e.target.value })}
+              >
+                <option value="">System Default Printer</option>
+                {printers.map(p => (
+                  <option key={p.name} value={p.name}>{p.displayName || p.name}{p.isDefault ? ' (OS Default)' : ''}</option>
+                ))}
+              </select>
+              {printers.length === 0 && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                  Printer list automatically loaded in Desktop App.
+                </span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Default Output Mode</label>
+              <select
+                className="form-input form-select"
+                value={billSettings.outputMode || 'direct'}
+                onChange={e => updateBill({ outputMode: e.target.value })}
+              >
+                <option value="direct">Direct Print (Send to Physical Printer)</option>
+                <option value="pdf">Export PDF (Show Save As PDF Dialog)</option>
+              </select>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Direct print immediately sends to the selected printer on confirmation.
               </span>
-            )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Default Paper Size</label>
+              <select
+                className="form-input form-select"
+                value={billSettings.paperSize || 'A4'}
+                onChange={e => updateBill({ paperSize: e.target.value })}
+              >
+                <option value="A4">A4 (Standard Full Sheet - 210 x 297 mm)</option>
+                <option value="A5">A5 (Half Sheet Voucher - 148 x 210 mm)</option>
+                <option value="80mm">80mm POS Thermal Receipt</option>
+              </select>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Vouchers & advance receipts automatically adapt to compact layout.
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Default Copies</label>
+              <input
+                className="form-input"
+                type="number"
+                step="1"
+                min="1"
+                max="5"
+                value={billSettings.copies || 1}
+                onChange={e => updateBill({ copies: Math.max(1, parseInt(e.target.value) || 1) })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Default: <strong>1 copy</strong>
+              </span>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Tag Layout Format</label>
-            <select className="form-input form-select" value={settings.tagType || 'dumbbell'} onChange={e => update({ tagType: e.target.value })}>
-              <option value="dumbbell">Jewelry Dumbbell / Barbell Tag (70x11 mm)</option>
-              <option value="rectangle">Standard Rectangular Label</option>
-            </select>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Dumbbell layout: 50mm body (Details + Barcode) & 20mm tail.
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Total Label Width (mm)</label>
-            <input className="form-input" type="number" step="0.5" min="20" max="120" value={settings.labelWidthMm}
-              onChange={e => update({ labelWidthMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelWidthMm })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Standard Jewellery Tag: <strong>70 mm</strong>
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Total Label Height (mm)</label>
-            <input className="form-input" type="number" step="0.5" min="5" max="80" value={settings.labelHeightMm}
-              onChange={e => update({ labelHeightMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelHeightMm })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Standard Jewellery Tag: <strong>11 mm</strong>
-            </span>
-          </div>
-        </div>
-
-        <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
-          <div className="form-group">
-            <label className="form-label">Left Safety Margin (mm)</label>
-            <input className="form-input" type="number" step="0.1" min="0" max="10" value={settings.leftMarginMm !== undefined ? settings.leftMarginMm : 1.5}
-              onChange={e => update({ leftMarginMm: parseFloat(e.target.value) ?? 1.5 })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Fixes text clipping on left edge (Default: <strong>1.5 mm</strong>)
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Top Safety Margin (mm)</label>
-            <input className="form-input" type="number" step="0.1" min="0" max="5" value={settings.topMarginMm !== undefined ? settings.topMarginMm : 0.5}
-              onChange={e => update({ topMarginMm: parseFloat(e.target.value) ?? 0.5 })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Adjust vertical alignment (Default: <strong>0.5 mm</strong>)
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Printable Body Width (mm)</label>
-            <input className="form-input" type="number" step="0.5" min="20" max="60" value={settings.bodyWidthMm || 50}
-              onChange={e => update({ bodyWidthMm: parseFloat(e.target.value) || 50 })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Wide section before tail (Default: <strong>50 mm</strong>)
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Barcode Height (mm)</label>
-            <input className="form-input" type="number" step="0.5" min="3" max="20" value={settings.barcodeHeightMm || 8.5}
-              onChange={e => update({ barcodeHeightMm: parseFloat(e.target.value) || 8.5 })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Tall barcode for fast scanning (Default: <strong>8.5 mm</strong>)
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={billSettings.silent !== false}
+                onChange={e => updateBill({ silent: e.target.checked })}
+              />
+              Silent Print (Print directly without opening OS print dialog)
+            </label>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <button className="btn btn--secondary btn--sm" onClick={handleResetBillDefaults}>
+                <i className="fa-solid fa-rotate-left"></i> Reset Defaults
+              </button>
+              <button className="btn btn--primary btn--sm" onClick={handleTestBillPrint} disabled={testingBill}>
+                <i className={`fa-solid ${testingBill ? 'fa-spinner fa-spin' : 'fa-print'}`}></i> {testingBill ? 'Printing...' : 'Print Test Bill'}
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
-          <div className="form-group">
-            <label className="form-label">Barcode Zoom / Thickness (x)</label>
-            <input className="form-input" type="number" step="0.1" min="1.0" max="4.0" value={settings.moduleWidth || 2.0}
-              onChange={e => update({ moduleWidth: parseFloat(e.target.value) || 2.0 })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Thick bars for instant scanning (Default: <strong>2.0x</strong>)
-            </span>
+      {/* ── Barcode Label Printer ── */}
+      <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+        <div className="billing-form__header">
+          <span className="billing-form__header-title">
+            <i className="fa-solid fa-barcode" style={{ marginRight: 8, opacity: 0.6 }}></i>Barcode Label Printer Setup
+          </span>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>
+            Calibrated for RP-3160 GOLD, TSC, Zebra, TVS & standard thermal printers
+          </span>
+        </div>
+        <div className="billing-form__body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Selected Barcode Printer</label>
+              <select
+                className="form-input form-select"
+                id="settings-barcode-printer"
+                value={barcodeSettings.printerName || ''}
+                onChange={e => updateBarcode({ printerName: e.target.value })}
+              >
+                <option value="">System Default Printer</option>
+                {printers.map(p => (
+                  <option key={p.name} value={p.name}>{p.displayName || p.name}{p.isDefault ? ' (OS Default)' : ''}</option>
+                ))}
+              </select>
+              {printers.length === 0 && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                  Printer list automatically loaded in Desktop App.
+                </span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tag Layout Format</label>
+              <select
+                className="form-input form-select"
+                value={barcodeSettings.tagType || 'dumbbell'}
+                onChange={e => updateBarcode({ tagType: e.target.value })}
+              >
+                <option value="dumbbell">Jewelry Dumbbell / Barbell Tag (70x11 mm)</option>
+                <option value="rectangle">Standard Rectangular Label</option>
+              </select>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Dumbbell layout: 50mm body (Details + Barcode) & 20mm tail.
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Total Label Width (mm)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.5"
+                min="20"
+                max="120"
+                value={barcodeSettings.labelWidthMm}
+                onChange={e => updateBarcode({ labelWidthMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelWidthMm })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Standard Jewellery Tag: <strong>70 mm</strong>
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Total Label Height (mm)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.5"
+                min="5"
+                max="80"
+                value={barcodeSettings.labelHeightMm}
+                onChange={e => updateBarcode({ labelHeightMm: parseFloat(e.target.value) || DEFAULT_PRINTER_SETTINGS.labelHeightMm })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Standard Jewellery Tag: <strong>11 mm</strong>
+              </span>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Copies per Print</label>
-            <input className="form-input" type="number" step="1" min="1" max="10" value={settings.copies}
-              onChange={e => update({ copies: Math.max(1, parseInt(e.target.value) || 1) })} />
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-              Default: <strong>1 copy</strong>
-            </span>
+          <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
+            <div className="form-group">
+              <label className="form-label">Left Safety Margin (mm)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={barcodeSettings.leftMarginMm !== undefined ? barcodeSettings.leftMarginMm : 1.5}
+                onChange={e => updateBarcode({ leftMarginMm: parseFloat(e.target.value) ?? 1.5 })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Fixes text clipping on left edge (Default: <strong>1.5 mm</strong>)
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Top Safety Margin (mm)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                value={barcodeSettings.topMarginMm !== undefined ? barcodeSettings.topMarginMm : 0.5}
+                onChange={e => updateBarcode({ topMarginMm: parseFloat(e.target.value) ?? 0.5 })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Adjust vertical alignment (Default: <strong>0.5 mm</strong>)
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Printable Body Width (mm)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.5"
+                min="20"
+                max="60"
+                value={barcodeSettings.bodyWidthMm || 50}
+                onChange={e => updateBarcode({ bodyWidthMm: parseFloat(e.target.value) || 50 })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Wide section before tail (Default: <strong>50 mm</strong>)
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Barcode Height (mm)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.5"
+                min="3"
+                max="20"
+                value={barcodeSettings.barcodeHeightMm || 8.5}
+                onChange={e => updateBarcode({ barcodeHeightMm: parseFloat(e.target.value) || 8.5 })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Tall barcode for fast scanning (Default: <strong>8.5 mm</strong>)
+              </span>
+            </div>
+          </div>
+
+          <div className="form-row" style={{ marginTop: 'var(--space-3)' }}>
+            <div className="form-group">
+              <label className="form-label">Barcode Zoom / Thickness (x)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.1"
+                min="1.0"
+                max="4.0"
+                value={barcodeSettings.moduleWidth || 2.0}
+                onChange={e => updateBarcode({ moduleWidth: parseFloat(e.target.value) || 2.0 })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Thick bars for instant scanning (Default: <strong>2.0x</strong>)
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Copies per Print</label>
+              <input
+                className="form-input"
+                type="number"
+                step="1"
+                min="1"
+                max="10"
+                value={barcodeSettings.copies}
+                onChange={e => updateBarcode({ copies: Math.max(1, parseInt(e.target.value) || 1) })}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Default: <strong>1 copy</strong>
+              </span>
+            </div>
+          </div>
+
+          <BarcodeTagVisualizer settings={barcodeSettings} />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={barcodeSettings.autoPrintOnCreate}
+                onChange={e => updateBarcode({ autoPrintOnCreate: e.target.checked })}
+              />
+              Automatically print a barcode label when a new product is added
+            </label>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <button className="btn btn--secondary btn--sm" onClick={handleResetBarcodeDefaults}>
+                <i className="fa-solid fa-rotate-left"></i> Reset Defaults
+              </button>
+              <button className="btn btn--primary btn--sm" onClick={handleTestBarcodePrint} disabled={testingBarcode}>
+                <i className={`fa-solid ${testingBarcode ? 'fa-spinner fa-spin' : 'fa-print'}`}></i> {testingBarcode ? 'Printing...' : 'Print Test Label'}
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <BarcodeTagVisualizer settings={settings} />
+function KarigarPanel() {
+  const [karigars, setKarigars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={settings.autoPrintOnCreate} onChange={e => update({ autoPrintOnCreate: e.target.checked })} />
-            Automatically print a barcode label when a new product is added
-          </label>
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <button className="btn btn--secondary btn--sm" onClick={handleResetDefaults}>
-              <i className="fa-solid fa-rotate-left"></i> Reset Defaults
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [specialty, setSpecialty] = useState('');
+
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editSpecialty, setEditSpecialty] = useState('');
+
+  const fetchKarigars = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/accounts/karigars/');
+      const list = extractList(res.data);
+      setKarigars(list);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load karigars list.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchKarigars();
+  }, []);
+
+  const handleAdd = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!name.trim()) {
+      toast.warning('Please enter karigar name.');
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await api.post('/accounts/karigars/', {
+        name: name.trim(),
+        phone: phone.trim(),
+        specialty: specialty.trim(),
+        is_active: true,
+      });
+      setKarigars(prev => [...prev, res.data]);
+      setName('');
+      setPhone('');
+      setSpecialty('');
+      toast.success(`Karigar "${res.data.name}" added successfully.`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || err.response?.data?.name?.[0] || 'Failed to add karigar.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleStatus = async (k) => {
+    try {
+      const res = await api.patch(`/accounts/karigars/${k.id}/`, {
+        is_active: !k.is_active,
+      });
+      setKarigars(prev => prev.map(item => item.id === k.id ? res.data : item));
+      toast.info(`Status updated for ${k.name}.`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update karigar status.');
+    }
+  };
+
+  const startEdit = (k) => {
+    setEditingId(k.id);
+    setEditName(k.name || '');
+    setEditPhone(k.phone || '');
+    setEditSpecialty(k.specialty || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async (id) => {
+    if (!editName.trim()) {
+      toast.warning('Karigar name cannot be empty.');
+      return;
+    }
+    try {
+      const res = await api.patch(`/accounts/karigars/${id}/`, {
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        specialty: editSpecialty.trim(),
+      });
+      setKarigars(prev => prev.map(item => item.id === id ? res.data : item));
+      setEditingId(null);
+      toast.success('Karigar details updated.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update karigar.');
+    }
+  };
+
+  const handleDelete = async (k) => {
+    if (!window.confirm(`Are you sure you want to remove karigar "${k.name}"?`)) return;
+    try {
+      await api.delete(`/accounts/karigars/${k.id}/`);
+      setKarigars(prev => prev.filter(item => item.id !== k.id));
+      toast.info(`Removed karigar "${k.name}".`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete karigar.');
+    }
+  };
+
+  const filtered = karigars.filter(k => {
+    const q = search.toLowerCase();
+    return !q || k.name.toLowerCase().includes(q) || (k.phone && k.phone.includes(q)) || (k.specialty && k.specialty.toLowerCase().includes(q));
+  });
+
+  return (
+    <div className="animate-fade-in-up">
+      <div className="billing-form" style={{ marginBottom: 'var(--space-5)' }}>
+        <div className="billing-form__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="billing-form__header-title">
+              <i className="fa-solid fa-user-gear" style={{ marginRight: 8, opacity: 0.6 }}></i>
+              Karigar & Workshop Craftsmen
+            </span>
+          </div>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+            {karigars.length} registered
+          </span>
+        </div>
+
+        <div className="billing-form__body">
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)', lineHeight: 1.6 }}>
+            Manage the list of karigars and craftsmen for workshop assignments in customer orders.
+          </p>
+
+          <form onSubmit={handleAdd} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.5fr auto', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', alignItems: 'flex-end' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Karigar Name *</label>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="e.g. Ramesh Kumar"
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Mobile Number</label>
+              <input
+                className="form-input"
+                type="tel"
+                placeholder="e.g. 9876543210"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Specialty / Role</label>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="e.g. Gold Specialist, Stone Setter"
+                value={specialty}
+                onChange={e => setSpecialty(e.target.value)}
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={saving || !name.trim()}
+              style={{ height: 38, whiteSpace: 'nowrap' }}
+            >
+              <i className={`fa-solid ${saving ? 'fa-spinner fa-spin' : 'fa-plus'}`}></i> Add Karigar
             </button>
-            <button className="btn btn--primary btn--sm" onClick={handleTestPrint} disabled={testing}>
-              <i className={`fa-solid ${testing ? 'fa-spinner fa-spin' : 'fa-print'}`}></i> {testing ? 'Printing...' : 'Print Test Label'}
+          </form>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+            <div style={{ position: 'relative', width: 280 }}>
+              <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', pointerEvents: 'none' }} />
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Search karigars..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: 34, height: 34, fontSize: 'var(--text-sm)' }}
+              />
+            </div>
+            <button className="btn btn--ghost btn--sm" onClick={fetchKarigars} disabled={loading}>
+              <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`}></i> Refresh
             </button>
+          </div>
+
+          <div style={{ border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <table className="billing-items-table" style={{ margin: 0 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '5%' }}>#</th>
+                  <th style={{ width: '30%' }}>Name</th>
+                  <th style={{ width: '20%' }}>Phone</th>
+                  <th style={{ width: '25%' }}>Specialty</th>
+                  <th style={{ width: '10%' }}>Status</th>
+                  <th style={{ width: '10%', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--text-muted)' }}>
+                      <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }}></i> Loading karigars...
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--text-muted)' }}>
+                      {search ? 'No karigars match your search.' : 'No karigars added yet. Use the form above to add your first worker.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((k, idx) => {
+                    const isEditing = editingId === k.id;
+                    return (
+                      <tr key={k.id}>
+                        <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="form-input"
+                              type="text"
+                              value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              style={{ height: 30, fontSize: 'var(--text-sm)' }}
+                              autoFocus
+                            />
+                          ) : (
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{k.name}</span>
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="form-input"
+                              type="text"
+                              value={editPhone}
+                              onChange={e => setEditPhone(e.target.value)}
+                              style={{ height: 30, fontSize: 'var(--text-sm)' }}
+                            />
+                          ) : (
+                            <span style={{ color: 'var(--text-secondary)' }}>{k.phone || '—'}</span>
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="form-input"
+                              type="text"
+                              value={editSpecialty}
+                              onChange={e => setEditSpecialty(e.target.value)}
+                              style={{ height: 30, fontSize: 'var(--text-sm)' }}
+                            />
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>{k.specialty || 'General Craftsman'}</span>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(k)}
+                            style={{
+                              border: 'none',
+                              background: k.is_active ? 'var(--color-accent-muted, #dcfce7)' : 'var(--bg-elevated)',
+                              color: k.is_active ? 'var(--color-accent, #15803d)' : 'var(--text-muted)',
+                              borderRadius: 'var(--radius-sm)',
+                              padding: '3px 8px',
+                              fontSize: 'var(--text-xs)',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                            title="Click to toggle status"
+                          >
+                            <i className={`fa-solid ${k.is_active ? 'fa-check' : 'fa-xmark'}`} style={{ fontSize: '0.65rem' }}></i>
+                            {k.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {isEditing ? (
+                            <div style={{ display: 'inline-flex', gap: 4 }}>
+                              <button
+                                className="btn btn--primary btn--sm btn--icon"
+                                onClick={() => saveEdit(k.id)}
+                                title="Save"
+                              >
+                                <i className="fa-solid fa-check"></i>
+                              </button>
+                              <button
+                                className="btn btn--ghost btn--sm btn--icon"
+                                onClick={cancelEdit}
+                                title="Cancel"
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'inline-flex', gap: 4 }}>
+                              <button
+                                className="btn btn--ghost btn--sm btn--icon"
+                                onClick={() => startEdit(k)}
+                                title="Edit"
+                                style={{ opacity: 0.6 }}
+                              >
+                                <i className="fa-solid fa-pen-to-square"></i>
+                              </button>
+                              <button
+                                className="btn btn--ghost btn--sm btn--icon"
+                                onClick={() => handleDelete(k)}
+                                title="Delete"
+                                style={{ opacity: 0.6, color: 'var(--color-danger)' }}
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -618,7 +1178,7 @@ export default function Settings() {
   const { syncShop } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
   const [tab, setTab] = useState('General');
-  const tabs = ['General', 'Business', 'Numbering', 'Suggestions', 'Security'];
+  const tabs = ['General', 'Business', 'Printers', 'Numbering', 'Suggestions', 'Karigar', 'Security'];
 
   const [formData, setFormData] = useState({
     theme: 'default',
@@ -1586,6 +2146,10 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {tab === 'Printers' && <PrintersPanel />}
+
+      {tab === 'Karigar' && <KarigarPanel />}
 
       {/* ═══ Reset Data Modal ═══ */}
       {showResetModal && (

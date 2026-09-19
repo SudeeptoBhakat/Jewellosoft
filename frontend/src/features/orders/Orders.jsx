@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
@@ -103,15 +103,16 @@ function OrderSetupModal({ onStart, onClose }) {
 /* ═══════════════════════════════════════════
    WORKER AUTO-SUGGESTION INPUT
    ═══════════════════════════════════════════ */
-function WorkerInput({ value, onChange }) {
+function WorkerInput({ value, onChange, karigars = [] }) {
   const [focused, setFocused] = useState(false);
-  const [allWorkers, setAllWorkers] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('jewellosoft_workers') || '[]');
-      return [...new Set([...defaultWorkers, ...saved])];
-    } catch { return [...defaultWorkers]; }
-  });
   const wrapRef = useRef(null);
+
+  const allWorkers = useMemo(() => {
+    if (karigars.length > 0) {
+      return karigars.map(k => k.name + (k.specialty ? ` — ${k.specialty}` : ''));
+    }
+    return defaultWorkers;
+  }, [karigars]);
 
   const suggestions = useMemo(() => {
     if (!focused) return [];
@@ -120,23 +121,14 @@ function WorkerInput({ value, onChange }) {
   }, [value, focused, allWorkers]);
 
   const selectWorker = (w) => { onChange(w); setFocused(false); };
-
   const handleBlur = () => setTimeout(() => setFocused(false), 200);
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && value.trim() && !allWorkers.includes(value.trim())) {
-      const updated = [...allWorkers, value.trim()];
-      setAllWorkers(updated);
-      try { localStorage.setItem('jewellosoft_workers', JSON.stringify(updated.filter(w => !defaultWorkers.includes(w)))); } catch { }
-    }
-  };
 
   return (
     <div className="search-ac" ref={wrapRef}>
       <input
         className="form-input" type="text" placeholder="Type or select worker..."
         value={value} onChange={e => onChange(e.target.value)}
-        onFocus={() => setFocused(true)} onBlur={handleBlur} onKeyDown={handleKeyDown}
+        onFocus={() => setFocused(true)} onBlur={handleBlur}
       />
       {focused && suggestions.length > 0 && (
         <div className="search-ac__dropdown">
@@ -180,6 +172,16 @@ export default function Orders({ tabId, isActive }) {
   const [priority, setPriority] = useState('Normal');
   const [orderStatus, setOrderStatus] = useState('Pending');
   const [assignedWorker, setAssignedWorker] = useState('');
+  const [karigarList, setKarigarList] = useState([]);
+
+  useEffect(() => {
+    api.get('/accounts/karigars/')
+      .then(res => {
+        const list = extractList(res.data);
+        setKarigarList(list.filter(k => k.is_active));
+      })
+      .catch(() => {});
+  }, []);
 
   /* ─── Customer ─── */
   const [customerId, setCustomerId] = useState(null);
@@ -293,6 +295,9 @@ export default function Orders({ tabId, isActive }) {
     id: Date.now() + Math.random(),
     name: '', weight: '', size: '', makingCharges: '', specialNotes: '',
     metalValue: 0, total: 0,
+    karigar: '',
+    estimateDate: '',
+    urgencyNote: '',
   });
 
   const recalcItem = (item, rate, mRate) => {
@@ -511,7 +516,11 @@ export default function Orders({ tabId, isActive }) {
                   metal_value: Number(it.metalValue || 0).toFixed(2),
                   making_charge: Number(it.makingCharges || 0).toFixed(2),
                   total: Number(it.total || 0).toFixed(2),
-                  status: 'created'
+                  status: 'created',
+                  karigar: it.karigar ? parseInt(it.karigar) : null,
+                  estimate_date: it.estimateDate || null,
+                  urgency_note: it.urgencyNote || '',
+                  karigar_note_status: 'active',
               })),
               design_images: designImages.map(img => img.url),
               credit_note_applications: appliedCreditNotes.map(n => ({ credit_note_id: n.credit_note_id, amount: n.amount }))
@@ -579,13 +588,20 @@ export default function Orders({ tabId, isActive }) {
               customer: { name: finalCustName, phone: custMobile, address: custAddress },
               meta: { number: assignedOrderNo, date: assignedDate },
               rates: { rate10gm: metalRate * 10, makingPerGm: makingRate, makingRate: makingRate, priority: priority },
-              items: items.map(it => ({
-                  name: it.name + (it.size ? ` (Size: ${it.size})` : ''),
-                  weight: it.weight || 0,
-                  metalValue: it.metalValue || 0,
-                  making: it.makingCharges || 0,
-                  total: it.total || 0
-              })),
+              items: items.map(it => {
+                  const matchedK = karigarList.find(k => String(k.id) === String(it.karigar));
+                  return {
+                      name: it.name + (it.size ? ` (Size: ${it.size})` : ''),
+                      weight: it.weight || 0,
+                      metalValue: it.metalValue || 0,
+                      making: it.makingCharges || 0,
+                      total: it.total || 0,
+                      karigar: matchedK ? matchedK.name : (assignedWorker || '—'),
+                      estimateDate: it.estimateDate || '',
+                      urgencyNote: it.urgencyNote || '',
+                      designRemarks: it.specialNotes || '',
+                  };
+              }),
               oldMetal: calc.hasOld ? {
                   weight: calc.oldWt,
                   value: calc.effectiveOldValue,
@@ -789,7 +805,7 @@ export default function Orders({ tabId, isActive }) {
           <div className="form-row" style={{ gridTemplateColumns: '1.5fr 1fr 1fr' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Assigned Worker / Karigar</label>
-              <WorkerInput value={assignedWorker} onChange={setAssignedWorker} />
+              <WorkerInput value={assignedWorker} onChange={setAssignedWorker} karigars={karigarList} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Estimated Days</label>
@@ -833,17 +849,69 @@ export default function Orders({ tabId, isActive }) {
                   Search for a product or click "Add Item"
                 </td></tr>
               ) : items.map((item, idx) => (
-                <tr key={item.id}>
-                  <td style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{idx + 1}</td>
-                  <td><ProductNameInput value={item.name} onChange={val => updateItem(item.id, 'name', val)} placeholder="Product name" style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
-                  <td><input className="form-input" type="text" placeholder="—" value={item.size} onChange={e => updateItem(item.id, 'size', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
-                  <td><input className="form-input" type="number" step="0.001" placeholder="0.000" value={item.weight} onChange={e => updateItem(item.id, 'weight', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
-                  <td><span className="bill-readonly-val">{item.metalValue ? fmt(item.metalValue) : '—'}</span></td>
-                  <td><input className="form-input" type="number" step="1" placeholder="0" value={item.makingCharges} onChange={e => updateItem(item.id, 'makingCharges', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
-                  <td><span className="bill-readonly-val bill-readonly-val--highlight">{item.total ? fmt(item.total) : '—'}</span></td>
-                  <td><input className="form-input" type="text" placeholder="Notes..." value={item.specialNotes} onChange={e => updateItem(item.id, 'specialNotes', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
-                  <td><button className="btn btn--ghost btn--sm btn--icon" onClick={() => removeItem(item.id)} style={{ color: 'var(--color-danger)', width: 28, height: 28 }}><i className="fa-solid fa-trash-can" style={{ fontSize: '0.7rem' }}></i></button></td>
-                </tr>
+                <React.Fragment key={item.id}>
+                  <tr>
+                    <td style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{idx + 1}</td>
+                    <td><ProductNameInput value={item.name} onChange={val => updateItem(item.id, 'name', val)} placeholder="Product name" style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
+                    <td><input className="form-input" type="text" placeholder="—" value={item.size} onChange={e => updateItem(item.id, 'size', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
+                    <td><input className="form-input" type="number" step="0.001" placeholder="0.000" value={item.weight} onChange={e => updateItem(item.id, 'weight', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
+                    <td><span className="bill-readonly-val">{item.metalValue ? fmt(item.metalValue) : '—'}</span></td>
+                    <td><input className="form-input" type="number" step="1" placeholder="0" value={item.makingCharges} onChange={e => updateItem(item.id, 'makingCharges', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
+                    <td><span className="bill-readonly-val bill-readonly-val--highlight">{item.total ? fmt(item.total) : '—'}</span></td>
+                    <td><input className="form-input" type="text" placeholder="Notes..." value={item.specialNotes} onChange={e => updateItem(item.id, 'specialNotes', e.target.value)} style={{ height: 32, fontSize: 'var(--text-sm)' }} /></td>
+                    <td><button className="btn btn--ghost btn--sm btn--icon" onClick={() => removeItem(item.id)} style={{ color: 'var(--color-danger)', width: 28, height: 28 }}><i className="fa-solid fa-trash-can" style={{ fontSize: '0.7rem' }}></i></button></td>
+                  </tr>
+                  <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-primary)' }}>
+                    <td></td>
+                    <td colSpan={8} style={{ padding: '6px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className="fa-solid fa-user-gear" style={{ opacity: 0.7 }}></i> Karigar:
+                          </span>
+                          <select
+                            className="form-input form-select"
+                            value={item.karigar || ''}
+                            onChange={e => updateItem(item.id, 'karigar', e.target.value)}
+                            style={{ height: 28, fontSize: 'var(--text-xs)', minWidth: 160, padding: '2px 8px' }}
+                          >
+                            <option value="">Unassigned (Optional)</option>
+                            {karigarList.map(k => (
+                              <option key={k.id} value={k.id}>{k.name}{k.specialty ? ` (${k.specialty})` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className="fa-solid fa-calendar-day" style={{ opacity: 0.7 }}></i> Est. Date:
+                          </span>
+                          <input
+                            type="date"
+                            className="form-input"
+                            value={item.estimateDate || ''}
+                            onChange={e => updateItem(item.id, 'estimateDate', e.target.value)}
+                            style={{ height: 28, fontSize: 'var(--text-xs)', width: 135, padding: '2px 6px' }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                            <i className="fa-solid fa-bell" style={{ opacity: 0.7 }}></i> Urgency Note:
+                          </span>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Optional urgency info or workshop instructions..."
+                            value={item.urgencyNote || ''}
+                            onChange={e => updateItem(item.id, 'urgencyNote', e.target.value)}
+                            style={{ height: 28, fontSize: 'var(--text-xs)', flex: 1, padding: '2px 8px' }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>

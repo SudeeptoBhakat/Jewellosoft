@@ -1,6 +1,6 @@
 import React from "react";
 import "../../../assets/styles/pdf-standard.css";
-import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
+import FallbackWatermarkSVG from "../../../assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png";
 
 
 const fmt = (n) => {
@@ -118,15 +118,20 @@ export default function StandardTemplate({ data }) {
         : [];
     const hasAdvances = activeAdvances.length > 0;
 
-    /* ── Summary grid column count ── */
-    const summaryColCount = (() => {
-        // Base cols: GRAND TOTAL | ROUND OFF | HALLMARK | OTHER CHARGES | TOTAL
-        let cols = 5;
-        if (hasVoucher) cols++;
+    /* ── Summary Row-1 columns: TOTAL | [LESS DISCOUNT] | OTHER CHARGES | HALLMARK | [TAX] | SUB TOTAL ── */
+    const row1Cols = (() => {
+        let cols = 4; // TOTAL | OTHER CHARGES | HALLMARK | SUB TOTAL
         if (hasDiscount) cols++;
-        if (isInvoice) {
-            cols += totals?.isIgst ? 1 : 2; // IGST or CGST+SGST
-        }
+        if (isInvoice) cols += totals?.isIgst ? 1 : 2;
+        return cols;
+    })();
+
+    /* ── Summary Row-2 columns: [PV] | [CN] | [ADVANCE] | ROUND OFF | GRAND TOTAL ── */
+    const row2Cols = (() => {
+        let cols = 2; // ROUND OFF + GRAND TOTAL always
+        if (hasVoucher) cols++;
+        if (hasCreditNotes) cols++;
+        if (hasAdvances || has(totals?.advance)) cols++;
         return cols;
     })();
 
@@ -135,6 +140,30 @@ export default function StandardTemplate({ data }) {
     while (displayItems.length < 5) displayItems.push({ _isEmpty: true });
 
     /* ─────────────────────────────────────────────────────── */
+
+    /* ── Reference table micro-style constants ── */
+    const refTh = {
+        padding: "4px 6px", fontWeight: 700, fontSize: "8px",
+        textTransform: "uppercase", letterSpacing: "0.05em",
+        textAlign: "left", borderBottom: "1px solid #1e3b8a33",
+    };
+    const refTd = {
+        padding: "3px 6px", fontSize: "8.5px", borderBottom: "1px solid #f0f0f0",
+        textAlign: "left", verticalAlign: "middle",
+    };
+    const refBadge = (color) => ({
+        display: "inline-block",
+        background: color + "22",
+        color: color,
+        border: `1px solid ${color}55`,
+        borderRadius: 3,
+        padding: "1px 4px",
+        fontSize: "7.5px",
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+    });
+    const refRowStyle = { background: "#fff" };
 
     return (
         <div className="pdf-root">
@@ -241,8 +270,8 @@ export default function StandardTemplate({ data }) {
                 {/* ═══════════════════ RATE PILL ═══════════════════ */}
                 {has(rates?.rate10gm) && (
                     <div className="pdf-rate-pill">
-                        <span>RATE OF {rateLabel}: ₹ {ratePerGm.toLocaleString("en-IN")}/g</span>
-                        <span>PER 10GM: ₹ {safe(rates.rate10gm).toLocaleString("en-IN")}</span>
+                        {/* <span>RATE OF {rateLabel}: ₹ {ratePerGm.toLocaleString("en-IN")}/g</span> */}
+                        <span>PER 10GM: ₹ {safe(rates.rate10gm).toLocaleString("en-IN")}</span> |
                         {has(rates?.makingRate || rates?.makingPerGm) && (
                             <span>MAKING RATE: ₹ {safe(rates.makingRate || rates.makingPerGm).toLocaleString("en-IN")}</span>
                         )}
@@ -343,281 +372,285 @@ export default function StandardTemplate({ data }) {
                     </div>
                 )}
 
-                {/* ═══════════════════ SUMMARY BANNER ═══════════════════ */}
-                <div style={{ width: "100%", fontFamily: "Arial, sans-serif", padding: "0 25px" }}>
-
-                    {/*
-                        Summary grid columns (in order):
-                          GRAND TOTAL | ROUND OFF | [PV ADJUSTED] | [LESS DISCOUNT] | HALLMARK | OTHER CHARGES | [CGST + SGST | IGST] | TOTAL
-                        NOTE: "LESS ADVANCE" is removed from the grid — it is shown
-                              in the advance-history section below for proper itemisation.
-                    */}
+                {/* ═══════════════════ SUMMARY BANNER ROW 1 ═══════════════════
+                    Columns: TOTAL | [LESS DISCOUNT] | OTHER CHARGES | HALLMARK | [CGST+SGST or IGST] | SUB TOTAL
+                ════════════════════════════════════════════════════════════════ */}
+                <div style={{ width: "100%", fontFamily: "Arial, sans-serif", padding: "0 25px", marginTop: 6 }}>
                     <div
                         className="pdf-summary-head"
-                        style={{ gridTemplateColumns: `repeat(${summaryColCount}, 1fr)` }}
+                        style={{ gridTemplateColumns: `repeat(${row1Cols}, 1fr)`, marginTop: 0 }}
                     >
-                        <div>GRAND TOTAL</div>
-                        <div>ROUND OFF</div>
-                        {hasVoucher && <div>PV ADJUSTED</div>}
+                        <div>TOTAL</div>
                         {hasDiscount && <div>LESS DISCOUNT</div>}
-                        <div>HALLMARK</div>
                         <div>OTHER CHARGES</div>
+                        <div>HALLMARK</div>
                         {isInvoice && (
                             totals?.isIgst
                                 ? <div>IGST</div>
                                 : <><div>CGST</div><div>SGST</div></>
                         )}
-                        <div>TOTAL</div>
+                        <div>SUB TOTAL</div>
                     </div>
-
                     <div
                         className="pdf-summary-values"
-                        style={{
-                            gridTemplateColumns: `repeat(${summaryColCount}, 1fr)`,
-                            borderBottomLeftRadius: "15px",
-                            borderBottomRightRadius: "15px",
-                        }}
+                        style={{ gridTemplateColumns: `repeat(${row1Cols}, 1fr)` }}
                     >
-                        <div className="bold">{fmt(totals?.finalAmount)}</div>
-
-                        <div className="red">
-                            {has(totals?.roundOff) ? Number(safe(totals.roundOff)).toFixed(2) : "₹ 0.00"}
-                        </div>
-
-                        {/* Purchase Voucher adjustment — shown dynamically when voucher applied */}
-                        {hasVoucher && (
-                            <div style={{ fontWeight: 700 }}>
-                                {fmt(oldMetal.value)}
-                            </div>
-                        )}
-
-                        {/* Discount — shown only when has a value */}
+                        {/* TOTAL = new product value (sum of all items: metalValue + making) */}
+                        <div className="bold">{fmt(totals?.subtotal+(totals?.isIgst?totals?.igst?.totals.igst:totals?.cgst+totals?.sgst) + totals?.hallmark + totals?.otherCharges - discountAmt)}</div>
+                        {/* LESS DISCOUNT */}
                         {hasDiscount && (
-                            <div style={{ fontWeight: 700 }}>
-                                {fmt(discountAmt)}
-                            </div>
+                            <div style={{ fontWeight: 700 }}>{fmt(discountAmt)}</div>
                         )}
-
-                        <div>{has(totals?.hallmark) ? fmt(totals.hallmark) : "₹ 0.00"}</div>
+                        {/* OTHER CHARGES */}
                         <div>{has(totals?.otherCharges) ? fmt(totals.otherCharges) : "₹ 0.00"}</div>
-
+                        {/* HALLMARK */}
+                        <div>{has(totals?.hallmark) ? fmt(totals.hallmark) : "₹ 0.00"}</div>
+                        {/* TAX */}
                         {isInvoice && (
                             totals?.isIgst
                                 ? <div>{has(totals?.igst) ? fmt(totals.igst) : "₹ 0.00"}</div>
                                 : <><div>{fmt(totals?.cgst)}</div><div>{fmt(totals?.sgst)}</div></>
                         )}
+                        {/* SUB TOTAL = items total + charges + tax − discount (before PV/CN/Advance) */}
+                        <div className="bold">{fmt(totals?.subtotal)}</div>
+                    </div>
+                </div>
 
-                        <div className="bold">{hasVoucher && totals ? fmt(totals.subtotal + oldMetal.value) : fmt(totals.subtotal)}</div>
+                {/* ═══════════════════ SUMMARY BANNER ROW 2 ═══════════════════
+                    Columns: [PV ADJUSTED] | [CN ADJUSTED] | [LESS ADVANCE] | ROUND OFF | GRAND TOTAL
+                ════════════════════════════════════════════════════════════════ */}
+                <div style={{ width: "100%", fontFamily: "Arial, sans-serif", padding: "0 25px"}}>
+                    <div
+                        className="pdf-summary-head"
+                        style={{ gridTemplateColumns: `repeat(${row2Cols}, 1fr)`, marginTop: 0 }}
+                    >
+                        {hasVoucher && <div>PV ADJUSTED</div>}
+                        {hasCreditNotes && <div>CN ADJUSTED</div>}
+                        {(hasAdvances || has(totals?.advance)) && <div>LESS ADVANCE</div>}
+                        <div>ROUND OFF</div>
+                        <div>GRAND TOTAL</div>
+                    </div>
+                    <div
+                        className="pdf-summary-values"
+                        style={{
+                            gridTemplateColumns: `repeat(${row2Cols}, 1fr)`,
+                            borderBottomLeftRadius: "12px",
+                            borderBottomRightRadius: "12px",
+                        }}
+                    >
+                        {/* PV ADJUSTED — old purchase voucher deduction */}
+                        {hasVoucher && (
+                            <div style={{ fontWeight: 700 }}>{fmt(oldMetal.value)}</div>
+                        )}
+                        {/* CN ADJUSTED — total credit notes applied */}
+                        {hasCreditNotes && (
+                            <div style={{ fontWeight: 700 }}>{fmt(totalCreditApplied)}</div>
+                        )}
+                        {/* LESS ADVANCE — total advance deducted */}
+                        {(hasAdvances || has(totals?.advance)) && (
+                            <div style={{ fontWeight: 700 }}>
+                                {has(totals?.advance) ? fmt(totals.advance) : "₹ 0.00"}
+                            </div>
+                        )}
+                        {/* ROUND OFF */}
+                        <div style={{ color: "#64748b" }}>
+                            {has(totals?.roundOff)
+                                ? (safe(totals.roundOff) >= 0 ? "+" : "") + Number(safe(totals.roundOff)).toFixed(2)
+                                : "₹ 0.00"}
+                        </div>
+                        {/* GRAND TOTAL — final payable / receivable */}
+                        <div className="bold" style={{ fontSize: "13px" }}>{fmt(totals?.finalAmount)}</div>
                     </div>
                 </div>
 
                 {/* ═══════════════════ AMOUNT IN WORDS ═══════════════════ */}
-                <div className="pdf-amount-strip">
+                <div className="pdf-amount-strip" style={{ marginTop: 8 }}>
                     {totals?.amountInWords && String(totals.amountInWords).trim()
                         ? String(totals.amountInWords).toUpperCase()
                         : "—"}
                 </div>
 
-                {/* ═══════════════════ PAYMENT METHOD ═══════════════════ */}
-                {transactionType === "payable" && !hasCreditNotes ? (
-                    payment?.amounts?.filter((p) => has(p.amount)).length > 0 && (
-                        <div className="pdf-payment">
-                            <div className="label">PAYMENT METHOD</div>
-                            {payment.amounts
-                                .filter((p) => has(p.amount))
-                                .map((p, i) => (
-                                    <div key={i}>
-                                        {String(p.mode || "").toUpperCase()} : {fmt(p.amount)}
-                                    </div>
-                                ))}
-                        </div>
-                    )
-                ) : hasCreditNotes ? (
-                    <div className="pdf-payment">
-                        <div className="label">PAYMENT METHOD</div>
-                    </div>
-                ) : (
-                    <div className="pdf-payment">
-                        <div className="label">TRANSACTION TYPE</div>
-                        <div>RETURN AMOUNT TO CUSTOMER : {fmt(totals?.finalAmount)}</div>
+                {/* ═══════════════════ PAYMENT METHOD/RETURN SHOW ═══════════════════ */}
+                {transactionType !== "payable" && (
+                    <div style={{ padding: "4px 30px", fontSize: "11px", fontWeight: 600 }}>
+                        <span>
+                            <span style={{ textTransform: "uppercase", color: "#555", marginRight: 6 }}>
+                                RETURN TO CUSTOMER:
+                            </span>
+                            <span>{fmt(totals?.finalAmount)}</span>
+                        </span>
                     </div>
                 )}
 
-                {/* ═══════════════════ LESS ADVANCE + CREDIT NOTES SECTION ═══════════════════
 
-                    Layout:
-                      • Heading row "LESS ADVANCE" with total deducted amount
-                      • Each advance payment receipt on its own line
-                      • Each applied credit note on its own line
-                      • If a purchase voucher was applied: "OLD PURCHASE: #PV-2026-007  ₹ X"
-                ═══════════════════════════════════════════════════════════════════════════ */}
-
-                {(hasAdvances || hasCreditNotes || hasVoucher || has(totals?.advance)) && (
-                    <div style={{ fontSize: "10px", padding: "0 0 0 30px", marginTop: 8 }}>
-
-                        {/* ── Section label ── */}
-                        <div style={{
-                            display: "flex",
-                            // justifyContent: "space-between",
-                            alignItems: "center",
-                            fontWeight: 700,
-                            fontSize: "10px",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            borderBottom: "1px solid #e0e0e0",
-                            paddingBottom: 3,
-                            marginBottom: 4,
-                            paddingRight: 30,
-                        }}>
-                        </div>
-
-                        {/* ── Advance payment receipts ── */}
-                        {hasAdvances && (
-                            <>
-                                <span>Less Advance: </span>
-                                {has(totals?.advance) && (
-                                    <span style={{ fontWeight: 700 }}>{fmt(totals.advance)}</span>
+                <div className="bill-info">
+                    <div className="order-additional">
+                        {/* ═══════════════════ DESIGN NOTES + IMAGE COUNT (Order Receipts only) ═══════════════════ */}
+                        {isOrderReceipt && (designNotes || (Array.isArray(designImages) && designImages.length > 0)) && (
+                            <div style={{
+                                padding: "4px 25px",
+                                margin: "4px 0",
+                                // display: "flex",
+                                alignItems: "flex-start",
+                                // gap: 10,
+                            }}>
+                                {/* Design Notes */}
+                                {designNotes && String(designNotes).trim() && (
+                                    <div style={{
+                                        flex: 1,
+                                        // background: "#fafafa",
+                                        borderRadius: 4,
+                                        fontWeight: 700,
+                                        fontSize: "9.5px",
+                                        lineHeight: 1.5,
+                                        padding: "5px 10px",
+                                        border: "1px solid #e8e8e8",
+                                    }}>
+                                        <div style={{ fontSize: "8px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#888", marginBottom: 3 }}>
+                                            Additional Notes
+                                        </div>
+                                        {designNotes}
+                                    </div>
                                 )}
-                                {/* Payment status badge */}
-                                {paymentStatus && (
-                                    <div style={{ marginBottom: 3 }}>
-                                        <span style={{
-                                            fontSize: "8px", fontWeight: 700, borderRadius: 3,
-                                            padding: "1px 5px",
-                                            border: "1px solid #ccc",
-                                            textTransform: "uppercase", letterSpacing: "0.04em",
-                                        }}>
-                                            {String(paymentStatus).replace(/_/g, " ")}
+                                {/* Image count badge */}
+                                {Array.isArray(designImages) && designImages.length > 0 && (
+                                    <div style={{
+                                        // display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        minWidth: 54,
+                                        // background: "#f0f4ff",
+                                        // border: "1px solid #c7d4f0",
+                                        borderRadius: 6,
+                                        padding: "4px 9px",
+                                        fontSize: "9px",
+                                        fontWeight: 700,
+                                        // color: "#1e3b8a",
+                                        gap: 2,
+                                    }}>
+                                        {/* <span style={{ fontSize: "18px", lineHeight: 1 }}>🖼</span> */}
+                                        {/* <span style={{ fontSize: "11px", fontWeight: 800 }}></span> */}
+                                        <span style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: 700 }}>
+                                            Ref. {designImages.length === 1 ? "Image" : "Images"}: {designImages.length}
                                         </span>
                                     </div>
                                 )}
-
-                                {advanceHistory.map((adv, idx) => {
-                                    if (!adv) return null;
-                                    const isCancelled = adv.status === "cancelled";
-                                    return (
-                                        <div
-                                            key={idx}
-                                            style={{
-                                                display: "flex",
-                                                // justifyContent: "space-between",
-                                                alignItems: "baseline",
-                                                borderBottom: idx < advanceHistory.length - 1 ? "1px dashed #e8e8e8" : "none",
-                                                opacity: isCancelled ? 0.5 : 1,
-                                                paddingRight: 30,
-                                                paddingTop: 1,
-                                                paddingBottom: 1,
-                                            }}
-                                        >
-                                            <span style={{ textDecoration: isCancelled ? "line-through" : "none" }}>
-                                                {adv.receiptNo || "—"}&nbsp;
-                                                ({adv.date || "—"})&nbsp;
-                                                <span style={{ textTransform: "uppercase" }}>{adv.paymentMode || ""}</span>
-                                                {isCancelled && " [CANCELLED]"}
-                                                {adv.isRefund && " [REFUND]"}
-                                            </span>
-                                            <span style={{ fontWeight: 600 }}>
-                                                {adv.isRefund ? "−" : ""}{fmt(adv.amount)}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </>
-                        )}
-
-                        {/* ── Applied Credit Notes ── */}
-                        {hasCreditNotes && appliedCreditNotes.map((cn, idx) => {
-                            if (!cn.creditNoteNo) return null;
-                            return (
-                                <div
-                                    key={`cn-${idx}`}
-                                    style={{
-                                        display: "flex",
-                                        // justifyContent: "space-between",
-                                        alignItems: "baseline",
-                                        borderBottom: "1px dashed #e8e8e8",
-                                        paddingRight: 30,
-                                        paddingTop: 1,
-                                        paddingBottom: 1,
-                                    }}
-                                >
-                                    <span>
-                                        Credit Note #{cn.creditNoteNo}
-                                        {cn.date ? <span>&nbsp;({fmtDate(cn.date)})</span> : ""}
-                                        {cn.reason ? (
-                                            <span style={{ color: "#555", fontStyle: "italic" }}>
-                                                &nbsp;— {cn.reason}
-                                            </span>
-                                        ) : ""}
-                                    </span>
-                                    <span style={{ fontWeight: 600 }}>
-                                        −{fmt(cn.amount)}
-                                    </span>
-                                </div>
-                            );
-                        })}
-
-                        {/* ── Purchase Voucher (inline reference) ── */}
-                        {hasVoucher && (
-                            <div style={{
-                                display: "flex",
-                                // justifyContent: "space-between",
-                                alignItems: "baseline",
-                                paddingRight: 30,
-                                paddingTop: 2,
-                                borderTop: (hasAdvances || hasCreditNotes) ? "1px dashed #e8e8e8" : "none",
-                                marginTop: (hasAdvances || hasCreditNotes) ? 2 : 0,
-                            }}>
-                                <span style={{ fontWeight: 600 }}>
-                                    Old Purchase: #{oldMetal.voucherNo}
-                                </span>
-                                <span style={{ fontWeight: 600 }}>
-                                    −{fmt(oldMetal.value)}
-                                </span>
                             </div>
                         )}
                     </div>
-                )}
-
-                {/* ═══════════════════ DESIGN NOTES (Order Receipts only) ═══════════════════ */}
-                {isOrderReceipt && designNotes && String(designNotes).trim() && (
-                    <div style={{
-                        padding: "6px 14px", background: "#fafafa",
-                        borderRadius: 4, fontSize: "10px", lineHeight: 1.6,
-                        margin: "6px 0", border: "1px solid #eee",
-                    }}>
-                        <strong style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#888" }}>
-                            Design Notes:
-                        </strong><br />
-                        {designNotes}
+                    <div className="reference-details">
+                        {/* ═══════════════════ REFERENCE DETAILS TABLE ═══════════════════
+                    Shows: Purchase Voucher # | Credit Note # | Advance Receipts
+                    All in a compact sequential table below the totals
+                ═══════════════════════════════════════════════════════════════ */}
+                        {(hasVoucher || hasCreditNotes || hasAdvances) && (
+                            <div style={{ padding: "0 25px", marginTop: 4 }}>
+                                <div style={{
+                                    fontSize: "8.5px",
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.07em",
+                                    color: "#1e3b8a",
+                                    borderBottom: "1.5px solid #1e3b8a55",
+                                    paddingBottom: 2,
+                                    marginBottom: 3,
+                                }}>
+                                    Reference Details
+                                </div>
+                                <table style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                    fontSize: "9px",
+                                }}>
+                                    <thead>
+                                        <tr style={{ background: "linear-gradient(90deg,#1e3b8a22,#2564eb14)", color: "#1e3b8a" }}>
+                                            {/* <th style={refTh}>#</th> */}
+                                            {/* <th style={refTh}>TYPE</th> */}
+                                            <th style={refTh}>REFERENCE NO.</th>
+                                            <th style={refTh}>DATE</th>
+                                            {/* <th style={refTh}>DETAILS</th> */}
+                                            <th style={{ ...refTh, textAlign: "right" }}>AMOUNT</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {/* Purchase Voucher row */}
+                                        {hasVoucher && (
+                                            <tr style={refRowStyle}>
+                                                {/* <td style={refTd}>1</td> */}
+                                                {/* <td style={refTd}>
+                                                    <span style={refBadge("#7c3aed")}>PURCHASE VOUCHER</span>
+                                                </td> */}
+                                                <td style={{ ...refTd, fontWeight: 700 }}>#{oldMetal.voucherNo}</td>
+                                                <td style={{refTd, fontWeight: 500}}>—</td>
+                                                {/* <td style={refTd}>
+                                                    {oldMetal.weight ? `${Number(oldMetal.weight).toFixed(3)} g` : "—"}
+                                                    {oldMetal.rateUsed ? ` @ ${oldMetal.rateUsed}` : ""}
+                                                </td> */}
+                                                <td style={{ ...refTd, textAlign: "right", fontWeight: 700 }}>
+                                                    {fmt(oldMetal.value)}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {/* Credit Note rows */}
+                                        {hasCreditNotes && appliedCreditNotes.map((cn, idx) => {
+                                            if (!cn.creditNoteNo) return null;
+                                            const rowNum = (hasVoucher ? 1 : 0) + idx + 1;
+                                            return (
+                                                <tr key={`cn-${idx}`} style={refRowStyle}>
+                                                    {/* <td style={refTd}>{rowNum}</td> */}
+                                                    {/* <td style={refTd}>
+                                                        <span style={refBadge("#0891b2")}>CREDIT NOTE</span>
+                                                    </td> */}
+                                                    <td style={{ ...refTd, fontWeight: 700 }}>#{cn.creditNoteNo}</td>
+                                                    <td style={{refTd, fontWeight: 500}}>{cn.date ? fmtDate(cn.date) : "—"}</td>
+                                                    {/* <td style={{ ...refTd, fontStyle: "italic", color: "#555" }}>
+                                                        {cn.reason || "—"}
+                                                    </td> */}
+                                                    <td style={{ ...refTd, textAlign: "right", fontWeight: 700 }}>
+                                                        {fmt(cn.amount)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {/* Advance Receipt rows */}
+                                        {hasAdvances && advanceHistory.map((adv, idx) => {
+                                            if (!adv) return null;
+                                            const rowNum = (hasVoucher ? 1 : 0) + (hasCreditNotes ? appliedCreditNotes.length : 0) + idx + 1;
+                                            const advCancelled = adv.status === "cancelled";
+                                            return (
+                                                <tr key={`adv-${idx}`} style={{ ...refRowStyle, opacity: advCancelled ? 0.5 : 1 }}>
+                                                    {/* <td style={refTd}>{rowNum}</td> */}
+                                                    {/* <td style={refTd}>
+                                                        <span style={refBadge(advCancelled ? "#9ca3af" : "#059669")}>
+                                                            {adv.isRefund ? "REFUND" : "ADVANCE"}
+                                                            {advCancelled ? " ✕" : ""}
+                                                        </span>
+                                                    </td> */}
+                                                    <td style={{ ...refTd, fontWeight: 700, textDecoration: advCancelled ? "line-through" : "none" }}>
+                                                        {adv.receiptNo || "—"}
+                                                    </td>
+                                                    <td style={{refTd, fontWeight: 500}}>{adv.date || "—"}</td>
+                                                    {/* <td style={refTd}>
+                                                        {adv.paymentMode ? String(adv.paymentMode).toUpperCase() : "—"}
+                                                    </td> */}
+                                                    <td style={{ ...refTd, textAlign: "right", fontWeight: 700 }}>
+                                                        {adv.isRefund ? "+" : "−"}{fmt(adv.amount)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                )}
-
-                {isOrderReceipt && Array.isArray(designImages) && designImages.length > 0 && (
-                    <div style={{ padding: "6px 14px", margin: "4px 0" }}>
-                        <div style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#888", marginBottom: 6 }}>
-                            Design References
-                        </div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            {designImages.slice(0, 4).map((src, i) => (
-                                <img
-                                    key={i} src={src} alt={`Design ${i + 1}`}
-                                    style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
-                                    onError={(e) => { e.target.style.display = "none"; }}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                )}
+                </div>
 
                 {/* ═══════════════════ FOOTER ═══════════════════ */}
                 <div className="pdf-footer">
-
                     <div className="signature">Customer Signature</div>
-
                     <div className="thank-text">THANK YOU | VISIT US AGAIN</div>
-
-                    {/* ── Right: always Authorized Signature ── */}
                     <div>
                         <div className="signature">Authorized Signature</div>
                     </div>
