@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
@@ -16,6 +16,8 @@ const statusBadge = (s) => <span className={`badge badge--${statusMap[s] || 'pri
 
 function AdvanceHoverCell({ advance, advanceHistory = [], grandTotal = 0 }) {
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState('bottom');
+  const cellRef = useRef(null);
   const activeHistory = (advanceHistory || []).filter(a => a.status !== 'cancelled' && !a.isRefund);
   const refundHistory = (advanceHistory || []).filter(a => a.status !== 'cancelled' && a.isRefund);
   const historySum = activeHistory.reduce((s, a) => s + (a.amount || 0), 0) - refundHistory.reduce((s, a) => s + (a.amount || 0), 0);
@@ -28,10 +30,24 @@ function AdvanceHoverCell({ advance, advanceHistory = [], grandTotal = 0 }) {
 
   const balanceDue = Math.max(0, grandTotal - totalAdv);
 
+  const handleMouseEnter = () => {
+    if (cellRef.current) {
+      const rect = cellRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 280) {
+        setPlacement('top');
+      } else {
+        setPlacement('bottom');
+      }
+    }
+    setOpen(true);
+  };
+
   return (
     <div
+      ref={cellRef}
       className="advance-hover-cell"
-      onMouseEnter={() => setOpen(true)}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setOpen(false)}
       style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5 }}
     >
@@ -47,7 +63,7 @@ function AdvanceHoverCell({ advance, advanceHistory = [], grandTotal = 0 }) {
         <i className="fa-solid fa-circle-info" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.7 }} />
       )}
       {open && (
-        <div className="advance-popover" onClick={e => e.stopPropagation()}>
+        <div className={`advance-popover advance-popover--${placement}`} onClick={e => e.stopPropagation()}>
           <div className="advance-popover__header">
             <div className="advance-popover__title">
               <i className="fa-solid fa-receipt" style={{ color: 'var(--color-primary)' }} />

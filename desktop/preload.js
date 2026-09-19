@@ -9,7 +9,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
     getApiUrl: () => ipcRenderer.invoke('get-api-url'),
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-    printToPDF: (filename) => ipcRenderer.invoke('print-to-pdf', filename),
+    printToPDF: (filename, options) => ipcRenderer.invoke('print-to-pdf', filename, options),
+    printDocument: (options) => ipcRenderer.invoke('print-document', options),
     listPrinters: () => ipcRenderer.invoke('list-printers'),
     printBarcodeLabel: (payload) => ipcRenderer.invoke('print-barcode-label', payload),
     backupDB: () => ipcRenderer.invoke('backup-db'),

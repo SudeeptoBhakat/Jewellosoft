@@ -2,12 +2,14 @@ import React, { useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import InvoicePDF from './pdf';
 import { toast } from '../../utils/toast';
+import { getBillPrinterSettings } from '../../utils/labelPrinter';
 
 export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemplate, onConfirmPrint }) {
     const PDFComponent = CustomPDFTemplate || InvoicePDF;
     // console.log(data);
     const printRef = useRef(null);
     const [printing, setPrinting] = useState(false);
+    const billSettings = getBillPrinterSettings();
 
     /* ─── PDF Display Options ─── */
     const [hideMetalValue, setHideMetalValue] = useState(false);
@@ -45,16 +47,36 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
         };
     }, [data, confirmedData, hideMetalValue, hideMaking, hideCustomerDetails, hideRate]);
 
-    /* Render/save/print the physical document (native PDF in desktop, window.print on web). */
-    const doPhysicalPrint = async (activeData) => {
+    /* Render/save/print the physical document (native Electron in desktop, window.print on web). */
+    const doPhysicalPrint = async (activeData, forcePdfMode = false) => {
+        const settings = getBillPrinterSettings();
+        const isPdfMode = forcePdfMode || settings.outputMode === 'pdf';
+        const docPageSize = (pdfData?.isVoucher || pdfData?.isKarigarNote || pdfData?.isHalfA4) ? 'A5' : (settings.paperSize || 'A4');
+
         if (window.electronAPI) {
-            // Determine a nice filename based on the data
-            const filename = `${activeData.docType?.replace(' ', '_') || 'Document'}_${activeData.meta?.number || 'TBD'}.pdf`;
-            const res = await window.electronAPI.printToPDF(filename);
-            if (res.success) {
-                onClose(); // Close on success
-            } else if (res.reason !== 'canceled') {
-                toast.error(`Failed to save PDF: ${res.error}`);
+            if (isPdfMode) {
+                const filename = `${activeData.docType?.replace(' ', '_') || 'Document'}_${activeData.meta?.number || 'TBD'}.pdf`;
+                const res = await window.electronAPI.printToPDF(filename, { pageSize: docPageSize });
+                if (res.success) {
+                    onClose();
+                } else if (res.reason !== 'canceled') {
+                    toast.error(`Failed to save PDF: ${res.error}`);
+                }
+            } else if (window.electronAPI.printDocument) {
+                const res = await window.electronAPI.printDocument({
+                    deviceName: settings.printerName || '',
+                    pageSize: docPageSize,
+                    silent: settings.silent !== false,
+                    copies: settings.copies || 1,
+                });
+                if (res.success) {
+                    toast.success(`Sent to printer${settings.printerName ? ` (${settings.printerName})` : ''}`);
+                    onClose();
+                } else {
+                    toast.error(`Print failed: ${res.error}`);
+                }
+            } else {
+                window.print();
             }
         } else {
             // Web browser fallback
@@ -62,7 +84,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
         }
     };
 
-    const handlePrint = async () => {
+    const handlePrint = async (forcePdf = false) => {
         setPrinting(true);
         try {
             let activeData = confirmedData || data;
@@ -79,7 +101,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
                 setConfirmedData(activeData);
             }
 
-            await doPhysicalPrint(activeData);
+            await doPhysicalPrint(activeData, forcePdf);
         } catch (err) {
             toast.error(`Print Error: ${err.message}`);
         } finally {
@@ -97,14 +119,36 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
             {/* Modal Container - Hidden when printing */}
             <div className="modal no-print" style={{ maxWidth: '850px', width: '95%', zIndex: 10001, height: '90vh', display: 'flex', flexDirection: 'column' }}>
                 <div className="modal__header" style={{ flexShrink: 0 }}>
-                    <h2 className="modal__title">
-                        <i className="fa-solid fa-file-pdf" style={{ color: 'var(--color-danger)', marginRight: 10 }}></i>
-                        Print Preview
-                    </h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <h2 className="modal__title" style={{ margin: 0 }}>
+                            <i className="fa-solid fa-file-pdf" style={{ color: 'var(--color-danger)', marginRight: 8 }}></i>
+                            Print Preview
+                        </h2>
+                        {window.electronAPI && (
+                            <span style={{
+                                fontSize: '11px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: 'var(--bg-tertiary, #e2e8f0)',
+                                color: 'var(--text-secondary, #475569)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                            }}>
+                                <i className="fa-solid fa-print"></i>
+                                {billSettings.outputMode === 'pdf' ? 'Save PDF Mode' : (billSettings.printerName || 'Default Bill Printer')}
+                            </span>
+                        )}
+                    </div>
                     <div className="flex gap-2">
-                        <button className="btn btn--primary btn--sm" onClick={handlePrint} disabled={printing}>
+                        {window.electronAPI && billSettings.outputMode !== 'pdf' && (
+                            <button className="btn btn--secondary btn--sm" onClick={() => handlePrint(true)} disabled={printing} title="Export as PDF file">
+                                <i className="fa-solid fa-file-arrow-down"></i> Save PDF
+                            </button>
+                        )}
+                        <button className="btn btn--primary btn--sm" onClick={() => handlePrint(false)} disabled={printing}>
                             {printing ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-print"></i>}
-                            {printing ? (onConfirmPrint ? ' Saving...' : ' Saving PDF...') : ' Confirm Print'}
+                            {printing ? (onConfirmPrint ? ' Saving...' : ' Printing...') : (billSettings.outputMode === 'pdf' ? ' Save PDF' : ' Confirm Print')}
                         </button>
                         <button className="btn btn--ghost btn--sm btn--icon" onClick={onClose} disabled={printing}>
                             <i className="fa-solid fa-xmark"></i>
@@ -203,7 +247,7 @@ export default function PrintPreviewModal({ isOpen, onClose, data, CustomPDFTemp
                                 body > *:not(.print-only-container) { display: none !important; }
                                 .print-only-container { display: block !important; }
                                 body { background-color: white !important; }
-                                @page { margin: 0; size: A4; }
+                                @page { margin: 0; size: ${(pdfData?.isVoucher || pdfData?.isKarigarNote || pdfData?.isHalfA4) ? 'A5 portrait' : 'A4'}; }
                             }
                             @media screen {
                                 .print-only-container { display: none; }

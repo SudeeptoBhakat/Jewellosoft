@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { extractList } from '../../lib/axios';
 import PrintPreviewModal from '../pdfs/PrintPreviewModal';
@@ -52,6 +52,8 @@ function deriveOrderStatus(items, originalStatus) {
 
 function AdvanceHoverCell({ order }) {
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState('bottom');
+  const cellRef = useRef(null);
   const bookingAdv = parseFloat(order.advance || 0);
   const receipts = order.advance_payments || [];
   const activeReceipts = receipts.filter(r => r.status === 'active' && !r.is_refund);
@@ -66,10 +68,24 @@ function AdvanceHoverCell({ order }) {
     return <span style={{ color: 'var(--text-muted)' }}>—</span>;
   }
 
+  const handleMouseEnter = () => {
+    if (cellRef.current) {
+      const rect = cellRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 280) {
+        setPlacement('top');
+      } else {
+        setPlacement('bottom');
+      }
+    }
+    setOpen(true);
+  };
+
   return (
     <div
+      ref={cellRef}
       className="advance-hover-cell"
-      onMouseEnter={() => setOpen(true)}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setOpen(false)}
       style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5 }}
     >
@@ -85,7 +101,7 @@ function AdvanceHoverCell({ order }) {
         <i className="fa-solid fa-circle-info" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.7 }} />
       )}
       {open && (
-        <div className="advance-popover" onClick={e => e.stopPropagation()}>
+        <div className={`advance-popover advance-popover--${placement}`} onClick={e => e.stopPropagation()}>
           <div className="advance-popover__header">
             <div className="advance-popover__title">
               <i className="fa-solid fa-receipt" style={{ color: 'var(--color-primary)' }} />
@@ -172,7 +188,7 @@ function AdvanceHoverCell({ order }) {
   );
 }
 
-function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddToInventory }) {
+function OrderDetailModal({ order, onClose, onPrint, onPrintKarigarNote, onUpdateItemStatus, onAddToInventory }) {
   if (!order) return null;
   const totalWeight = order.items?.reduce((s, i) => s + parseFloat(i.expected_weight || 0), 0) || 0;
   const allComplete = order.items?.every(i => i.status === 'complete');
@@ -209,7 +225,10 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
           </div>
           <div className="flex gap-2">
             <span className={`badge badge--${orderStatusMap[orderSt] || 'info'}`} style={{ textTransform: 'capitalize' }}>{orderSt.replace('_', ' ')}</span>
-            <button className="btn btn--ghost btn--sm" onClick={onPrint}><i className="fa-solid fa-print"></i></button>
+            <button className="btn btn--outline btn--sm" onClick={onPrintKarigarNote} title="Print Karigar Work Note" style={{ gap: 6 }}>
+              <i className="fa-solid fa-user-gear"></i> Karigar Note
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={onPrint} title="Print Order Invoice"><i className="fa-solid fa-print"></i></button>
             <button className="btn btn--ghost btn--sm btn--icon" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
           </div>
         </div>
@@ -287,6 +306,40 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
                           {item.expected_weight}g • {fmt(item.total)} • {item.size && `Size: ${item.size}`} {item.design_remarks && `• ${item.design_remarks}`}
                         </div>
+                        {(item.karigar_name || item.estimate_date || item.urgency_note) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: 6, flexWrap: 'wrap', fontSize: 'var(--text-xs)' }}>
+                            {item.karigar_name && (
+                              <span style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <i className="fa-solid fa-user-gear" style={{ opacity: 0.6, fontSize: '0.7rem' }}></i>
+                                Karigar: <strong>{item.karigar_name}</strong>
+                              </span>
+                            )}
+                            {item.estimate_date && (
+                              <span style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <i className="fa-solid fa-calendar-day" style={{ opacity: 0.6, fontSize: '0.7rem' }}></i>
+                                Est: <strong>{new Date(item.estimate_date).toLocaleDateString('en-IN')}</strong>
+                              </span>
+                            )}
+                            {item.urgency_note && (
+                              <span style={{ color: '#b45309', backgroundColor: '#fef3c7', padding: '1px 6px', borderRadius: 2, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <i className="fa-solid fa-triangle-exclamation" style={{ fontSize: '0.65rem' }}></i>
+                                {item.urgency_note}
+                              </span>
+                            )}
+                            <span style={{
+                              color: (item.status === 'complete' || item.karigar_note_status === 'completed') ? 'var(--color-success)' : 'var(--text-muted)',
+                              fontWeight: 600,
+                              fontSize: '0.68rem',
+                              marginLeft: 'auto',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}>
+                              <i className={`fa-solid ${(item.status === 'complete' || item.karigar_note_status === 'completed') ? 'fa-circle-check' : 'fa-clock'}`}></i>
+                              Karigar Note: {(item.status === 'complete' || item.karigar_note_status === 'completed') ? 'Completed' : 'Active'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
                         <span className={`badge badge--${si.color}`}>
@@ -496,6 +549,7 @@ function OrderDetailModal({ order, onClose, onPrint, onUpdateItemStatus, onAddTo
 
         <div style={{ padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', position: 'sticky', bottom: 0, background: 'var(--bg-card)' }}>
           <button className="btn btn--ghost" onClick={onClose}>Close</button>
+          <button className="btn btn--outline" onClick={onPrintKarigarNote}><i className="fa-solid fa-user-gear"></i> Print Karigar Note</button>
           <button className="btn btn--primary" onClick={onPrint}><i className="fa-solid fa-print"></i> Print Order</button>
         </div>
       </div>
@@ -820,21 +874,81 @@ export default function OrdersList({ isActive = true }) {
     setPrintData(docData);
   };
 
-  /* ─── Advance item status ─── */
+  const handlePrintKarigarNote = (order) => {
+    const isCompleted = order.order_status === 'completed' || (order.items?.length > 0 && order.items.every(i => i.status === 'complete' || i.karigar_note_status === 'completed'));
+    const designImages = (order.images || []).map(img => img.image);
+
+    let activeShop = shop;
+    if (!activeShop?.name) {
+      try {
+        const cached = localStorage.getItem('jewellosoft_shop_info');
+        if (cached) activeShop = JSON.parse(cached);
+      } catch {}
+    }
+
+    const docData = {
+      template: 'karigar_note',
+      isKarigarNote: true,
+      shop: {
+        name: activeShop?.name || 'My Jewellery Shop',
+        address: activeShop?.address || '',
+        phone: activeShop?.phone || '',
+        email: activeShop?.email || '',
+        gst_number: activeShop?.gst_number || '',
+        pan_number: activeShop?.pan_number || '',
+      },
+      meta: {
+        orderNo: order.order_no,
+        orderDate: new Date(order.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }),
+        deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+        priority: order.priority || 'Normal',
+        orderStatus: order.order_status,
+      },
+      customer: {
+        name: order.customer_detail?.name || 'Walk-in',
+        phone: order.customer_detail?.phone || '',
+      },
+      worker: order.worker || '—',
+      items: (order.items || []).map(i => ({
+        id: i.id,
+        name: i.product_name,
+        size: i.size,
+        metalType: i.metal_type || order.metal_type,
+        weight: i.expected_weight,
+        designRemarks: i.design_remarks,
+        status: i.status,
+        karigar: i.karigar_name || (order.worker?.split('—')[0]?.trim()) || 'Unassigned',
+        estimateDate: i.estimate_date || '',
+        urgencyNote: i.urgency_note || '',
+        karigarNoteStatus: i.karigar_note_status || (i.status === 'complete' ? 'completed' : 'active'),
+      })),
+      designNotes: order.design_notes || '',
+      designImages: designImages,
+      isCompleted: isCompleted,
+    };
+    setPrintData(docData);
+  };
+
   const handleUpdateItemStatus = async (orderId, itemId, newStatus) => {
     try {
       await api.patch(`/orders/${orderId}/update-item-status/`, { item_id: itemId, status: newStatus });
       setOrders(prev => prev.map(o => {
         if (o.id !== orderId) return o;
-        const mappedItems = o.items.map(i => i.id === itemId ? { ...i, status: newStatus } : i);
-        // compute new order status if needed locally
+        const mappedItems = o.items.map(i => i.id === itemId ? {
+          ...i,
+          status: newStatus,
+          karigar_note_status: newStatus === 'complete' ? 'completed' : i.karigar_note_status,
+        } : i);
         const newOrderStatus = deriveOrderStatus(mappedItems, o.order_status);
         return { ...o, items: mappedItems, order_status: newOrderStatus };
       }));
-      // Live update view modal
       setViewOrder(prev => {
         if (!prev || prev.id !== orderId) return prev;
-        const mappedItems = prev.items.map(i => i.id === itemId ? { ...i, status: newStatus } : i);
+        const mappedItems = prev.items.map(i => i.id === itemId ? {
+          ...i,
+          status: newStatus,
+          karigar_note_status: newStatus === 'complete' ? 'completed' : i.karigar_note_status,
+        } : i);
         const newOrderStatus = deriveOrderStatus(mappedItems, prev.order_status);
         return { ...prev, items: mappedItems, order_status: newOrderStatus };
       });
@@ -1015,6 +1129,7 @@ export default function OrdersList({ isActive = true }) {
                     <div className="flex gap-2" style={{ justifyContent: 'center' }}>
                       <button className="btn btn--ghost btn--sm btn--icon" title="View" onClick={() => setViewOrder(order)}><i className="fa-solid fa-eye"></i></button>
                       <button className="btn btn--ghost btn--sm btn--icon" title="Print" onClick={() => handlePrint(order)}><i className="fa-solid fa-print"></i></button>
+                      <button className="btn btn--ghost btn--sm btn--icon" title="Print Karigar Note" onClick={() => handlePrintKarigarNote(order)}><i className="fa-solid fa-user-gear"></i></button>
                     </div>
                   </td>
                 </tr>
@@ -1024,7 +1139,16 @@ export default function OrdersList({ isActive = true }) {
         </table>
       </div>
 
-      {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} onPrint={() => { setViewOrder(null); handlePrint(viewOrder); }} onUpdateItemStatus={handleUpdateItemStatus} onAddToInventory={(item) => setInventoryItem({ item, orderId: viewOrder.id })} />}
+      {viewOrder && (
+        <OrderDetailModal
+          order={viewOrder}
+          onClose={() => setViewOrder(null)}
+          onPrint={() => { setViewOrder(null); handlePrint(viewOrder); }}
+          onPrintKarigarNote={() => { setViewOrder(null); handlePrintKarigarNote(viewOrder); }}
+          onUpdateItemStatus={handleUpdateItemStatus}
+          onAddToInventory={(item) => setInventoryItem({ item, orderId: viewOrder.id })}
+        />
+      )}
       {inventoryItem && <InventoryModal item={inventoryItem.item} orderId={inventoryItem.orderId} onClose={() => setInventoryItem(null)} onSuccess={handleInventorySuccess} />}
       <PrintPreviewModal isOpen={!!printData} data={printData} onClose={() => setPrintData(null)} />
     </div>
