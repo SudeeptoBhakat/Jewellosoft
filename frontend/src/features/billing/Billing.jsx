@@ -733,7 +733,7 @@ export default function Billing({ tabId, isActive }) {
       hallmarkValue,
       isInvoice: billType === 'Invoice',
       otherCharges,
-      advance: orderTimeAdvance + prevAdvanceTotal + (parseFloat(advance) || 0),
+      advance: orderTimeAdvance + prevAdvanceTotal + (billType === 'Invoice' ? 0 : (parseFloat(advance) || 0)),
       discount,
       creditApplied: creditAppliedAmount,
       cashAmt,
@@ -1143,7 +1143,7 @@ export default function Billing({ tabId, isActive }) {
           advance: calc.advanceVal,
           orderAdvance: orderTimeAdvance,
           receiptAdvance: prevAdvanceTotal,
-          newAdvance: parseFloat(advance) || 0,
+          newAdvance: billType === 'Invoice' ? 0 : (parseFloat(advance) || 0),
           discount: calc.discountVal,
           roundOff: calc.roundOffVal,
           finalAmount: calc.finalAmt,
@@ -1231,7 +1231,7 @@ export default function Billing({ tabId, isActive }) {
               <button
                 type="button"
                 className={`doc-type-toggle__btn doc-type-toggle__btn--invoice${billType === 'Invoice' ? ' doc-type-toggle__btn--active' : ''}`}
-                onClick={() => setBillType('Invoice')}
+                onClick={() => { setBillType('Invoice'); setAdvance(''); }}
               >
                 <i className="fa-solid fa-file-invoice"></i> Invoice
               </button>
@@ -1759,9 +1759,21 @@ export default function Billing({ tabId, isActive }) {
                     </div>
                   )}
                   <label className="form-label">Additional Payment Today (₹)</label>
-                  <input className="form-input" type="number" step="1" placeholder="0" value={advance} onChange={e => setAdvance(e.target.value)} id="bill-advance" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="1"
+                    placeholder="0"
+                    value={billType === 'Invoice' ? '' : advance}
+                    onChange={e => setAdvance(e.target.value)}
+                    id="bill-advance"
+                    disabled={billType === 'Invoice'}
+                    title={billType === 'Invoice' ? 'Manual advance input is disabled for Invoices' : ''}
+                  />
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 3 }}>
-                    Any extra amount paid by customer on bill day (added to advance deduction)
+                    {billType === 'Invoice'
+                      ? 'Manual advance input is disabled for Invoices'
+                      : 'Any extra amount paid by customer on bill day (added to advance deduction)'}
                   </div>
                 </div>
                 <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>

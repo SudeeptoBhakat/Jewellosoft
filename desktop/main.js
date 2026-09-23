@@ -896,12 +896,13 @@ ipcMain.handle('open-log-folder', () => {
 });
 
 // PDF Generation using native electron webContents
-ipcMain.handle('print-to-pdf', async (event, filename) => {
+ipcMain.handle('print-to-pdf', async (event, filename, options = {}) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   try {
+    const pageSize = (options && options.pageSize) ? options.pageSize : 'A4';
     const pdfData = await win.webContents.printToPDF({
       printBackground: true,
-      pageSize: 'A4',
+      pageSize: pageSize,
       margins: { top: 0, bottom: 0, left: 0, right: 0 }
     });
 
@@ -932,6 +933,82 @@ ipcMain.handle('print-to-pdf', async (event, filename) => {
     if (win && !win.isDestroyed()) {
       win.webContents.invalidate();
     }
+  }
+});
+
+// Document / Bill Direct Printing
+ipcMain.handle('print-document', async (event, options = {}) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return { success: false, error: 'Window not found' };
+
+  try {
+    const printOptions = {
+      silent: options.silent !== false,
+      printBackground: true,
+      deviceName: options.deviceName || '',
+      copies: Math.max(1, parseInt(options.copies) || 1),
+      pageSize: options.pageSize || 'A4',
+    };
+
+    if (options.margins) {
+      printOptions.margins = options.margins;
+    }
+
+    if (options.html) {
+      let docWindow = new BrowserWindow({
+        show: false,
+        frame: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      const tempPath = path.join(userDataPath, 'document_print_temp.html');
+      fs.writeFileSync(tempPath, options.html, 'utf-8');
+      await docWindow.loadFile(tempPath);
+
+      await new Promise(r => setTimeout(r, 400));
+
+      const result = await new Promise((resolve) => {
+        docWindow.webContents.print(printOptions, (success, failureReason) => {
+          resolve({ success, failureReason });
+        });
+      });
+
+      setTimeout(() => {
+        try {
+          if (!docWindow.isDestroyed()) docWindow.destroy();
+        } catch (_) {}
+      }, 2000);
+
+      if (!result.success) {
+        const reason = result.failureReason || 'unknown';
+        log(`Document print failed: ${reason}`);
+        return { success: false, error: `Print failed: ${reason}` };
+      }
+
+      log(`Document spooled successfully to ${options.deviceName || 'default'}`);
+      return { success: true };
+    }
+
+    const result = await new Promise((resolve) => {
+      win.webContents.print(printOptions, (success, failureReason) => {
+        resolve({ success, failureReason });
+      });
+    });
+
+    if (!result.success) {
+      const reason = result.failureReason || 'unknown';
+      log(`Document print failed: ${reason}`);
+      return { success: false, error: `Print failed: ${reason}` };
+    }
+
+    log(`Document spooled successfully to ${options.deviceName || 'default'}`);
+    return { success: true };
+  } catch (error) {
+    log(`Document Print Error: ${error.message}`);
+    return { success: false, error: error.message };
   }
 });
 

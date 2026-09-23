@@ -5,215 +5,466 @@
  */
 
 import React from "react";
-import "../../../assets/styles/pdf.css";
-import FallbackWatermarkSVG from "../../../assets/media/svg.svg";
-// import bgCreditNote from "../../../assets/media/PDF templates/credit_note.png";
+import "../../../assets/styles/pdf-standard.css";
+import { amountWords } from "../../../utils/billingCalcEngine";
+import FallbackWatermarkSVG from "../../../assets/icons/b503ee48-1ece-4256-8ef5-72c1d9f0a8de.png";
 
-const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const fmt = (n) => {
+    const num = Number(n);
+    if (!Number.isFinite(num)) return "₹ 0.00";
+    return `₹ ${num.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+};
+
+/** True when the value is a non-zero, finite number. */
+const has = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n !== 0;
+};
+
+/** Safe parseFloat — returns 0 for anything falsy or NaN. */
+const safe = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+};
+
+/** Format a date string or ISO string to a compact Indian locale string. */
+const fmtDate = (d) => {
+    if (!d) return "";
+    try {
+        return new Date(d).toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    } catch {
+        return String(d);
+    }
+};
 
 export default function CreditNoteTemplate({ data }) {
     if (!data) return null;
 
     const {
-        shop = {},
         customer = {},
         creditNote = {},
+        rates = {},
+        hideCustomerDetails = false,
+        theme = "gold",
     } = data;
 
-    const shopName = shop.name || "My Jewellery Shop";
-    const shopAddress = shop.address || "";
-    const shopPhone = shop.phone || "";
-    const shopEmail = shop.email || "";
-    const shopGST = shop.gst_number || "";
-    const shopPAN = shop.pan_number || "";
-
     const watermarkSrc = shop.watermark_logo_url || FallbackWatermarkSVG;
+    const cnNo = creditNote.credit_note_no || "";
+    const issueDate = creditNote.created_at ? fmtDate(creditNote.created_at) : fmtDate(new Date());
+    const validUntil = creditNote.expires_at ? fmtDate(creditNote.expires_at) : "No Expiry";
+    const status = creditNote.status || "open";
+    const isCancelled = status === "cancelled" || data.isCancelled;
 
-    // Details parts
-    const detailParts = [];
-    if (shopAddress) detailParts.push(shopAddress);
-    const contactParts = [];
-    if (shopPhone) contactParts.push(`Phone: ${shopPhone}`);
-    if (shopEmail) contactParts.push(`Email: ${shopEmail}`);
-    const idParts = [];
-    if (shopGST) idParts.push(`GSTIN: ${shopGST}`);
-    if (shopPAN) idParts.push(`PAN: ${shopPAN}`);
+    const sourceInv = creditNote.source_invoice_detail || {};
+    const sourceInvoiceNo = creditNote.source_invoice_no || sourceInv.invoice_no || "";
 
-    const issueDate = creditNote.created_at 
-        ? new Date(creditNote.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-        
-    const issueTime = creditNote.created_at 
-        ? new Date(creditNote.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-        : new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const creditAmount = safe(creditNote.credit_amount);
+    const usedAmount = safe(creditNote.used_amount);
+    const remainingAmount = safe(creditNote.remaining_amount ?? (creditAmount - usedAmount));
+
+    const rate10gm = safe(rates?.rate10gm || sourceInv.metal_rate);
+    const makingRate = safe(rates?.makingRate || sourceInv.making_rate);
+    const rateLabel = theme?.toLowerCase() === "silver" ? "SILVER" : "GOLD";
+
+    // Products / Items extraction
+    const rawItems = creditNote.items || sourceInv.items || data.items || [];
+    const items = Array.isArray(rawItems) && rawItems.length > 0
+        ? rawItems.map((item) => ({
+            name: item.product_name || item.name || item.description || "—",
+            huid: item.huid || item.huid_code || item.huidCode || "—",
+            weight: safe(item.net_weight || item.weight || item.gross_weight),
+            metalValue: safe(item.metal_value || item.metalValue),
+            making: safe(item.making_charge || item.making),
+            total: safe(item.total || item.amount),
+        }))
+        : [
+            {
+                name: creditNote.reason ? `Credit: ${creditNote.reason}` : "Store Credit Note",
+                huid: "—",
+                weight: 0,
+                metalValue: creditAmount,
+                making: 0,
+                total: creditAmount,
+            },
+        ];
+
+    const hasHuid = items.some((i) => i && i.huid && String(i.huid).trim() && i.huid !== "—");
+    const hasMetalVal = items.some((i) => i && has(i.metalValue));
+    const hasMaking = items.some((i) => i && has(i.making));
+
+    /* ── Pad items table to minimum 5 visible rows ── */
+    const displayItems = [...items];
+    while (displayItems.length < 5) displayItems.push({ _isEmpty: true });
+
+    /* ── Discount and charges ── */
+    const discountAmt = safe(sourceInv.discount || data.totals?.discount);
+    const hasDiscount = discountAmt > 0;
+    const hallmarkAmt = safe(sourceInv.hallmark || data.totals?.hallmark);
+    const otherChargesAmt = safe(sourceInv.others || data.totals?.otherCharges);
+    const cgstAmt = safe(sourceInv.cgst || data.totals?.cgst);
+    const sgstAmt = safe(sourceInv.sgst || data.totals?.sgst);
+    const igstAmt = safe(sourceInv.igst || data.totals?.igst);
+    const isTaxPresent = cgstAmt > 0 || sgstAmt > 0 || igstAmt > 0;
+    const isIgst = igstAmt > 0 || data.totals?.isIgst;
+
+    /* ── Summary Row-1 columns: TOTAL | [LESS DISCOUNT] | OTHER CHARGES | HALLMARK | [TAX] | SUB TOTAL ── */
+    const row1Cols = (() => {
+        let cols = 4; // TOTAL | OTHER CHARGES | HALLMARK | SUB TOTAL
+        if (hasDiscount) cols++;
+        if (isTaxPresent) cols += isIgst ? 1 : 2;
+        return cols;
+    })();
+
+    /* ── Summary Row-2 columns: TOTAL CREDIT | USED CREDIT | ROUND OFF | REMAINING CREDIT ── */
+    const row2Cols = (() => {
+        let cols = 3; // TOTAL CREDIT | USED CREDIT | REMAINING CREDIT
+        if (has(sourceInv.round_off || data.totals?.roundOff)) cols++;
+        return cols;
+    })();
+
+    /* ── Usages & Consumption history ── */
+    const usages = Array.isArray(creditNote.usages) ? creditNote.usages : [];
+    const hasUsages = usages.length > 0;
+
+    /* ── Reference table micro-style constants ── */
+    const refTh = {
+        padding: "4px 6px", fontWeight: 700, fontSize: "8px",
+        textTransform: "uppercase", letterSpacing: "0.05em",
+        textAlign: "left", borderBottom: "1px solid #1e3b8a33",
+    };
+    const refTd = {
+        padding: "3px 6px", fontSize: "8.5px", borderBottom: "1px solid #f0f0f0",
+        textAlign: "left", verticalAlign: "middle",
+    };
+    const refBadge = (color) => ({
+        display: "inline-block",
+        background: color + "22",
+        color: color,
+        border: `1px solid ${color}55`,
+        borderRadius: 3,
+        padding: "1px 4px",
+        fontSize: "7.5px",
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+    });
+    const refRowStyle = { background: "#fff" };
+
+    const amountInWords = creditNote.amountInWords || amountWords(remainingAmount > 0 ? remainingAmount : creditAmount);
 
     return (
-        <div className={`pdf-print-wrapper theme-gold`}>
-            <img
-                src={watermarkSrc}
-                alt=""
-                aria-hidden="true"
-                style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "center top",
-                    zIndex: 0,
-                    pointerEvents: "none",
-                    userSelect: "none",
-                }}
-            />
+        <div className="pdf-root">
+            {watermarkSrc && String(watermarkSrc).endsWith(".pdf") ? (
+                <embed
+                    src={`${watermarkSrc}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                    type="application/pdf"
+                    aria-hidden="true"
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        zIndex: 0,
+                        pointerEvents: "none",
+                        userSelect: "none",
+                        border: "none",
+                    }}
+                />
+            ) : (
+                <img
+                    src={watermarkSrc}
+                    alt=""
+                    aria-hidden="true"
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center top",
+                        zIndex: 0,
+                        pointerEvents: "none",
+                        userSelect: "none",
+                    }}
+                />
+            )}
 
-            {/* Watermark */}
-            <img
-                src={watermarkSrc}
-                alt="watermark"
-                className="pdf-watermark"
-                onError={(e) => { e.target.style.display = 'none'; }}
-            />
+            {/* CANCELLED stamp */}
+            {isCancelled && (
+                <div style={{
+                    position: "absolute", top: "50%", left: "50%",
+                    transform: "translate(-50%, -50%) rotate(-35deg)",
+                    fontSize: "72px", fontWeight: 900,
+                    color: "rgba(220,38,38,0.14)",
+                    letterSpacing: "0.1em", whiteSpace: "nowrap",
+                    pointerEvents: "none", zIndex: 10, userSelect: "none",
+                }}>CANCELLED</div>
+            )}
 
-            <div className="pdf-content-layer">
-                {/* Header */}
-                <div className="pdf-header" style={{ borderBottom: '2px solid var(--color-primary, #d97706)' }}>
-                    <div className="pdf-header-left">
-                        <h1 className="pdf-shop-name">{shopName}</h1>
-                        {(detailParts.length > 0 || contactParts.length > 0 || idParts.length > 0) && (
-                            <div className="pdf-shop-details">
-                                {detailParts.length > 0 && <>{detailParts.join(', ')}<br /></>}
-                                {contactParts.length > 0 && <>{contactParts.join(' | ')}<br /></>}
-                                {idParts.length > 0 && <>{idParts.join(' | ')}</>}
-                            </div>
-                        )}
+            <div className="pdf-container">
+
+                {/* ═══════════════════ CUSTOMER + META ═══════════════════ */}
+                <div className="pdf-top-row">
+                    <div className="pdf-customer" style={hideCustomerDetails ? { visibility: "hidden" } : {}}>
+                        <div className="label">ISSUED TO:</div>
+                        <div>{customer?.name || "Walk-in Customer"}</div>
+                        {customer?.address && <div>{customer.address}</div>}
+                        {customer?.phone && <div>{customer.phone}</div>}
                     </div>
-                    <div className="pdf-header-right">
-                        <h2 className="pdf-document-title" style={{ color: 'var(--color-primary, #d97706)' }}>CREDIT NOTE</h2>
-                        <div className="pdf-meta-box">
-                            <div><strong>No:</strong> {creditNote.credit_note_no}</div>
-                            <div><strong>Date:</strong> {issueDate}</div>
-                            <div><strong>Time:</strong> {issueTime}</div>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Customer Details & Credit Info */}
-                <div className="pdf-info-row" style={{ marginBottom: 30 }}>
-                    <div className="pdf-customer-box">
-                        <h4 style={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Issued To</h4>
-                        <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: '4px 0' }}>{customer.name || "Walk-in Customer"}</p>
-                        {customer.phone && <span style={{ display: 'block', fontSize: '0.9rem' }}>Phone: {customer.phone}</span>}
-                        {customer.address && <span style={{ display: 'block', fontSize: '0.9rem', marginTop: 2 }}>{customer.address}</span>}
-                    </div>
-
-                    <div className="pdf-rate-box" style={{ minWidth: 240 }}>
-                        <h4 style={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>Credit Summary</h4>
-                        <div className="pdf-rate-item">
-                            <span>Status:</span>
-                            <span style={{ fontWeight: 700, textTransform: 'uppercase' }}>{creditNote.status?.replace('_', ' ')}</span>
-                        </div>
-                        {creditNote.source_invoice_no && (
-                            <div className="pdf-rate-item">
-                                <span>Source Invoice:</span>
-                                <span style={{ fontFamily: 'monospace' }}>{creditNote.source_invoice_no}</span>
-                            </div>
-                        )}
-                        <div className="pdf-rate-item">
-                            <span>Valid Until:</span>
-                            <span>{creditNote.expires_at ? new Date(creditNote.expires_at).toLocaleDateString('en-IN') : 'No Expiry'}</span>
-                        </div>
+                    <div className="pdf-meta">
+                        {cnNo && <div className="bold">#{cnNo}</div>}
+                        <div>Date: {issueDate}</div>
+                        {sourceInvoiceNo && <div>Ref Inv: #{sourceInvoiceNo}</div>}
                     </div>
                 </div>
 
-                {/* Details Table */}
-                <table className="pdf-table" style={{ marginBottom: 30 }}>
+                {/* ═══════════════════ RATE / STATUS PILL ═══════════════════ */}
+                <div className="pdf-rate-pill">
+                    {rate10gm > 0 && <span>PER 10GM: ₹ {rate10gm.toLocaleString("en-IN")} | </span>}
+                    <span> MAKING: ₹ {makingRate.toLocaleString("en-IN")}</span>
+                </div>
+
+                {/* ═══════════════════ ITEMS TABLE ═══════════════════ */}
+                <table className="pdf-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '60%' }}>Reason / Description</th>
-                            <th className="txt-right" style={{ width: '40%' }}>Total Credit Value</th>
+                            <th>SL NO</th>
+                            <th>DESCRIPTION</th>
+                            {hasHuid && <th>HUID</th>}
+                            <th>WEIGHT</th>
+                            {hasMetalVal && <th>{rateLabel} VALUE</th>}
+                            {hasMaking && <th>MAKING</th>}
+                            <th>TOTAL</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td style={{ padding: '20px 15px', fontSize: '1.05rem', fontWeight: 500 }}>
-                                {creditNote.reason}
-                                {creditNote.notes && (
-                                    <div style={{ fontSize: '0.85rem', color: '#666', marginTop: 8, fontStyle: 'italic' }}>
-                                        Notes: {creditNote.notes}
-                                    </div>
-                                )}
-                            </td>
-                            <td className="txt-right" style={{ padding: '20px 15px', fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary, #d97706)' }}>
-                                {fmt(creditNote.credit_amount)}
-                            </td>
-                        </tr>
+                        {displayItems.length === 0 ? (
+                            <tr>
+                                <td colSpan={3 + (hasHuid ? 1 : 0) + (hasMetalVal ? 1 : 0) + (hasMaking ? 1 : 0)}
+                                    style={{ textAlign: "center", padding: 20, color: "#999" }}>
+                                    No items
+                                </td>
+                            </tr>
+                        ) : (
+                            displayItems.map((item, i) => (
+                                <tr key={i}>
+                                    {item._isEmpty ? (
+                                        <>
+                                            <td>&nbsp;</td>
+                                            <td></td>
+                                            {hasHuid && <td></td>}
+                                            <td></td>
+                                            {hasMetalVal && <td></td>}
+                                            {hasMaking && <td></td>}
+                                            <td></td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td>{i + 1}</td>
+                                            <td style={{ textAlign: "left" }}>{item.name || "—"}</td>
+                                            {hasHuid && <td>{item.huid || "—"}</td>}
+                                            <td>{item.weight > 0 ? `${Number(item.weight).toFixed(3)} g` : "—"}</td>
+                                            {hasMetalVal && <td>{item.metalValue > 0 ? fmt(item.metalValue) : "—"}</td>}
+                                            {hasMaking && <td>{item.making > 0 ? fmt(item.making) : "—"}</td>}
+                                            <td>{fmt(item.total)}</td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
 
-                {/* Usage History (if partially or fully used) */}
-                {creditNote.usages && creditNote.usages.length > 0 && (
-                    <div style={{ marginBottom: 40 }}>
-                        <h3 style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555', marginBottom: 10, borderBottom: '1px solid #ddd', paddingBottom: 4 }}>
-                            Credit Consumption History
-                        </h3>
-                        <table className="pdf-table" style={{ fontSize: '0.85rem' }}>
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Applied To</th>
-                                    <th>Description</th>
-                                    <th className="txt-right">Amount Consumed</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {creditNote.usages.map((u, i) => (
-                                    <tr key={i}>
-                                        <td>{new Date(u.created_at).toLocaleDateString('en-IN')}</td>
-                                        <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{u.invoice_no || u.estimate_no}</td>
-                                        <td>{u.note || '—'}</td>
-                                        <td className="txt-right" style={{ fontWeight: 700 }}>{fmt(u.amount_used)}</td>
-                                    </tr>
-                                ))}
-                                <tr className="pdf-table-total-row">
-                                    <td colSpan={3} className="txt-right" style={{ fontWeight: 700 }}>TOTAL CREDIT USED</td>
-                                    <td className="txt-right" style={{ fontWeight: 700, color: '#dc2626' }}>{fmt(creditNote.used_amount)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                {/* ═══════════════════ SUMMARY BANNER ROW 1 ═══════════════════
+                    Columns: TOTAL | [LESS DISCOUNT] | OTHER CHARGES | HALLMARK | [TAX] | SUB TOTAL
+                ════════════════════════════════════════════════════════════════ */}
+                <div style={{ width: "100%", fontFamily: "Arial, sans-serif", padding: "0 25px", marginTop: 6 }}>
+                    <div
+                        className="pdf-summary-head"
+                        style={{ gridTemplateColumns: `repeat(${row1Cols}, 1fr)`, marginTop: 0 }}
+                    >
+                        <div>TOTAL</div>
+                        {hasDiscount && <div>LESS DISCOUNT</div>}
+                        <div>OTHER CHARGES</div>
+                        <div>HALLMARK</div>
+                        {isTaxPresent && (
+                            isIgst
+                                ? <div>IGST</div>
+                                : <><div>CGST</div><div>SGST</div></>
+                        )}
+                        <div>SUB TOTAL</div>
                     </div>
-                )}
-
-                {/* Final Balance Box */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 40 }}>
-                    <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '15px 25px', minWidth: 260 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#78350f', marginBottom: 6 }}>
-                            <span>Total Credit Value:</span>
-                            <span style={{ fontWeight: 600 }}>{fmt(creditNote.credit_amount)}</span>
+                    <div
+                        className="pdf-summary-values"
+                        style={{ gridTemplateColumns: `repeat(${row1Cols}, 1fr)` }}
+                    >
+                        <div className="bold">
+                            {fmt(sourceInv.grand_total || creditAmount)}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#78350f', marginBottom: 8, borderBottom: '1px dashed #f59e0b', paddingBottom: 6 }}>
-                            <span>Consumed Credit:</span>
-                            <span style={{ fontWeight: 600 }}>{fmt(creditNote.used_amount)}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 700, color: '#78350f' }}>
-                            <span>Remaining Balance:</span>
-                            <span>{fmt(creditNote.remaining_amount)}</span>
+                        {hasDiscount && (
+                            <div style={{ fontWeight: 700 }}>−{fmt(discountAmt)}</div>
+                        )}
+                        <div>{otherChargesAmt > 0 ? fmt(otherChargesAmt) : "₹ 0.00"}</div>
+                        <div>{hallmarkAmt > 0 ? fmt(hallmarkAmt) : "₹ 0.00"}</div>
+                        {isTaxPresent && (
+                            isIgst
+                                ? <div>{igstAmt > 0 ? fmt(igstAmt) : "₹ 0.00"}</div>
+                                : <><div>{fmt(cgstAmt)}</div><div>{fmt(sgstAmt)}</div></>
+                        )}
+                        <div className="bold">
+                            {fmt(sourceInv.subtotal || creditAmount)}
                         </div>
                     </div>
                 </div>
 
-                {/* Signatures */}
-                <div className="pdf-footer" style={{ marginTop: 'auto', paddingTop: 60 }}>
-                    <div style={{ paddingLeft: '20px' }}>
-                        <div className="pdf-signature">Customer Signature</div>
+                {/* ═══════════════════ SUMMARY BANNER ROW 2 ═══════════════════
+                    Columns: TOTAL CREDIT | USED CREDIT | [ROUND OFF] | REMAINING BALANCE
+                ════════════════════════════════════════════════════════════════ */}
+                <div style={{ width: "100%", fontFamily: "Arial, sans-serif", padding: "0 25px" }}>
+                    <div
+                        className="pdf-summary-head"
+                        style={{ gridTemplateColumns: `repeat(${row2Cols}, 1fr)`, marginTop: 0 }}
+                    >
+                        <div>TOTAL CREDIT</div>
+                        <div>USED CREDIT</div>
+                        {has(sourceInv.round_off || data.totals?.roundOff) && <div>ROUND OFF</div>}
+                        <div>REMAINING BALANCE</div>
                     </div>
-                    <div style={{ fontSize: '12px', opacity: 0.7, alignSelf: 'flex-end', paddingBottom: 10 }}>
-                        Offline store credit issued by {shopName}. Valid as per terms.
-                    </div>
-                    <div style={{ paddingRight: '20px' }}>
-                        <div className="pdf-signature">Authorized Signature</div>
+                    <div
+                        className="pdf-summary-values"
+                        style={{
+                            gridTemplateColumns: `repeat(${row2Cols}, 1fr)`,
+                            borderBottomLeftRadius: "12px",
+                            borderBottomRightRadius: "12px",
+                        }}
+                    >
+                        <div className="bold">{fmt(creditAmount)}</div>
+                        <div style={{ fontWeight: 700 }}>
+                            {usedAmount > 0 ? `${fmt(usedAmount)}` : "₹ 0.00"}
+                        </div>
+                        {has(sourceInv.round_off || data.totals?.roundOff) && (
+                            <div style={{ color: "#64748b" }}>
+                                {fmt(sourceInv.round_off || data.totals?.roundOff)}
+                            </div>
+                        )}
+                        <div className="bold" style={{ fontSize: "13px" }}>
+                            {fmt(remainingAmount)}
+                        </div>
                     </div>
                 </div>
+
+                {/* ═══════════════════ AMOUNT IN WORDS ═══════════════════ */}
+                <div className="pdf-amount-strip" style={{ marginTop: 8 }}>
+                    {amountInWords ? String(amountInWords).toUpperCase() : "—"}
+                </div>
+
+                {/* ═══════════════════ NOTES & CONSUMPTION / REFERENCE DETAILS ═══════════════════ */}
+                <div className="bill-info">
+                    <div className="order-additional">
+                        {(creditNote.reason || creditNote.notes) && (
+                            <div style={{
+                                padding: "4px 25px",
+                                margin: "4px 0",
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: 10,
+                            }}>
+                                <div style={{
+                                    flex: 1,
+                                    // background: "#fafafa",
+                                    borderRadius: 4,
+                                    fontSize: "9.5px",
+                                    lineHeight: 1.5,
+                                    fontWeight: 700,
+                                    padding: "5px 10px",
+                                    border: "1px solid #e8e8e8",
+                                }}>
+                                    <div style={{ fontSize: "8px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>
+                                        Credit Note Reason & Notes
+                                    </div>
+                                    {creditNote.reason && <div><strong>Reason:</strong> {creditNote.reason}</div>}
+                                    {creditNote.notes && <div style={{ marginTop: 2, fontStyle: "italic", color: "#555" }}>{creditNote.notes}</div>}
+                                </div>
+                            </div>
+                        )}
+
+                        <span style={{padding: "0 35px", fontWeight: 700, fontSize: "12.5px"}}>STATUS: {status.toUpperCase()}</span>
+                    </div>
+
+                    <div className="reference-details">
+                        {hasUsages && (
+                            <div style={{ padding: "0 27px", marginTop: 4 }}>
+                                <div style={{
+                                    fontSize: "8.5px",
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.07em",
+                                    color: "#1e3b8a",
+                                    borderBottom: "1.5px solid #1e3b8a55",
+                                    paddingBottom: 2,
+                                    marginBottom: 3,
+                                }}>
+                                    Credit Consumption History
+                                </div>
+                                <table style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                    fontSize: "9px",
+                                }}>
+                                    <thead>
+                                        <tr style={{ background: "linear-gradient(90deg,#1e3b8a22,#2564eb14)", color: "#1e3b8a" }}>
+                                            {/* <th style={refTh}>#</th> */}
+                                            <th style={refTh}>APPLIED TO</th>
+                                            <th style={refTh}>DATE</th>
+                                            <th style={refTh}>NOTES</th>
+                                            <th style={{ ...refTh, textAlign: "right" }}>AMOUNT</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {usages.map((u, idx) => (
+                                            <tr key={idx} style={refRowStyle}>
+                                                {/* <td style={refTd}>{idx + 1}</td> */}
+                                                <td style={{ ...refTd, fontWeight: 700 }}>
+                                                    <span>
+                                                        {u.invoice_no || u.estimate_no || "BILL"}
+                                                    </span>
+                                                </td>
+                                                <td style={{ ...refTd, fontWeight: 500 }}>{fmtDate(u.created_at || u.date)}</td>
+                                                <td style={{ ...refTd, fontStyle: "italic", fontWeight: 500 }}>
+                                                    {u.note || u.reason || "—"}
+                                                </td>
+                                                <td style={{ ...refTd, fontWeight: 700 }}>
+                                                    {fmt(u.amount_used || u.amount)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ═══════════════════ FOOTER ═══════════════════ */}
+                <div className="pdf-footer">
+                    <div className="signature">Customer Signature</div>
+                    <div className="thank-text">THANK YOU | VISIT US AGAIN</div>
+                    <div>
+                        <div className="signature">Authorized Signature</div>
+                    </div>
+                </div>
+
             </div>
         </div>
     );
 }
+

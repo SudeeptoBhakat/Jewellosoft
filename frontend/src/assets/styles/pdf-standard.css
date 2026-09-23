@@ -33,10 +33,12 @@
 .pdf-container {
     position: relative;
     padding-top: 190px;
+    padding-bottom: 70px;
     z-index: 2;
     flex: 1;
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
 }
 
 /* HEADER */
@@ -154,7 +156,12 @@
     display: flex;
     justify-content: space-between;
     font-size: 13px;
-    padding: 0 39px;
+    font-weight: bold;
+    padding: 0 36px;
+}
+
+.pdf-customer {
+    margin-left: -8px;
 }
 
 .pdf-customer .bold {
@@ -168,15 +175,15 @@
 
 
 .pdf-rate-pill {
-    margin-top: 15px;
+    /* margin-top: 15px; */
     display: inline-flex;
     margin-left: auto;
     margin-right: auto;
     justify-content: space-between;
     border: 2px solid #1e40af;
     border-radius: 40px;
-    padding: 10px 40px;
-    gap: 20px;
+    padding: 6px 20px;
+    gap: 15px;
     font-weight: 700;
     background: #f8faff33;
     font-size: 14px;
@@ -185,10 +192,10 @@
 /* TABLE */
 .pdf-table {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 10px;
     border-collapse: separate;
     border-spacing: 0;
-    padding: 0px 40px;
+    padding: 0px 25px;
 }
 
 /* 🔥 HEADER */
@@ -198,15 +205,15 @@
 }
 
 .pdf-table th {
-    padding: 12px;
-    font-size: 13px;
+    padding: 9px;
+    font-size: 12px;
     font-weight: 700;
 }
 
 /* rounded corners */
 .pdf-table thead tr th:first-child {
     border-top-left-radius: 15px;
-    width: 62px;
+    width: 52px;
 }
 
 .pdf-table thead tr th:last-child {
@@ -215,8 +222,8 @@
 
 /* ROWS */
 .pdf-table td {
-    padding: 10px;
-    font-size: 13px;
+    padding: 7px;
+    font-size: 12px;
     border-bottom: 1px solid #eee;
     text-align: center;
 }
@@ -242,19 +249,17 @@
 
 /* SUMMARY HEAD */
 .pdf-summary-head {
-    margin-top: 20px;
+    margin-top: 8px;
     display: grid;
-    /* Changed to 6 columns to match your exact invoice metrics */
     grid-template-columns: repeat(6, 1fr);
     background: linear-gradient(90deg, #1e3b8aaf, #2564eb98);
     color: #fff;
-    font-size: 11px;
+    font-size: 9.5px;
     font-weight: 700;
-    padding: 10px 0;
+    padding: 7px 0;
     text-align: center;
     text-transform: uppercase;
     align-items: center;
-    /* Ensures short/long text stays vertically aligned */
 }
 
 /* SUMMARY VALUES */
@@ -262,9 +267,8 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     background: #f8faff;
-    /* Light background tint matching image */
-    padding: 12px 0;
-    font-size: 12px;
+    padding: 8px 0;
+    font-size: 11px;
     font-weight: 600;
     text-align: center;
     align-items: center;
@@ -288,39 +292,58 @@
     align-items: center;
     margin-left: auto;
     margin-right: auto;
-    margin-top: 15px;
+    margin-top: 8px;
     background: linear-gradient(90deg, #1e3b8ab2, #2564ebb6);
     color: #fff;
     font-family: Arial, Helvetica, sans-serif;
     text-align: center;
-    padding: 10px 40px;
     border-radius: 25px;
     font-weight: 800;
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.5px;
-
-    height: 39px;
+    height: 32px;
     box-sizing: border-box;
-    padding: 0 30px;
+    padding: 0 24px;
 }
 
 /* PAYMENT */
 .pdf-payment {
     padding-left: 30px;
-    margin-top: 20px;
-    font-size: 13px;
+    margin-top: 8px;
+    font-size: 12px;
     font-weight: 600;
+}
+
+.bill-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.order-additional {
+    flex: 1;
+}
+
+.reference-details {
+    flex: 1;
 }
 
 /* FOOTER */
 .pdf-footer {
-    /* margin-top: auto; */
+    position: absolute;
+    bottom: 30px;
+    left: 25px;
+    right: 25px;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    padding-top: 125px;
     padding-left: 20px;
     padding-right: 20px;
+    box-sizing: border-box;
+    z-index: 10;
 }
 
 .signature {

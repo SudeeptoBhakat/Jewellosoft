@@ -265,17 +265,24 @@ export default function OldPurchaseVoucher({ tabId, isActive }) {
   // form state for the pre-save preview, or the saved backend record).
   const buildVoucherDocData = (voucherObj) => {
     const finalCustName = custName.trim() || 'Walk-in';
+    let activeShop = shop;
+    if (!activeShop?.name) {
+      try {
+        const cached = localStorage.getItem('jewellosoft_shop_info');
+        if (cached) activeShop = JSON.parse(cached);
+      } catch {}
+    }
     return {
       isVoucher: true,
-      template: shop?.pdf_template || 'classic',
+      template: activeShop?.pdf_template || 'classic',
       shop: {
-        name: shop?.name || 'My Jewellery Shop',
-        address: shop?.address || '',
-        phone: shop?.phone || '',
-        email: shop?.email || '',
-        gst_number: shop?.gst_number || '',
-        pan_number: shop?.pan_number || '',
-        watermark_logo_url: shop?.watermark_logo || null,
+        name: activeShop?.name || 'My Jewellery Shop',
+        address: activeShop?.address || '',
+        phone: activeShop?.phone || '',
+        email: activeShop?.email || '',
+        gst_number: activeShop?.gst_number || '',
+        pan_number: activeShop?.pan_number || '',
+        watermark_logo_url: activeShop?.watermark_logo || null,
       },
       customer: { name: finalCustName, phone: custMobile, address: custAddress },
       voucher: voucherObj,
