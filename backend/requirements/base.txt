@@ -3,7 +3,7 @@ Django>=6.0.7,<7.0
 djangorestframework>=3.18.3
 djangorestframework-simplejwt>=5.4
 django-cors-headers>=4.9.0
-django-filter>=26.1
+django-filter>=26.2
 
 # Database
 sqlparse>=0.5.5
